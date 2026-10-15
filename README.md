@@ -32,7 +32,12 @@ Remove Qloo and nothing works. The core inference ("people who love *Blade Runne
 6. **Bridges**: a place, film, artist and book that complete the aesthetic.
 7. **Finalize**: the LLM names the aesthetic and writes "because you love…" lines. Any IDs it invents are ignored.
 
-With `LLM_*` set, an OpenAI-compatible tool-calling model plans and calls these tools itself, and its reasoning streams to the trace. Without one, a deterministic planner runs the same tools. If the LLM fails mid-run, the planner finishes the job. The trace streams live (NDJSON) and every Qloo call is inspectable.
+With `LLM_*` set, an OpenAI-compatible tool-calling model plans and calls these tools itself. The default is a free OpenRouter model, `nvidia/nemotron-3.5-lightning:free`, with `nemotron-3.5-super-vl:free` as fallback. Without an LLM, a deterministic planner runs the same tools.
+
+- **Speculative execution:** while the LLM is deciding, the next Qloo step is prefetched. Its trace events are held back until the LLM actually calls that tool, so runs stay around 20s without hiding the LLM's choices.
+- **Free-tier resilience:** on a 429 the LLM is paused (circuit breaker) and the deterministic planner finishes the run. The user never sees a blank screen.
+
+The trace streams live (NDJSON) and every Qloo call is inspectable.
 
 ## Run it
 

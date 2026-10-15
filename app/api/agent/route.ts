@@ -1,5 +1,7 @@
-import { runAgent } from "@/lib/agent";
+import { AGENT_VERSION, runAgent } from "@/lib/agent";
 import { sharedCache } from "@/lib/cache";
+import { llmConfigured } from "@/lib/llm";
+import { qlooMode } from "@/lib/qloo";
 import { allow } from "@/lib/ratelimit";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 
@@ -10,6 +12,9 @@ const results = sharedCache<{ events: TraceEvent[]; result: StyleResult }>("resu
 
 function keyOf(req: AgentRequest) {
   return JSON.stringify({
+    v: AGENT_VERSION,
+    m: qlooMode(),
+    llm: llmConfigured() ? process.env.LLM_MODEL : "",
     s: req.seeds.map((s) => s.id || `${s.kind}:${s.name.toLowerCase()}`).sort(),
     b: req.budget ?? 0,
     g: (req.goal ?? "").trim().toLowerCase(),
@@ -54,7 +59,8 @@ export async function POST(request: Request) {
           events.push(e);
           send(e);
         });
-        results.set(key, { events, result });
+        // Don't pin a fallback run: next time the LLM may be back (Qloo calls are cached either way).
+        if (!llmConfigured() || result.planner === "llm") results.set(key, { events, result });
         send({ type: "result", result });
       } catch (err) {
         send({ type: "error", message: (err as Error).message || "Agent failed" });

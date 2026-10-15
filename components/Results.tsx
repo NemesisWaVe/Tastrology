@@ -233,6 +233,7 @@ function BrandCard({ b, i, seedName, vote, onVote }: { b: BrandMatch; i: number;
           <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">
             {b.category}
             {b.entity.tier ? <span className="ml-1.5 tracking-normal">{"$".repeat(b.entity.tier)}</span> : null}
+            {b.side ? <span className="ml-1.5 rounded bg-warn-soft px-1.5 py-px tracking-normal text-warn">Side B</span> : null}
           </p>
           <h3 className="truncate font-serif text-[24px] leading-tight">{b.entity.name}</h3>
         </div>
@@ -254,6 +255,11 @@ function BrandCard({ b, i, seedName, vote, onVote }: { b: BrandMatch; i: number;
       </div>
 
       <p className="mt-3 text-[14px] leading-snug text-ink-2">{b.why}</p>
+      {b.entity.style && (
+        <p className="mt-2 text-[11.5px] text-ink-3">
+          <span className="font-semibold uppercase tracking-wider">Qloo style</span> · {b.entity.style.slice(0, 3).join(" · ")}
+        </p>
+      )}
 
       <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
         {b.because.map((id) => (

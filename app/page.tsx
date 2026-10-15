@@ -220,8 +220,8 @@ export default function Home() {
                     className="mt-1 block w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm font-normal"
                   >
                     <option value="">Any</option>
-                    <option value="1">$ · budget (≈ under ₹3k / $40)</option>
-                    <option value="2">$$ · mid (≈ ₹3k–15k / $40–180)</option>
+                    <option value="1">$ · entry (from under ₹5k / $60)</option>
+                    <option value="2">$$ · mid (from ₹5k–20k / $60–250)</option>
                     <option value="3">$$$ · premium</option>
                   </select>
                 </label>
@@ -262,7 +262,7 @@ export default function Home() {
       )}
 
       {stage !== "home" && (
-        <main className="mx-auto grid max-w-6xl gap-6 px-4 pb-28 sm:px-6 lg:grid-cols-[1fr_360px]">
+        <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 pb-28 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="order-2 min-w-0 lg:order-1">
             {returning && stage === "result" && (
               <p className="rise mb-4 rounded-xl bg-paper-2 px-4 py-2.5 text-sm text-ink-2">

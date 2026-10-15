@@ -42,6 +42,11 @@ function normEntity(raw: Record<string, unknown>): QEntity {
     }
   }
   const pop = raw.popularity ?? props.popularity;
+  const strs = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "" && !/^(null|undefined|n\/a)$/i.test(x.trim())) : [];
+  const style = [...strs(props.personal_style), ...strs(props.aesthetic_properties)].filter((s, i, a) => a.indexOf(s) === i).slice(0, 5);
+  const priceMin = typeof props.price_range_usd_min === "number" ? props.price_range_usd_min : undefined;
+  const liveTier = priceMin === undefined ? undefined : priceMin < 60 ? 1 : priceMin < 250 ? 2 : 3;
   return {
     id: String(raw.entity_id ?? raw.id),
     name: String(raw.name),
@@ -52,7 +57,8 @@ function normEntity(raw: Record<string, unknown>): QEntity {
     popularity: typeof pop === "number" ? pop : undefined,
     affinity: typeof query.affinity === "number" ? query.affinity : undefined,
     explain,
-    tier: (props.mock_tier as 1 | 2 | 3) ?? undefined,
+    tier: (props.mock_tier as 1 | 2 | 3) ?? liveTier,
+    style: style.length ? style : undefined,
   };
 }
 
@@ -116,6 +122,9 @@ export async function insights(p: InsightsParams, log?: QlooCallLog[]): Promise<
   if (p.tagIds?.length) params["signal.interests.tags"] = p.tagIds.join(",");
   if (p.filterTags?.length) params["filter.tags"] = p.filterTags.join(",");
   if (p.excludeIds?.length) params["filter.exclude.entities"] = p.excludeIds.join(",");
+  if (p.tagTypes?.length) params["filter.tag.types"] = p.tagTypes.join(",");
+  if (p.popularity?.min !== undefined) params["filter.popularity.min"] = String(p.popularity.min);
+  if (p.popularity?.max !== undefined) params["filter.popularity.max"] = String(p.popularity.max);
   if (p.explain) params["feature.explainability"] = "true";
 
   const json = await qget("/v2/insights", params, log);
@@ -133,8 +142,10 @@ export async function insights(p: InsightsParams, log?: QlooCallLog[]): Promise<
   return list.map(normEntity);
 }
 
-export async function findTags(query: string, take = 10, log?: QlooCallLog[]): Promise<QTag[]> {
-  const json = await qget("/v2/tags", { "filter.query": query, take: String(take) }, log);
+export async function findTags(query: string, take = 10, log?: QlooCallLog[], parentType?: EntityKind): Promise<QTag[]> {
+  const params: Record<string, string> = { "filter.query": query, take: String(take) };
+  if (parentType) params["filter.parents.types"] = `urn:entity:${parentType}`;
+  const json = await qget("/v2/tags", params, log);
   const r = (json.results ?? {}) as Record<string, unknown>;
   return normTags(r.tags);
 }

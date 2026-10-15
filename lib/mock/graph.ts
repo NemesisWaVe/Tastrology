@@ -81,7 +81,8 @@ export const SEEDS: MockEntity[] = [
   e("tv_show", "Normal People", { minimalist: 0.6, romantic: 0.7, dark_academia: 0.4 }, "BBC Three"),
   e("tv_show", "Succession", { quiet_luxury: 0.9, minimalist: 0.6, preppy: 0.5 }, "HBO"),
   e("tv_show", "Euphoria", { y2k: 0.8, clubwear: 0.6, avant_garde: 0.5, streetwear: 0.4 }, "HBO"),
-  e("tv_show", "The Great British Bake Off", { cottagecore: 0.9, whimsical: 0.5, preppy: 0.4, vintage: 0.3 }, "Channel 4"),
+  e("tv_show", "The Great British Baking Show", { cottagecore: 0.9, whimsical: 0.5, preppy: 0.4, vintage: 0.3 }, "Channel 4"),
+  e("tv_show", "Made in Heaven", { artisanal: 0.6, quiet_luxury: 0.6, romantic: 0.5, bohemian: 0.3 }, "Prime Video · India"),
   e("tv_show", "The Bear", { artisanal: 0.6, minimalist: 0.5, streetwear: 0.4, gorpcore: 0.2 }, "FX"),
   e("tv_show", "Twin Peaks", { noir: 0.7, vintage: 0.7, avant_garde: 0.4 }, "ABC"),
   // books
