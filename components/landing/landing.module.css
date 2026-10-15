@@ -1,0 +1,337 @@
+/* Landing-only styles. Tokens come from app/globals.css. */
+
+.root {
+  position: relative;
+  overflow-x: clip;
+  isolation: isolate;
+  background: var(--paper);
+}
+
+/* ---------- film grain ---------- */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.075;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: grain 0.9s steps(6) infinite;
+}
+@keyframes grain {
+  0% { background-position: 0 0; }
+  20% { background-position: -40px 60px; }
+  40% { background-position: 70px -30px; }
+  60% { background-position: -90px -80px; }
+  80% { background-position: 30px 100px; }
+  100% { background-position: 0 0; }
+}
+
+/* ---------- type ---------- */
+.holoText {
+  background: var(--holo);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: holoPan 7s linear infinite;
+}
+@keyframes holoPan {
+  to { background-position: 220% 0; }
+}
+
+.mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  /* room for descenders and italic overhang, given back with negative margin */
+  padding: 0.04em 0.12em 0.16em 0.02em;
+  margin: -0.04em -0.12em -0.16em -0.02em;
+}
+
+/* ---------- hero ---------- */
+.hero {
+  --sx: 72%;
+  --sy: 38%;
+  position: relative;
+  isolation: isolate;
+}
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: -1;
+  animation: drift 18s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4%, -6%, 0) scale(1.08); }
+  100% { transform: translate3d(-5%, 4%, 0) scale(0.96); }
+}
+
+.gridBg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
+}
+
+/* Flashlight: a hidden constellation of taste words revealed around the cursor. */
+.constellation {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  mask-image: radial-gradient(circle 260px at var(--sx) var(--sy), black 0%, rgb(0 0 0 / 0.5) 45%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle 260px at var(--sx) var(--sy), black 0%, rgb(0 0 0 / 0.5) 45%, transparent 100%);
+  background-image: radial-gradient(rgb(255 255 255 / 0.22) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+}
+.spot {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle 420px at var(--sx) var(--sy), rgb(198 255 61 / 0.075), transparent 70%);
+}
+
+.strike {
+  position: relative;
+  white-space: nowrap;
+}
+.strike::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 55%;
+  height: 1.5px;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(var(--k, 0));
+  transition: transform 0.6s cubic-bezier(0.7, 0, 0.2, 1) var(--d, 0s);
+}
+
+/* ---------- specimen ---------- */
+.halo {
+  position: absolute;
+  inset: -18%;
+  z-index: -1;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--ha), var(--hb), var(--hc), var(--ha));
+  filter: blur(64px);
+  opacity: 0.42;
+  animation: spin 16s linear infinite;
+  pointer-events: none;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ph {
+  position: relative;
+  aspect-ratio: 63 / 88;
+  border-radius: 16px;
+  background: var(--holo);
+  background-size: 300% 300%;
+  animation: phPan 4s linear infinite;
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.8);
+  container-type: inline-size;
+}
+@keyframes phPan {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+.phInner {
+  position: absolute;
+  inset: 1.6cqw;
+  border-radius: 3cqw;
+  background:
+    radial-gradient(120% 80% at 100% 0%, #241a40 0%, transparent 55%),
+    radial-gradient(90% 70% at 0% 100%, #0d3333 0%, transparent 55%),
+    #0b0b10;
+  overflow: hidden;
+}
+.phInner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.07) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: sweep 1.8s ease-in-out infinite;
+}
+@keyframes sweep {
+  from { background-position: 150% 0; }
+  to { background-position: -100% 0; }
+}
+
+.float {
+  animation: float 6s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* ---------- marquee ---------- */
+.marquee {
+  display: flex;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+.track {
+  display: flex;
+  flex-shrink: 0;
+  min-width: max-content;
+  animation: marquee var(--dur, 40s) linear infinite;
+}
+.reverse {
+  animation-direction: reverse;
+}
+.marquee:hover .track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ---------- persona cards ---------- */
+.persona {
+  --tx: 0deg;
+  --ty: 0deg;
+  position: relative;
+  transform: perspective(900px) rotateX(var(--tx)) rotateY(var(--ty));
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transform-style: preserve-3d;
+}
+.persona::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--holo);
+  background-size: 200% 200%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s;
+  animation: phPan 5s linear infinite;
+  pointer-events: none;
+}
+.persona:hover::before,
+.persona:focus-visible::before {
+  opacity: 1;
+}
+.personaSheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle 240px at var(--px, 50%) var(--py, 0%), rgb(255 255 255 / 0.1), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.persona:hover .personaSheen {
+  opacity: 1;
+}
+.snap {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.snap::-webkit-scrollbar {
+  display: none;
+}
+.snap > * {
+  scroll-snap-align: center;
+}
+
+/* ---------- receipt ---------- */
+.receipt {
+  --zz: 9px;
+  position: relative;
+  background: #f1eee6;
+  color: #111014;
+  padding-bottom: calc(var(--zz) + 18px);
+  mask:
+    conic-gradient(from -45deg at bottom, transparent, #000 1deg 89deg, transparent 90deg) 50% / calc(var(--zz) * 2) 100%;
+  -webkit-mask:
+    conic-gradient(from -45deg at bottom, transparent, #000 1deg 89deg, transparent 90deg) 50% / calc(var(--zz) * 2) 100%;
+}
+.receiptWrap {
+  filter: drop-shadow(0 40px 50px rgb(0 0 0 / 0.6));
+}
+.dash {
+  border-top: 1.5px dashed rgb(17 16 20 / 0.35);
+}
+.barcode {
+  height: 42px;
+  background: repeating-linear-gradient(
+    90deg,
+    #111014 0 2px,
+    transparent 2px 4px,
+    #111014 4px 5px,
+    transparent 5px 8px,
+    #111014 8px 11px,
+    transparent 11px 12px,
+    #111014 12px 13px,
+    transparent 13px 17px
+  );
+}
+
+/* ---------- graph ---------- */
+.pulse {
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(198 255 61 / 0.45); }
+  50% { box-shadow: 0 0 0 18px rgb(198 255 61 / 0); }
+}
+.flow {
+  stroke-dasharray: 2 6;
+  animation: flow 1.4s linear infinite;
+}
+@keyframes flow {
+  to { stroke-dashoffset: -16; }
+}
+
+/* ---------- footer ---------- */
+.wordmark {
+  font-size: clamp(4rem, 19.5vw, 20rem);
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  background: linear-gradient(to bottom, var(--ink) 30%, rgb(243 241 236 / 0.05) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain,
+  .holoText,
+  .orb,
+  .halo,
+  .ph,
+  .phInner::after,
+  .float,
+  .track,
+  .persona::before,
+  .pulse,
+  .flow {
+    animation: none !important;
+  }
+  .persona {
+    transform: none !important;
+  }
+}

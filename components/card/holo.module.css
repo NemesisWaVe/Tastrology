@@ -1,0 +1,829 @@
+/* Collectible card. Sizes use cqw (relative to the scene width) so the card scales as one object.
+   Layout is a fixed grid where only the art window flexes, so content can never overflow the card. */
+
+.scene {
+  container-type: inline-size;
+  perspective: 1100px;
+  -webkit-tap-highlight-color: transparent;
+  /* next/font variables live on <body>; reference them directly so they resolve here. */
+  --f-serif: var(--nf-serif), "Instrument Serif", Georgia, serif;
+  --f-display: var(--nf-display), var(--nf-sans), system-ui, sans-serif;
+  --f-sans: var(--nf-sans), system-ui, sans-serif;
+  --f-mono: var(--nf-mono), ui-monospace, monospace;
+  --paperw: #f5f3ee;
+}
+
+.card {
+  --rx: 0deg;
+  --ry: 0deg;
+  --mx: 50%;
+  --my: 50%;
+  --ang: 0deg;
+  --hyp: 0;
+  --o: 0.5;
+  --frame: linear-gradient(135deg, var(--a), var(--b) 45%, var(--a2) 100%);
+  position: relative;
+  aspect-ratio: 63 / 88;
+  border-radius: 4.8cqw;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transform-style: preserve-3d;
+  will-change: transform;
+  padding: 2.2cqw;
+  background: var(--frame);
+  box-shadow:
+    0 3cqw 7cqw -2cqw rgb(0 0 0 / 0.7),
+    0 0 16cqw -5cqw var(--a),
+    inset 0 0 0 0.3cqw rgb(255 255 255 / 0.35),
+    inset 0 0 0 0.9cqw rgb(0 0 0 / 0.12);
+  isolation: isolate;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+/* rarity → frame metal */
+.common {
+  --frame: linear-gradient(140deg, #e7eaee 0%, #8a929c 22%, #f4f6f8 46%, #6b7280 68%, #d4d8dd 100%);
+}
+.rare {
+  --frame: linear-gradient(135deg, color-mix(in oklab, var(--a) 85%, white), var(--b) 45%, color-mix(in oklab, var(--a2) 80%, white) 100%);
+}
+.holo {
+  --frame: linear-gradient(115deg, #ff7773, #ffed5f 18%, #a8ff5f 34%, #83fff7 50%, #7894ff 66%, #d875ff 82%, #ff7773);
+  background-size: 200% 200%;
+  background-position: var(--mx) var(--my);
+}
+.secret {
+  --frame: linear-gradient(135deg, #fff1b8 0%, #b7791f 22%, #fff6d6 44%, #8a5a12 64%, #f8dc84 82%, #a16207 100%);
+  background-size: 180% 180%;
+  background-position: var(--mx) var(--my);
+}
+
+/* ---------------------------------------------------------------- face */
+
+.face {
+  position: relative;
+  height: 100%;
+  border-radius: 3cqw;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto auto;
+  row-gap: 1.45cqw;
+  padding: 3cqw 3.8cqw 2.6cqw;
+  color: var(--paperw);
+  background:
+    radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.5), transparent),
+    radial-gradient(1px 1px at 78% 62%, rgb(255 255 255 / 0.35), transparent),
+    radial-gradient(1px 1px at 42% 88%, rgb(255 255 255 / 0.3), transparent),
+    radial-gradient(120% 55% at 100% 0%, color-mix(in oklab, var(--a) 32%, transparent), transparent 62%),
+    radial-gradient(90% 50% at 0% 100%, color-mix(in oklab, var(--b) 26%, transparent), transparent 62%),
+    linear-gradient(180deg, #0f0f16, #08080c);
+  box-shadow:
+    inset 0 0 0 0.25cqw rgb(255 255 255 / 0.12),
+    inset 0 0 0 0.9cqw rgb(0 0 0 / 0.35);
+  font-family: var(--f-sans);
+}
+
+.face > * {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+}
+
+.face::after {
+  /* film grain */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.rosette {
+  position: absolute !important;
+  z-index: 0 !important;
+  width: 74cqw;
+  height: 74cqw;
+  right: -26cqw;
+  top: -24cqw;
+  fill: none;
+  stroke: color-mix(in oklab, var(--a) 70%, white);
+  stroke-width: 0.14;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqw;
+  font-family: var(--f-mono);
+  font-size: 1.95cqw;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8cqw;
+  font-weight: 500;
+  color: var(--paperw);
+}
+.brandMark {
+  width: 2.4cqw;
+  height: 2.4cqw;
+  color: var(--a);
+  filter: drop-shadow(0 0 0.8cqw var(--a));
+}
+
+.serial {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgb(245 243 238 / 0.45);
+}
+
+.rarity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8cqw;
+  padding: 0.8cqw 1.6cqw;
+  border-radius: 99px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: #0b0b10;
+  background: var(--frame);
+  background-size: 160% 160%;
+  background-position: var(--mx) var(--my);
+  box-shadow:
+    inset 0 0 0 0.2cqw rgb(255 255 255 / 0.55),
+    0 0 2.4cqw -0.6cqw var(--a);
+}
+.rarity i {
+  font-style: normal;
+  font-size: 1.6cqw;
+  letter-spacing: 0.05em;
+}
+
+/* ---------------------------------------------------------------- title */
+
+.titleBlock {
+  padding-top: 0.6cqw;
+}
+
+.kicker {
+  margin: 0;
+  font-family: var(--f-mono);
+  font-size: 1.95cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--a) 70%, white);
+}
+
+.title {
+  margin: 0.5cqw 0 0;
+  font-family: var(--f-serif);
+  font-weight: 400;
+  line-height: 0.92;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-bottom: 0.4cqw;
+  /* foil-stamped type: a moving metallic glint inside the letterforms (text stays crisp) */
+  color: var(--paperw);
+  background: linear-gradient(
+    100deg,
+    var(--paperw) 0%,
+    var(--paperw) 38%,
+    color-mix(in oklab, var(--a) 55%, white) 46%,
+    #ffffff 50%,
+    color-mix(in oklab, var(--a2) 55%, white) 54%,
+    var(--paperw) 62%,
+    var(--paperw) 100%
+  );
+  background-size: 260% 100%;
+  background-position: calc(100% - var(--mx)) 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.title[data-size="l"] {
+  font-size: 10.6cqw;
+}
+.title[data-size="m"] {
+  font-size: 9cqw;
+}
+.title[data-size="s"] {
+  font-size: 7.7cqw;
+}
+.secret .title {
+  background-image: linear-gradient(100deg, #fff4d0 0%, #f6d77c 30%, #fffaf0 48%, #d4a640 62%, #fff1c2 100%);
+}
+.common .title {
+  background-image: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* ---------------------------------------------------------------- art */
+
+.art {
+  min-height: 0;
+  border-radius: 2.4cqw;
+  overflow: hidden;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--a) 35%, #08080c), color-mix(in oklab, var(--b) 35%, #08080c));
+  box-shadow:
+    inset 0 0 0 0.3cqw rgb(255 255 255 / 0.35),
+    0 1.2cqw 3cqw -1cqw rgb(0 0 0 / 0.75);
+}
+
+.collage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 0.5cqw;
+  padding: 0.5cqw;
+}
+
+.collage img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  border-radius: 1cqw;
+  grid-column: span 2;
+  filter: grayscale(1) contrast(1.35) brightness(0.95);
+}
+
+.collage[data-n="5"] img:nth-child(-n + 2) {
+  grid-column: span 3;
+}
+.collage[data-n="4"] img {
+  grid-column: span 3;
+}
+.collage[data-n="3"] img:first-child {
+  grid-row: span 2;
+  grid-column: span 3;
+}
+.collage[data-n="3"] img:not(:first-child) {
+  grid-column: span 3;
+}
+.collage[data-n="2"] img,
+.collage[data-n="1"] img {
+  grid-row: span 2;
+  grid-column: span 3;
+}
+.collage[data-n="1"] img {
+  grid-column: span 6;
+}
+
+.collage::after {
+  /* duotone: multiply the greyscale collage by the type gradient (white paper → type colour) + vignette */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 100% at 50% 35%, transparent 35%, rgb(5 5 10 / 0.7) 100%),
+    linear-gradient(160deg, color-mix(in oklab, var(--a) 85%, white), color-mix(in oklab, var(--b) 90%, black));
+  mix-blend-mode: multiply;
+}
+
+.gen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.gen i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4cqw);
+}
+.gen i:nth-child(1) {
+  width: 70%;
+  height: 120%;
+  left: -10%;
+  top: -20%;
+  background: var(--a);
+}
+.gen i:nth-child(2) {
+  width: 60%;
+  height: 90%;
+  right: -10%;
+  bottom: -30%;
+  background: var(--a2);
+}
+.gen i:nth-child(3) {
+  width: 40%;
+  height: 50%;
+  left: 40%;
+  top: 20%;
+  background: #fff;
+  opacity: 0.35;
+}
+
+.constellation {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.constellation svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.constellation polyline,
+.constellation line {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.75);
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+.constellation .faint {
+  stroke: rgb(255 255 255 / 0.4);
+  stroke-dasharray: 2 3;
+}
+.star {
+  position: absolute;
+  width: calc(2.4cqw + var(--w) * 3.2cqw);
+  height: calc(2.4cqw + var(--w) * 3.2cqw);
+  transform: translate(-50%, -50%);
+  color: #fff;
+  filter: drop-shadow(0 0 1cqw rgb(255 255 255 / 0.9)) drop-shadow(0 0 2.2cqw var(--a));
+}
+.star svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.seal {
+  position: absolute;
+  z-index: 4;
+  top: 1.8cqw;
+  right: 1.8cqw;
+  width: 14.5cqw;
+  height: 14.5cqw;
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: var(--paperw);
+  background:
+    radial-gradient(circle, #0d0d13 0 60%, transparent 61%),
+    conic-gradient(from var(--ang), #ff7773, #ffed5f, #a8ff5f, #83fff7, #7894ff, #d875ff, #ff7773);
+  box-shadow:
+    0 0 0 0.35cqw rgb(13 13 19 / 0.9),
+    0 1cqw 2.4cqw rgb(0 0 0 / 0.6);
+}
+.secret .seal {
+  background:
+    radial-gradient(circle, #0d0d13 0 60%, transparent 61%),
+    conic-gradient(from var(--ang), #fff1b8, #b7791f, #fff6d6, #8a5a12, #f8dc84, #fff1b8);
+}
+.common .seal {
+  background:
+    radial-gradient(circle, #0d0d13 0 60%, transparent 61%),
+    conic-gradient(from var(--ang), #f4f6f8, #8a929c, #e7eaee, #6b7280, #f4f6f8);
+}
+.seal b {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 5.6cqw;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+}
+.seal span {
+  font-family: var(--f-mono);
+  font-size: 1.5cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.artTag {
+  position: absolute;
+  z-index: 4;
+  left: 1.6cqw;
+  bottom: 1.6cqw;
+  max-width: calc(100% - 3.2cqw);
+  display: flex;
+  gap: 1cqw;
+  padding: 0.8cqw 1.8cqw;
+  border-radius: 99px;
+  font-family: var(--f-mono);
+  font-size: 1.95cqw;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #0b0b10;
+  background: rgb(255 255 255 / 0.86);
+}
+.artTag i {
+  font-style: normal;
+  margin-right: 0.6cqw;
+}
+.artTag em {
+  font-style: normal;
+  opacity: 0.4;
+  margin-right: 1cqw;
+}
+
+/* ---------------------------------------------------------------- big three */
+
+.big3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.4cqw;
+}
+
+.sign {
+  position: relative;
+  padding: 1.5cqw 1.7cqw 1.4cqw;
+  border-radius: 2cqw;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--c1) 16%, transparent), transparent 75%),
+    rgb(255 255 255 / 0.035);
+  box-shadow: inset 0 0 0 0.22cqw color-mix(in oklab, var(--c1) 45%, rgb(255 255 255 / 0.1));
+  overflow: hidden;
+}
+.sign[data-alert] {
+  box-shadow:
+    inset 0 0 0 0.22cqw color-mix(in oklab, var(--c1) 70%, white),
+    0 0 2.6cqw -0.8cqw var(--c1);
+}
+
+.signHead {
+  display: flex;
+  align-items: center;
+  gap: 0.8cqw;
+  font-family: var(--f-mono);
+  font-size: 1.85cqw;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(245 243 238 / 0.6);
+  line-height: 1;
+}
+.signHead i {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 2.3cqw;
+  color: var(--c1);
+  letter-spacing: 0;
+}
+.sigil {
+  width: 3.1cqw;
+  height: 3.1cqw;
+  color: color-mix(in oklab, var(--c1) 75%, white);
+  filter: drop-shadow(0 0 0.8cqw var(--c1));
+  flex: 0 0 auto;
+}
+
+.signVal {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: 2.04em;
+  margin-top: 1cqw;
+  font-family: var(--f-display);
+  font-size: 2.95cqw;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.signSub {
+  display: block;
+  margin-top: 0.7cqw;
+  font-family: var(--f-mono);
+  font-size: 1.6cqw;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(245 243 238 / 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sign[data-alert] .signSub {
+  color: color-mix(in oklab, var(--c1) 70%, white);
+}
+
+/* ---------------------------------------------------------------- moves */
+
+.moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.moves li {
+  display: flex;
+  align-items: center;
+  gap: 2cqw;
+  padding: 1cqw 0;
+  border-top: 0.18cqw solid rgb(245 243 238 / 0.09);
+}
+.moves li:last-child {
+  border-bottom: 0.18cqw solid rgb(245 243 238 / 0.09);
+}
+
+.moveIdx {
+  font-family: var(--f-mono);
+  font-size: 1.9cqw;
+  color: color-mix(in oklab, var(--a) 75%, white);
+  flex: 0 0 auto;
+}
+
+.moveName {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--f-display);
+  font-size: 3.3cqw;
+  font-weight: 600;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moveName small {
+  display: block;
+  font-family: var(--f-sans);
+  font-weight: 400;
+  font-size: 2cqw;
+  color: rgb(245 243 238 / 0.48);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moveVal {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5cqw;
+  font-family: var(--f-display);
+  font-size: 4.6cqw;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.moveVal small {
+  font-family: var(--f-mono);
+  font-size: 1.5cqw;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(245 243 238 / 0.45);
+}
+
+/* ---------------------------------------------------------------- stats */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2cqw;
+}
+.stats > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  row-gap: 0.6cqw;
+}
+.stats span {
+  font-family: var(--f-mono);
+  font-size: 1.75cqw;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(245 243 238 / 0.55);
+}
+.stats b {
+  font-family: var(--f-display);
+  font-size: 3.6cqw;
+  font-weight: 700;
+  line-height: 1;
+}
+.stats > div > i {
+  grid-column: 1 / -1;
+  height: 0.55cqw;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 0.1);
+  overflow: hidden;
+}
+.stats > div > i > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--a), var(--a2));
+}
+
+/* ---------------------------------------------------------------- flavor + mrz */
+
+.flavor {
+  margin: 0;
+  font-family: var(--f-serif);
+  font-style: italic;
+  font-size: 2.95cqw;
+  line-height: 1.22;
+  color: rgb(245 243 238 / 0.82);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mrz {
+  display: flex;
+  flex-direction: column;
+  padding-top: 1.2cqw;
+  border-top: 0.18cqw dashed rgb(245 243 238 / 0.16);
+  font-family: var(--f-mono);
+  font-size: 1.85cqw;
+  line-height: 1.3;
+  letter-spacing: 0.24em;
+  color: rgb(245 243 238 / 0.38);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- foil */
+
+.faceFoil,
+.frameShine,
+.glare,
+.artShine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.faceFoil,
+.frameShine,
+.artShine {
+  background-image:
+    /* dark stops on purpose: color-dodge blows them out into neon only where light hits */
+    repeating-linear-gradient(
+      0deg,
+      hsl(2 80% 36%) 5%,
+      hsl(53 80% 34%) 10%,
+      hsl(93 80% 33%) 15%,
+      hsl(176 80% 36%) 20%,
+      hsl(228 80% 38%) 25%,
+      hsl(283 80% 37%) 30%,
+      hsl(2 80% 36%) 35%
+    ),
+    repeating-linear-gradient(133deg, #0e152e 0%, hsl(180 10% 60%) 3.8%, hsl(180 29% 66%) 4.5%, hsl(180 10% 60%) 5.2%, #0e152e 10%, #0e152e 12%),
+    radial-gradient(farthest-corner circle at var(--mx) var(--my), rgb(0 0 0 / 0.1) 12%, rgb(0 0 0 / 0.15) 20%, rgb(0 0 0 / 0.25) 120%);
+  background-blend-mode: screen, hue, hard-light;
+  background-size: 200% 700%, 300% 100%, 200% 100%;
+  background-position:
+    0% var(--my),
+    var(--mx) var(--my),
+    center;
+  filter: brightness(0.75) contrast(1.9) saturate(1.1);
+  mix-blend-mode: color-dodge;
+  opacity: 0;
+}
+
+/* under the text: foil only lights the empty dark field around the type */
+.faceFoil {
+  z-index: 0 !important;
+  -webkit-mask-image: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 85%);
+  mask-image: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 85%);
+}
+
+.artShine {
+  z-index: 3;
+}
+
+/* the frame ring only (never over the face) */
+.frameShine {
+  z-index: 3;
+  padding: 2.2cqw;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+/* rarity → how much of the card is foil */
+.rare .artShine,
+.holo .artShine,
+.secret .artShine {
+  opacity: calc(var(--o) * 0.8);
+}
+.rare .frameShine {
+  opacity: calc(var(--o) * 0.5);
+}
+.holo .frameShine,
+.secret .frameShine {
+  opacity: calc(var(--o) * 0.75);
+}
+.holo .faceFoil {
+  opacity: calc(var(--o) * 0.55);
+}
+.secret .faceFoil {
+  opacity: calc(var(--o) * 0.5);
+}
+.secret .faceFoil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 30%, #fff 0 0.6px, transparent 1.2px),
+    radial-gradient(circle at 70% 60%, #fff 0 0.5px, transparent 1px),
+    radial-gradient(circle at 40% 80%, #fde68a 0 0.7px, transparent 1.3px);
+  background-size: 23px 29px, 31px 37px, 41px 43px;
+  background-position: var(--mx) var(--my), calc(100% - var(--mx)) var(--my), var(--my) var(--mx);
+  mix-blend-mode: color-dodge;
+}
+
+.glare {
+  z-index: 5;
+  background: radial-gradient(farthest-corner circle at var(--mx) var(--my), rgb(255 255 255 / 0.55) 6%, rgb(255 255 255 / 0.22) 24%, rgb(0 0 0 / 0.35) 95%);
+  mix-blend-mode: overlay;
+  opacity: calc(var(--o) * 0.55);
+}
+
+/* ---------------------------------------------------------------- still (export) mode
+   No blend modes: a pre-composed foil band that survives html-to-image / canvas export. */
+
+.card[data-still] {
+  transform: none;
+  box-shadow:
+    0 0 0 0 transparent,
+    inset 0 0 0 0.3cqw rgb(255 255 255 / 0.35),
+    inset 0 0 0 0.9cqw rgb(0 0 0 / 0.12);
+}
+.card[data-still] .face::after,
+.card[data-still] .glare,
+.card[data-still] .frameShine {
+  display: none;
+}
+.card[data-still] .faceFoil,
+.card[data-still] .artShine {
+  mix-blend-mode: normal;
+  filter: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background-blend-mode: normal;
+  background-size: 100% 100%;
+  background-position: 0 0;
+  background-image:
+    linear-gradient(
+      118deg,
+      transparent 18%,
+      rgb(255 119 115 / 0.5) 27%,
+      rgb(255 237 95 / 0.5) 34%,
+      rgb(168 255 95 / 0.45) 41%,
+      rgb(131 255 247 / 0.5) 48%,
+      rgb(120 148 255 / 0.5) 55%,
+      rgb(216 117 255 / 0.5) 62%,
+      transparent 72%
+    ),
+    linear-gradient(118deg, transparent 38%, rgb(255 255 255 / 0.55) 44%, transparent 50%);
+}
+.card[data-still] .artShine {
+  opacity: 0;
+}
+.card[data-still].rare .artShine,
+.card[data-still].holo .artShine,
+.card[data-still].secret .artShine {
+  opacity: 0.38;
+}
+.card[data-still] .faceFoil {
+  opacity: 0;
+}
+.card[data-still].holo .faceFoil,
+.card[data-still].secret .faceFoil {
+  opacity: 0.13;
+}
+.card[data-still] .faceFoil::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transform: none;
+  }
+}
