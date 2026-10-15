@@ -38,8 +38,10 @@ export interface QEntity {
   affinity?: number;
   /** query.explainability: signal entity id -> normalized influence (0-1). */
   explain?: Record<string, number>;
-  /** Only present in mock mode; live Qloo has no price data. */
+  /** Price band: from Qloo price_range_usd_min (live) or the mock graph. */
   tier?: 1 | 2 | 3;
+  /** Qloo brand properties: personal_style + aesthetic_properties. */
+  style?: string[];
 }
 
 export interface InsightsParams {
@@ -48,6 +50,9 @@ export interface InsightsParams {
   tagIds?: string[];
   filterTags?: string[];
   excludeIds?: string[];
+  /** filter.tag.types, for urn:tag insights. */
+  tagTypes?: string[];
+  popularity?: { min?: number; max?: number };
   take?: number;
   explain?: boolean;
 }
@@ -71,6 +76,8 @@ export interface BrandMatch {
   /** Seed ids that most drive this brand, strongest first. */
   because: string[];
   why?: string;
+  /** 1 = picked by the separate query for the minority side of a split taste. */
+  side?: 1;
 }
 
 export interface RejectedBrand {

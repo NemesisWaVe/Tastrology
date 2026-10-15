@@ -31,23 +31,23 @@ export const PERSONAS: Persona[] = [
     blurb: "Cyberpunk nights… and a soft spot for baking shows",
     seeds: [
       { name: "Blade Runner 2049", kind: "movie" },
-      { name: "Berghain", kind: "place" },
+      { name: "Daft Punk", kind: "artist" },
       { name: "Cyberpunk 2077", kind: "videogame" },
       { name: "Neuromancer", kind: "book" },
-      { name: "The Great British Bake Off", kind: "tv_show" },
+      { name: "The Great British Baking Show", kind: "tv_show" },
     ],
   },
   {
     key: "mumbai",
     name: "The Mumbai Storyteller",
     emoji: "🪔",
-    blurb: "Prateek Kuhad, The Lunchbox, Wes Anderson, Ghibli",
+    blurb: "Prateek Kuhad, The Lunchbox, Made in Heaven, Ghibli",
     seeds: [
       { name: "Prateek Kuhad", kind: "artist" },
       { name: "The Lunchbox", kind: "movie" },
+      { name: "Made in Heaven", kind: "tv_show" },
       { name: "The Grand Budapest Hotel", kind: "movie" },
       { name: "Spirited Away", kind: "movie" },
-      { name: "Kala Ghoda Arts District", kind: "place" },
     ],
   },
 ];

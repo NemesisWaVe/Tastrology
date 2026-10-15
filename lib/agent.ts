@@ -1,6 +1,7 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { GroundingLedger } from "./grounding";
-import { chat, llmConfigured, type ChatMessage, type ToolDef } from "./llm";
+import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
 import { findTags, insights, qlooMode, searchEntities } from "./qloo";
 import type {
   AgentRequest,
@@ -19,9 +20,12 @@ import type {
 
 type Emit = (e: TraceEvent) => void;
 
+/** Bump when agent logic changes so cached results from older logic aren't replayed. */
+export const AGENT_VERSION = 8;
+
 const FLUKE_SHARE = 0.6; // one seed carries ≥60% of Qloo's explained signal
-const CONTRADICTION_SIM = 0.2; // seeds whose influence patterns barely overlap
 const TARGET = 10;
+const SIDE_B = 3; // slots reserved for the minority side when the taste is split
 const MIN_BRANDS = 8;
 
 /** Everything the agent has learned so far in one run. Tools read and write this. */
@@ -31,9 +35,12 @@ class RunState {
   llmSteps = 0;
   seeds: QEntity[] = [];
   filterTags: string[] = [];
+  /** Qloo aesthetic tags fed back into the brand query as signal.interests.tags. */
+  signalTags: string[] = [];
+  seedTags = new Map<string, QTag[]>();
+  inert: string[] = [];
   candidates: QEntity[] = [];
   ablation = new Map<string, Record<string, number>>(); // brandId -> seedId -> drop
-  sim: Record<string, Record<string, number>> = {};
   contradictions: Contradiction[] = [];
   lobes: Lobe[] = [];
   final: BrandMatch[] = [];
@@ -44,7 +51,13 @@ class RunState {
   name = "";
   tagline = "";
   done = new Set<string>();
-  constructor(public req: AgentRequest, public emit: Emit) {}
+  /** Step promises, keyed by step; prefetched steps buffer their trace events until the LLM asks for them. */
+  steps = new Map<string, { p: Promise<unknown>; buf: TraceEvent[] | null }>();
+  speculate = false;
+  constructor(public req: AgentRequest, private rawEmit: Emit) {}
+
+  emit = (e: TraceEvent) => (emitCtx.getStore() ?? this.rawEmit)(e);
+  emitNow = (e: TraceEvent) => this.rawEmit(e);
 
   get liked() {
     return this.req.feedback?.liked ?? [];
@@ -52,9 +65,62 @@ class RunState {
   get disliked() {
     return this.req.feedback?.disliked ?? [];
   }
+  /** Seeds that drive the main brand query: side A when the taste is split. */
+  get mainSeeds() {
+    return this.lobes.length ? this.seeds.filter((s) => this.lobes[0].seedIds.includes(s.id)) : this.seeds;
+  }
   seedName(id: string) {
     return this.seeds.find((s) => s.id === id)?.name ?? this.ledger.get(id)?.name ?? id;
   }
+}
+
+/* ---------------------------------------------------- speculative steps */
+
+const emitCtx = new AsyncLocalStorage<Emit>();
+
+type StepKey = "resolve" | "tags" | "tags_dna" | "insights" | "ablate" | "critique" | "bridges";
+
+const STEPS: Record<StepKey, { needs: StepKey[]; run: (st: RunState) => Promise<unknown> }> = {
+  resolve: { needs: [], run: resolveSeeds },
+  tags: { needs: [], run: (st) => discoverBrandTags(st, ["fashion", "beauty"]) },
+  tags_dna: { needs: ["resolve"], run: styleTags },
+  insights: { needs: ["resolve", "tags", "tags_dna"], run: brandInsights },
+  ablate: { needs: ["insights"], run: ablateSeeds },
+  critique: { needs: ["ablate"], run: critique },
+  bridges: { needs: ["critique"], run: tasteBridges },
+};
+
+/**
+ * Runs a pipeline step once. While the LLM is reasoning, the next Qloo step is prefetched
+ * (speculative) with its trace events held back; they are released when the LLM actually
+ * calls that tool, so the visible trace follows the LLM's own decisions.
+ */
+function step(st: RunState, key: StepKey, speculative = false): Promise<unknown> {
+  const hit = st.steps.get(key);
+  if (hit) {
+    if (!speculative && hit.buf) {
+      const buf = hit.buf;
+      hit.buf = null;
+      buf.forEach(st.emitNow);
+    }
+    return hit.p;
+  }
+  const entry: { p: Promise<unknown>; buf: TraceEvent[] | null } = { p: Promise.resolve(), buf: speculative ? [] : null };
+  st.steps.set(key, entry);
+  const emitter: Emit = (e) => (entry.buf ? entry.buf.push(e) : st.emitNow(e));
+  entry.p = emitCtx.run(emitter, async () => {
+    await Promise.all(STEPS[key].needs.map((k) => step(st, k, speculative)));
+    const out = await STEPS[key].run(st);
+    if (st.speculate) prefetch(st);
+    return out;
+  });
+  entry.p.catch(() => {}); // surfaced when the step is awaited for real
+  return entry.p;
+}
+
+function prefetch(st: RunState) {
+  for (const key of Object.keys(STEPS) as StepKey[])
+    if (!st.steps.has(key) && STEPS[key].needs.every((k) => st.done.has(k))) step(st, key, true);
 }
 
 /* ------------------------------------------------------------------ tools */
@@ -73,7 +139,11 @@ async function resolveSeeds(st: RunState) {
     const out = await Promise.all(
       st.req.seeds.map(async (s) => {
         const hits = await searchEntities(s.name, [s.kind], 5, log);
-        return hits.find((h) => h.id === s.id) ?? hits[0];
+        return (
+          hits.find((h) => h.id === s.id) ??
+          hits.find((h) => h.name.toLowerCase() === s.name.toLowerCase() && (h.popularity ?? 0) >= 0.5) ??
+          hits[0]
+        );
       }),
     );
     const ok = out.filter(Boolean) as QEntity[];
@@ -94,10 +164,12 @@ async function discoverBrandTags(st: RunState, queries: string[]) {
     return { filter_tags: [], note: "mock graph is fashion & beauty only; no filter needed" };
   }
   const tags = await logged(st, "find_tags", queries.join(", "), async (log) => {
-    const lists = await Promise.all(queries.map((q) => findTags(q, 8, log).catch(() => [])));
+    const lists = await Promise.all(queries.map((q) => findTags(q, 10, log, "brand").catch(() => [])));
     const all = lists.flat().filter((t, i, a) => a.findIndex((x) => x.id === t.id) === i);
-    const brandish = all.filter((t) => /brand|fashion|apparel|cloth|beauty|cosmetic|fragrance|skin|footwear|shoe/i.test(t.id + t.name));
-    return { value: brandish.slice(0, 12), summary: `${brandish.length} fashion/beauty tag URNs discovered` };
+    // Top-level brand genres only (sub-genres like fashion:footwear are covered by their parent).
+    const genres = all.filter((t) => /^urn:tag:genre:brand:(fashion|health_and_beauty)$/.test(t.id));
+    const picked = genres.length ? genres : [{ id: "urn:tag:genre:brand:fashion", name: "Fashion" }];
+    return { value: picked, summary: `Brand genres: ${picked.map((t) => t.id.split(":").pop()).join(", ")}` };
   });
   st.filterTags = tags.map((t) => t.id);
   st.done.add("tags");
@@ -106,15 +178,25 @@ async function discoverBrandTags(st: RunState, queries: string[]) {
 
 async function brandInsights(st: RunState) {
   if (!st.done.has("resolve")) return { error: "call resolve_seeds first" };
-  st.emit({ type: "step", id: "insights", label: "Asking Qloo's taste graph for brand affinities", status: "run" });
-  const signal = [...st.seeds.map((s) => s.id), ...st.liked];
-  const run = (filterTags: string[], log: QlooCallLog[]) =>
-    insights({ type: "brand", entityIds: signal, filterTags, excludeIds: st.disliked, take: 40, explain: true }, log);
-  const cands = await logged(st, "get_insights", `brand ← ${signal.length} signals${st.filterTags.length ? ` · ${st.filterTags.length} style tags` : ""}`, async (log) => {
-    let r = await run(st.filterTags, log);
-    if (r.length < MIN_BRANDS + 4 && st.filterTags.length) r = await run([], log);
-    return { value: r, summary: `${r.length} brands scored · top: ${r.slice(0, 3).map((b) => `${b.name} ${(b.affinity ?? 0).toFixed(2)}`).join(", ")}` };
-  });
+  if (!st.done.has("tags_dna")) return { error: "call get_style_tags first: its aesthetic tags steer the brand query" };
+  st.emit({ type: "step", id: "insights", label: "Asking Qloo for brands that share your taste and aesthetic", status: "run" });
+  const signal = [...st.mainSeeds.map((s) => s.id), ...st.liked];
+  const run = (filterTags: string[], tagIds: string[], log: QlooCallLog[]) =>
+    insights({ type: "brand", entityIds: signal, tagIds, filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 40, explain: true }, log).then(styleBrands);
+  const cands = await logged(
+    st,
+    "get_insights",
+    `brand ← ${signal.length} entities + ${st.signalTags.length} aesthetic tags${st.filterTags.length ? ` · genre filter` : ""}`,
+    async (log) => {
+      let r = await run(st.filterTags, st.signalTags, log);
+      if (r.length < MIN_BRANDS + 4 && st.signalTags.length) {
+        st.signalTags = [];
+        r = await run(st.filterTags, [], log);
+      }
+      if (r.length < MIN_BRANDS + 4 && st.filterTags.length) r = await run([], [], log);
+      return { value: r, summary: `${r.length} brands scored · top: ${r.slice(0, 3).map((b) => `${b.name} ${(b.affinity ?? 0).toFixed(2)}`).join(", ")}` };
+    },
+  );
   st.candidates = cands.filter((c) => !st.disliked.includes(c.id));
   st.ledger.record(st.candidates);
   st.done.add("insights");
@@ -124,13 +206,14 @@ async function brandInsights(st: RunState) {
 
 async function ablateSeeds(st: RunState) {
   if (!st.done.has("insights")) return { error: "call get_brand_insights first" };
-  st.emit({ type: "step", id: "ablate", label: `Stress-testing: re-querying Qloo ${st.seeds.length}× with one seed removed`, status: "run" });
+  const main = st.mainSeeds;
+  st.emit({ type: "step", id: "ablate", label: `Stress-testing: re-querying Qloo ${main.length}× with one seed removed`, status: "run" });
   const top = st.candidates.slice(0, 24);
-  await logged(st, "ablate_seeds", `${st.seeds.length} leave-one-out insight calls`, async (log) => {
+  await logged(st, "ablate_seeds", `${main.length} leave-one-out insight calls`, async (log) => {
     const runs = await Promise.all(
-      st.seeds.map(async (s) => {
-        const signal = [...st.seeds.filter((x) => x.id !== s.id).map((x) => x.id), ...st.liked];
-        const r = await insights({ type: "brand", entityIds: signal, filterTags: st.filterTags, excludeIds: st.disliked, take: 50 }, log);
+      main.map(async (s) => {
+        const signal = [...main.filter((x) => x.id !== s.id).map((x) => x.id), ...st.liked];
+        const r = await insights({ type: "brand", entityIds: signal, tagIds: st.signalTags, filterTags: st.filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 50 }, log);
         st.ledger.record(r);
         return { seed: s.id, r };
       }),
@@ -145,7 +228,7 @@ async function ablateSeeds(st: RunState) {
       }
       st.ablation.set(c.id, row);
     }
-    return { value: null, summary: `Attribution matrix: ${top.length} brands × ${st.seeds.length} seeds` };
+    return { value: null, summary: `Attribution matrix: ${top.length} brands × ${main.length} seeds` };
   });
   st.done.add("ablate");
   st.emit({ type: "step", id: "ablate", label: "Attribution matrix computed", status: "done" });
@@ -160,42 +243,25 @@ function influence(st: RunState, c: QEntity): Record<string, number> {
   for (const s of st.seeds) {
     const ex = c.explain?.[s.id];
     const abShare = abTotal > 0 ? (ab[s.id] ?? 0) / abTotal : 0;
-    out[s.id] = ex !== undefined && c.explain && Object.keys(c.explain).length ? (abTotal > 0 ? 0.6 * ex + 0.4 * abShare : ex) : abShare;
+    // Live explainability is close to uniform across seeds, so measured ablation carries most of the weight.
+    out[s.id] = ex !== undefined && c.explain && Object.keys(c.explain).length ? (abTotal > 0 ? 0.3 * ex + 0.7 * abShare : ex) : abShare;
   }
   return out;
 }
 
-function critique(st: RunState) {
+async function critique(st: RunState) {
   if (!st.done.has("ablate")) return { error: "call ablate_seeds first" };
   st.emit({ type: "step", id: "critique", label: "Self-critique: checking for contradictions and one-seed flukes", status: "run" });
   const pool = st.candidates.slice(0, 24);
   const inf = new Map(pool.map((c) => [c.id, influence(st, c)]));
-
-  // Seed similarity = cosine between their influence columns across the pool.
-  const ids = st.seeds.map((s) => s.id);
+  const ids = st.mainSeeds.map((s) => s.id);
   const col = (id: string) => pool.map((c) => inf.get(c.id)![id] ?? 0);
-  st.sim = {};
-  st.contradictions = [];
-  for (const a of ids) {
-    st.sim[a] = {};
-    for (const b of ids) st.sim[a][b] = a === b ? 1 : cosine(col(a), col(b));
-  }
-  for (let i = 0; i < ids.length; i++)
-    for (let j = i + 1; j < ids.length; j++)
-      if (st.sim[ids[i]][ids[j]] < CONTRADICTION_SIM) st.contradictions.push({ a: ids[i], b: ids[j], overlap: round(st.sim[ids[i]][ids[j]]) });
-  st.contradictions.sort((x, y) => x.overlap - y.overlap);
 
-  const lobes: string[][] = [];
-  if (st.contradictions.length) {
-    const { a, b } = st.contradictions[0];
-    const A = [a], B = [b];
-    for (const id of ids) if (id !== a && id !== b) (st.sim[id][a] >= st.sim[id][b] ? A : B).push(id);
-    lobes.push(A, B);
-    st.critique.push(
-      `Contradiction: ${st.seedName(a)} and ${st.seedName(b)} pull toward different brands (overlap ${(st.contradictions[0].overlap * 100).toFixed(0)}%). Splitting your Style DNA into two lobes.`,
-    );
-  }
-  st.lobes = lobes.map((seedIds) => ({ seedIds, keywords: [] }));
+  // Inert seeds: Qloo barely links them to any of these brands. Not a contradiction, just quiet.
+  const weight = Object.fromEntries(ids.map((id) => [id, col(id).reduce((a, b) => a + b, 0) / Math.max(1, pool.length)]));
+  st.inert = ids.length >= 3 ? ids.filter((id) => weight[id] < 0.35 / ids.length) : [];
+  for (const id of st.inert)
+    st.critique.push(`${st.seedName(id)} barely moves your brand matches (avg influence ${(weight[id] * 100).toFixed(0)}%). It still shapes your DNA, but it isn't steering brand picks.`);
 
   // Flukes: brands whose match collapses onto a single seed.
   const accepted: QEntity[] = [];
@@ -204,7 +270,7 @@ function critique(st: RunState) {
     const row = inf.get(c.id)!;
     const sorted = Object.entries(row).sort((x, y) => y[1] - x[1]);
     const [topId, topShare] = sorted[0] ?? ["", 0];
-    if (st.seeds.length >= 3 && topShare >= FLUKE_SHARE) {
+    if (ids.length >= 3 && topShare >= FLUKE_SHARE) {
       flagged.push({ c, reason: `Carried by one seed: ${st.seedName(topId)} accounts for ${(topShare * 100).toFixed(0)}% of the signal. Fragile match.` });
     } else if (passesBudget(st, c)) {
       accepted.push(c);
@@ -215,9 +281,10 @@ function critique(st: RunState) {
   // Spread across categories so the capsule plan has range (max 3 per category).
   const final: QEntity[] = [];
   const perCat = new Map<string, number>();
+  const target = st.lobes.length ? TARGET - SIDE_B : TARGET;
   for (const c of accepted) {
     const cat = categoryOf(c);
-    if ((perCat.get(cat) ?? 0) >= 3 || final.length >= TARGET) continue;
+    if ((perCat.get(cat) ?? 0) >= 3 || final.length >= target) continue;
     perCat.set(cat, (perCat.get(cat) ?? 0) + 1);
     final.push(c);
   }
@@ -231,7 +298,7 @@ function critique(st: RunState) {
   st.rejected = flagged.filter((f) => !final.includes(f.c)).slice(0, 6).map((f) => ({ entity: f.c, affinity: round(f.c.affinity), reason: f.reason }));
   for (const r of st.rejected.filter((r) => r.reason.startsWith("Carried")).slice(0, 2))
     st.critique.push(`Rejected ${r.entity.name} (affinity ${r.affinity.toFixed(2)}): ${r.reason}`);
-  if (accepted.length > TARGET) st.critique.push(`Kept the ${TARGET} strongest brands that at least two of your seeds agree on.`);
+  if (accepted.length > target) st.critique.push(`Kept the ${target} strongest brands that at least two of your seeds agree on.`);
 
   st.final = final.map((c) => {
     const row = inf.get(c.id)!;
@@ -245,6 +312,35 @@ function critique(st: RunState) {
       because,
     };
   });
+
+  // Re-plan for the minority side: its own Qloo query, so it gets real picks instead of being averaged away.
+  if (st.lobes.length) {
+    const side = st.lobes[1];
+    st.emit({ type: "step", id: "sideb", label: `Re-planning: separate Qloo query for your ${side.seedIds.map((x) => st.seedName(x)).join(" + ")} side`, status: "run" });
+    const picks = await logged(st, "get_insights", `brand ← side B seeds + ${side.keywords.length} side tags`, async (log) => {
+      const r = await insights(
+        { type: "brand", entityIds: [...side.seedIds, ...st.liked], tagIds: side.keywords.map((k) => k.id), filterTags: st.filterTags, excludeIds: [...st.disliked, ...st.final.map((b) => b.entity.id)], popularity: POP_BAND(), take: 20, explain: true },
+        log,
+      ).then(styleBrands);
+      st.ledger.record(r);
+      const ok = r.filter((c) => passesBudget(st, c)).slice(0, SIDE_B);
+      return { value: ok, summary: ok.map((b) => b.name).join(", ") };
+    });
+    for (const c of picks)
+      st.final.push({
+        entity: c,
+        affinity: round(c.affinity),
+        category: categoryOf(c),
+        explain: Object.fromEntries(side.seedIds.map((id) => [id, round(1 / side.seedIds.length)])),
+        ablation: {},
+        because: side.seedIds.slice(0, 2),
+        side: 1,
+      });
+    // A side-B pick may have been rejected as a main-list fluke; it's legitimate on its own side.
+    st.rejected = st.rejected.filter((r) => !picks.some((p) => p.id === r.entity.id));
+    st.critique = st.critique.filter((c) => !picks.some((p) => c.startsWith(`Rejected ${p.name} (`)));
+    st.emit({ type: "step", id: "sideb", label: `${picks.length} side-B picks added`, status: "done" });
+  }
   st.done.add("critique");
   st.emit({
     type: "step",
@@ -262,20 +358,75 @@ function critique(st: RunState) {
 
 async function styleTags(st: RunState) {
   if (!st.done.has("resolve")) return { error: "call resolve_seeds first" };
-  st.emit({ type: "step", id: "tags", label: "Reading your aesthetic from Qloo's tag graph", status: "run" });
-  await logged(st, "get_tags", `urn:tag ← seeds${st.lobes.length ? " + per lobe" : ""}`, async (log) => {
-    const signal = [...st.seeds.map((s) => s.id), ...st.liked];
-    const [all, ...perLobe] = await Promise.all([
-      insights({ type: "tag", entityIds: signal, take: 12 }, log),
-      ...st.lobes.map((l) => insights({ type: "tag", entityIds: l.seedIds, take: 4 }, log)),
-    ]);
-    st.keywords = all.map((t) => ({ id: t.id, name: t.name })).filter((t) => !/^\s*$/.test(t.name)).slice(0, 8);
-    perLobe.forEach((r, i) => (st.lobes[i].keywords = r.map((t) => ({ id: t.id, name: t.name })).slice(0, 3)));
-    return { value: null, summary: `Top tags: ${st.keywords.slice(0, 5).map((k) => k.name).join(", ")}` };
+  st.emit({ type: "step", id: "tags", label: `Reading the aesthetic of each of your ${st.seeds.length} loves in Qloo's tag graph`, status: "run" });
+  await logged(st, "get_tags", `urn:tag ← each seed separately`, async (log) => {
+    // Live: only Qloo's fashion vocabularies (personal style + aesthetic properties), not genre/venue tags.
+    const tagTypes = qlooMode() === "live" ? STYLE_TAG_TYPES : undefined;
+    const per = await Promise.all(st.seeds.map((s) => insights({ type: "tag", entityIds: [s.id], tagTypes, take: 12 }, log).catch(() => [])));
+    per.forEach((r, i) => {
+      st.ledger.record(r);
+      st.seedTags.set(st.seeds[i].id, dedupeTags(r));
+    });
+    // Consensus: a tag scores by how many seeds share it, so one loud seed can't hijack the DNA.
+    st.keywords = consensus(st, st.seeds.map((s) => s.id)).slice(0, 8);
+    st.signalTags = st.keywords.slice(0, 5).map((k) => k.id);
+    return { value: null, summary: `Consensus: ${st.keywords.slice(0, 5).map((k) => k.name).join(", ")}` };
   });
+  aestheticSplit(st);
   st.done.add("tags_dna");
-  st.emit({ type: "step", id: "tags", label: "Style keywords pulled from Qloo tags", status: "done", detail: st.keywords.slice(0, 5).map((k) => k.name).join(" · ") });
-  return { keywords: st.keywords.map((k) => k.name), lobes: st.lobes.map((l) => ({ seeds: l.seedIds.map((x) => st.seedName(x)), keywords: l.keywords.map((k) => k.name) })) };
+  st.emit({
+    type: "step",
+    id: "tags",
+    label: st.lobes.length ? "Your loves disagree on aesthetics: DNA split into two sides" : "Aesthetic consensus found, feeding it into the brand query",
+    status: st.lobes.length ? "warn" : "done",
+    detail: st.keywords.slice(0, 5).map((k) => k.name).join(" · "),
+  });
+  return {
+    keywords: st.keywords.map((k) => k.name),
+    sides: st.lobes.map((l) => ({ seeds: l.seedIds.map((x) => st.seedName(x)), keywords: l.keywords.map((k) => k.name) })),
+  };
+}
+
+/** Tags ranked by how many of the given seeds share them (rank-weighted). */
+function consensus(st: RunState, seedIds: string[]): QTag[] {
+  const score = new Map<string, { tag: QTag; s: number; n: number }>();
+  for (const id of seedIds)
+    (st.seedTags.get(id) ?? []).forEach((t, rank) => {
+      const k = t.name.toLowerCase();
+      const cur = score.get(k) ?? { tag: t, s: 0, n: 0 };
+      cur.s += 1 - rank / 24;
+      cur.n += 1;
+      score.set(k, cur);
+    });
+  return [...score.values()].sort((a, b) => b.n - a.n || b.s - a.s).map((x) => x.tag);
+}
+
+/** Seeds whose aesthetic tag sets don't overlap at all form two "sides". */
+function aestheticSplit(st: RunState) {
+  const ids = st.seeds.map((s) => s.id).filter((id) => (st.seedTags.get(id)?.length ?? 0) >= 5);
+  if (ids.length < 3) return;
+  const names = (id: string) => new Set((st.seedTags.get(id) ?? []).map((t) => t.name.toLowerCase()));
+  const jac = (a: string, b: string) => {
+    const A = names(a), B = names(b);
+    const inter = [...A].filter((x) => B.has(x)).length;
+    return inter / (A.size + B.size - inter || 1);
+  };
+  // Each seed's average agreement with the others; the odd one out anchors side B.
+  const avg = ids.map((id) => ({ id, a: ids.filter((x) => x !== id).reduce((t, x) => t + jac(id, x), 0) / (ids.length - 1) }));
+  avg.sort((x, y) => x.a - y.a);
+  const odd = avg[0];
+  const rest = avg.slice(1).reduce((t, x) => t + x.a, 0) / (avg.length - 1);
+  if (!(odd.a < 0.06 && rest > odd.a * 3 + 0.05)) return;
+  const B = [odd.id, ...ids.filter((id) => id !== odd.id && jac(id, odd.id) > 0.25)];
+  const A = st.seeds.map((s) => s.id).filter((id) => !B.includes(id));
+  st.lobes = [A, B].map((seedIds) => ({ seedIds, keywords: consensus(st, seedIds).slice(0, 3) }));
+  st.keywords = consensus(st, A).slice(0, 8);
+  st.signalTags = st.keywords.slice(0, 5).map((k) => k.id);
+  const other = A.reduce((best, id) => (jac(id, odd.id) < jac(best, odd.id) ? id : best), A[0]);
+  st.contradictions.push({ a: other, b: odd.id, overlap: round(jac(other, odd.id)) });
+  st.critique.push(
+    `Contradiction: ${st.seedName(odd.id)} shares almost no aesthetic with your other loves (tag overlap ${(odd.a * 100).toFixed(0)}% vs ${(rest * 100).toFixed(0)}% among the rest). Main DNA built from the majority; ${st.seedName(odd.id)} gets its own side.`,
+  );
 }
 
 async function tasteBridges(st: RunState) {
@@ -299,17 +450,14 @@ async function tasteBridges(st: RunState) {
   });
   st.done.add("bridges");
   st.emit({ type: "step", id: "bridges", label: `${st.bridges.length} taste bridges found`, status: "done" });
-  return { bridges: st.bridges.map((b) => ({ id: b.entity.id, name: b.entity.name, kind: b.entity.kind })) };
+  return { bridges: st.bridges.map((b) => ({ id: b.entity.id, name: b.entity.name, kind: b.entity.kind, driven_by: b.because.map((x) => st.seedName(x)) })) };
 }
 
 function finalize(st: RunState, args: Record<string, unknown>) {
   if (!st.done.has("critique") || !st.done.has("tags_dna")) return { error: "need critique_matches and get_style_tags before finalize" };
   if (typeof args.name === "string") st.name = args.name.slice(0, 40);
   if (typeof args.tagline === "string") st.tagline = args.tagline.slice(0, 140);
-  for (const n of (Array.isArray(args.brand_notes) ? args.brand_notes : []) as { id?: string; why?: string }[]) {
-    const b = st.final.find((x) => x.entity.id === n.id); // grounded: ignores ids Qloo never returned
-    if (b && typeof n.why === "string") b.why = n.why.slice(0, 160);
-  }
+  // Brand lines stay measured ("x% of this match traces to…"); the LLM only phrases bridges.
   for (const n of (Array.isArray(args.bridge_notes) ? args.bridge_notes : []) as { id?: string; why?: string }[]) {
     const b = st.bridges.find((x) => x.entity.id === n.id);
     if (b && typeof n.why === "string") b.why = n.why.slice(0, 160);
@@ -325,22 +473,18 @@ const TOOLS: ToolDef[] = [
   fn("find_brand_tags", "Search Qloo's tag catalog for tag URNs that restrict brand results to fashion & beauty.", {
     queries: { type: "array", items: { type: "string" }, description: "e.g. ['fashion','apparel','beauty']" },
   }),
-  fn("get_brand_insights", "Ask Qloo insights for brands with the highest taste affinity to the seeds, with per-seed explainability.", {}),
+  fn("get_style_tags", "Ask Qloo for the aesthetic/personal-style tags most associated with the seeds. These tags are then fed into the brand query.", {}),
+  fn("get_brand_insights", "Ask Qloo insights for brands with the highest affinity to the seeds AND the aesthetic tags, with per-seed explainability.", {}),
   fn("ablate_seeds", "Re-query Qloo once per seed with that seed removed, to measure how much each seed drives each brand.", {}),
-  fn("critique_matches", "Detect contradicting seeds and reject brands carried by a single seed; returns kept and rejected brands.", {}),
-  fn("get_style_tags", "Ask Qloo for the aesthetic tags most associated with the seeds (and each lobe if the taste is split).", {}),
+  fn("critique_matches", "Find inert seeds, contradicting seeds (splits the DNA into two sides) and brands carried by a single seed; returns kept and rejected brands.", {}),
   fn("find_taste_bridges", "Ask Qloo for a place, film, artist and book that complete the aesthetic.", {}),
   fn("finalize", "Publish the result. Only reference brand/bridge ids returned by earlier tools.", {
     name: { type: "string", description: "2-4 word Style DNA name built from the Qloo tags, e.g. 'Quiet Romantic Minimalist'" },
     tagline: { type: "string", description: "One sentence describing the person's style, grounded in the tags" },
-    brand_notes: {
-      type: "array",
-      items: { type: "object", properties: { id: { type: "string" }, why: { type: "string" } }, required: ["id", "why"] },
-      description: "For each kept brand: ≤18 words linking it to the named seeds that drive it",
-    },
     bridge_notes: {
       type: "array",
       items: { type: "object", properties: { id: { type: "string" }, why: { type: "string" } }, required: ["id", "why"] },
+      description: "For each bridge: ≤14 words citing its driven_by entities. No invented facts.",
     },
   }),
 ];
@@ -353,25 +497,26 @@ const SYSTEM = `You are TasteMirror, a style agent. You turn a person's taste in
 Hard rules:
 - Every brand, place or title you mention must come from a tool result. Never invent recommendations or IDs.
 - Style keywords come from get_style_tags, not from you.
-Plan: resolve_seeds → (find_brand_tags if not in mock mode) → get_brand_insights → ablate_seeds → critique_matches → get_style_tags → find_taste_bridges → finalize.
+Plan: resolve_seeds → find_brand_tags (skip in mock mode) → get_style_tags → get_brand_insights → ablate_seeds → critique_matches → find_taste_bridges → finalize.
+In finalize, name the Style DNA (2-4 words) from the Qloo keywords, and the tension between the two sides if the taste was split. Write one tagline sentence and a short note per taste bridge citing its driven_by entities.
 Before each tool call, write one short sentence of reasoning (what you expect to learn). Be terse.`;
 
 async function dispatch(st: RunState, name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "resolve_seeds":
-      return st.done.has("resolve") ? { seeds: st.seeds.map((s) => s.name) } : resolveSeeds(st);
+      return step(st, "resolve");
     case "find_brand_tags":
-      return discoverBrandTags(st, (Array.isArray(args.queries) ? args.queries : ["fashion", "apparel", "beauty"]).map(String).slice(0, 4));
-    case "get_brand_insights":
-      return brandInsights(st);
-    case "ablate_seeds":
-      return ablateSeeds(st);
-    case "critique_matches":
-      return critique(st);
+      return step(st, "tags");
     case "get_style_tags":
-      return styleTags(st);
+      return step(st, "tags_dna");
+    case "get_brand_insights":
+      return step(st, "insights");
+    case "ablate_seeds":
+      return step(st, "ablate");
+    case "critique_matches":
+      return step(st, "critique");
     case "find_taste_bridges":
-      return tasteBridges(st);
+      return step(st, "bridges");
     case "finalize":
       return finalize(st, args);
     default:
@@ -386,11 +531,14 @@ async function llmLoop(st: RunState) {
     { role: "system", content: SYSTEM },
     { role: "user", content: `Seeds: ${seedList}.${st.req.goal ? `\nStyle goal: ${st.req.goal}` : ""}\nQloo mode: ${qlooMode()}.${fb}` },
   ];
-  for (let step = 0; step < 12 && !st.done.has("finalize"); step++) {
+  st.speculate = true;
+  prefetch(st); // Qloo work starts while the LLM reads the brief
+  for (let turn = 0; turn < 12 && !st.done.has("finalize"); turn++) {
     const msg = await chat(messages, TOOLS);
     st.llmSteps++;
     messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
     if (msg.content?.trim()) st.emit({ type: "thought", text: msg.content.trim().slice(0, 300) });
+    else if (msg.tool_calls?.length) st.emit({ type: "thought", text: `Planner → ${msg.tool_calls.map((t) => t.function.name).join(", ")}` });
     if (!msg.tool_calls?.length) {
       messages.push({ role: "user", content: "Continue with the next tool call." });
       continue;
@@ -408,13 +556,9 @@ async function llmLoop(st: RunState) {
 
 /** Deterministic planner: same tools, fixed order. Used without an LLM key, and to finish any step the LLM skipped. */
 async function autopilot(st: RunState) {
-  if (!st.done.has("resolve")) await resolveSeeds(st);
-  if (!st.done.has("tags")) await discoverBrandTags(st, ["fashion", "apparel", "clothing", "beauty"]);
-  if (!st.done.has("insights")) await brandInsights(st);
-  if (!st.done.has("ablate")) await ablateSeeds(st);
-  if (!st.done.has("critique")) critique(st);
-  if (!st.done.has("tags_dna")) await styleTags(st);
-  if (!st.done.has("bridges")) await tasteBridges(st);
+  st.speculate = false;
+  // Same steps in order; anything already run (or prefetched) is reused and its trace released.
+  for (const key of Object.keys(STEPS) as StepKey[]) await step(st, key);
 }
 
 function fillCopy(st: RunState) {
@@ -440,11 +584,14 @@ export async function runAgent(req: AgentRequest, emit: Emit): Promise<StyleResu
   const t0 = Date.now();
   const st = new RunState(req, emit);
   let planner: "llm" | "autopilot" = "autopilot";
-  if (llmConfigured()) {
+  if (llmConfigured() && llmPaused()) {
+    emit({ type: "thought", text: "LLM planner is cooling down after a rate limit. Running the deterministic planner over the same Qloo tools." });
+  } else if (llmConfigured()) {
     emit({ type: "step", id: "plan", label: "Agent planning its Qloo queries", status: "run" });
     try {
       await llmLoop(st);
       planner = "llm";
+      emit({ type: "step", id: "plan", label: `Agent planned ${st.llmSteps} steps`, status: "done" });
     } catch (err) {
       emit({ type: "step", id: "plan", label: "LLM unavailable, continuing on autopilot", status: "warn", detail: String((err as Error).message) });
     }
@@ -500,22 +647,29 @@ function diff(st: RunState, prev: string[]): StyleResult["changes"] {
   return { added: named(added), removed: named(removed), why };
 }
 
-const CATS: [RegExp, string][] = [
-  [/fragrance|perfume|parfum/i, "Fragrance"],
-  [/skin|beauty|cosmetic|makeup/i, "Skincare & Beauty"],
-  [/sneaker|footwear|shoe|boot/i, "Sneakers & Shoes"],
-  [/outdoor|outerwear|jacket|coat/i, "Outerwear"],
-  [/denim|jean/i, "Denim"],
-  [/eyewear|sunglass|optical/i, "Eyewear"],
-  [/jewel|watch|bag|accessor|leather/i, "Accessories"],
-  [/knit|cashmere/i, "Knitwear"],
+/** Qloo brand genre (urn:tag:genre:brand:…) → capsule category, most specific first. */
+const GENRE_CATS: [RegExp, string][] = [
+  [/fashion:(haute_couture|formalwear)$/, "Designer & Tailoring"],
+  [/health_and_beauty:skincare$/, "Skincare & Beauty"],
+  [/health_and_beauty:(fragrance|perfume)/, "Fragrance"],
+  [/health_and_beauty$/, "Skincare & Beauty"],
+  [/fashion:jeans$/, "Denim"],
+  [/fashion:footwear/, "Shoes & Sneakers"],
+  [/fashion:accessories:eyewear$/, "Eyewear"],
+  [/fashion:accessories:watch$/, "Watches"],
+  [/fashion:accessories:bags_and_leather$/, "Bags & Leather"],
+  [/fashion:accessories:jewel/, "Jewellery"],
+  [/fashion:(outerwear|outdoor)/, "Outerwear"],
+  [/fashion:athletic$/, "Activewear"],
+  [/fashion:accessories$/, "Accessories"],
 ];
 
+const MOCK_CATS: Record<string, string> = { Sneakers: "Shoes & Sneakers", Skincare: "Skincare & Beauty", Beauty: "Skincare & Beauty", "Home & Apparel": "Apparel" };
+
 function categoryOf(c: QEntity): string {
-  const hay = `${c.subtitle ?? ""} ${c.tags.map((t) => t.name).join(" ")}`;
-  if (c.subtitle && /^(Outerwear|Apparel|Knitwear|Denim|Sneakers|Fragrance|Skincare|Beauty|Eyewear|Accessories|Home & Apparel)$/.test(c.subtitle))
-    return ({ Sneakers: "Sneakers & Shoes", Skincare: "Skincare & Beauty", Beauty: "Skincare & Beauty", "Home & Apparel": "Apparel" } as Record<string, string>)[c.subtitle] ?? c.subtitle;
-  for (const [re, cat] of CATS) if (re.test(hay)) return cat;
+  if (c.id.startsWith("mock-") && c.subtitle) return MOCK_CATS[c.subtitle] ?? c.subtitle;
+  const genres = c.tags.map((t) => t.id).filter((id) => id.startsWith("urn:tag:genre:brand:"));
+  for (const [re, cat] of GENRE_CATS) if (genres.some((g) => re.test(g))) return cat;
   return "Apparel";
 }
 
@@ -537,14 +691,29 @@ function shortExplain(st: RunState, c: QEntity) {
     .join(", ");
 }
 
-function cosine(a: number[], b: number[]) {
-  let d = 0, x = 0, y = 0;
-  for (let i = 0; i < a.length; i++) {
-    d += a[i] * b[i];
-    x += a[i] * a[i];
-    y += b[i] * b[i];
-  }
-  return x && y ? d / Math.sqrt(x * y) : 0;
-}
 
 const round = (v: number | undefined) => Math.round((v ?? 0) * 1000) / 1000;
+
+const STYLE_TAG_TYPES = ["urn:tag:personal_style:qloo", "urn:tag:aesthetic_property:qloo"];
+
+/** Live only: skip mass-market giants (taste, not bestsellers) and zero-popularity junk. */
+const POP_BAND = () => (qlooMode() === "live" ? { min: 0.3, max: 0.97 } : undefined);
+
+/** Live only: keep brands Qloo actually describes with a personal style (drops contact lenses, razors…). */
+function styleBrands(list: QEntity[]): QEntity[] {
+  if (qlooMode() !== "live") return list;
+  const styled = list.filter((e) => e.style?.length);
+  return styled.length >= MIN_BRANDS ? styled : list;
+}
+
+function dedupeTags(list: QEntity[]): QTag[] {
+  const seen = new Set<string>();
+  const out: QTag[] = [];
+  for (const t of list) {
+    const k = t.name.trim().toLowerCase();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push({ id: t.id, name: t.name.trim() });
+  }
+  return out;
+}
