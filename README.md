@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TasteMirror
 
-## Getting Started
+**Your taste already knows your style.** Tell TasteMirror a few things you love, such as artists, films, books, places or games. Its agent queries **Qloo's cross-domain taste graph** to infer your Style DNA and match you with fashion and beauty brands. It shows its work: it measures which of your loves earned each brand.
 
-First, run the development server:
+Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com) ("Agents, but with taste").
+
+## What makes it Qloo-powered
+
+Remove Qloo and nothing works. The core inference ("people who love *Blade Runner 2049* and *Berghain* gravitate to Acronym and Rick Owens") exists only in Qloo's cross-domain affinity data.
+
+| Qloo endpoint | Used for |
+|---|---|
+| `GET /search` | Seed autocomplete; the agent resolves seeds to entity IDs |
+| `GET /v2/insights` `filter.type=urn:entity:brand` + `feature.explainability` | Brand affinity, with Qloo's per-seed influence on every result |
+| `GET /v2/insights` × N (leave-one-out) | **Ablation**: re-query without each seed to measure how much affinity each brand loses |
+| `GET /v2/insights` `filter.type=urn:tag` | Style DNA keywords, overall and per "side" when tastes conflict |
+| `GET /v2/insights` place / movie / artist / book | Cross-domain taste bridges |
+| `GET /v2/tags` | Find fashion and beauty tag URNs to keep brand results on-topic |
+| `signal.interests.entities` / `filter.exclude.entities` | Feedback loop: 👍 brands become signals, 👎 brands are excluded |
+
+**Grounding rule.** Every brand, place or title shown comes from a Qloo response in that run. A `GroundingLedger` records everything Qloo returns, and a final gate drops anything else. The LLM can only name the aesthetic and phrase explanations. See `lib/grounding.ts` and `tests/grounding.test.ts`.
+
+## The agent (glass-box, not a wrapper)
+
+1. **Resolve** seeds via Qloo search.
+2. **Insights** for brands, with explainability.
+3. **Ablate**: one leave-one-out Qloo call per seed builds the **Attribution Matrix**.
+4. **Self-critique**:
+   - It detects *contradicting* seeds, meaning their influence patterns don't overlap, and splits the Style DNA into two sides instead of averaging them.
+   - It rejects brands *carried by a single seed* (≥60% of signal) as fragile matches.
+5. **Tags**: Style DNA keywords from Qloo's tag graph.
+6. **Bridges**: a place, film, artist and book that complete the aesthetic.
+7. **Finalize**: the LLM names the aesthetic and writes "because you love…" lines. Any IDs it invents are ignored.
+
+With `LLM_*` set, an OpenAI-compatible tool-calling model plans and calls these tools itself, and its reasoning streams to the trace. Without one, a deterministic planner runs the same tools. If the LLM fails mid-run, the planner finishes the job. The trace streams live (NDJSON) and every Qloo call is inspectable.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd tastemirror
+cp .env.example .env.local   # mock mode works with no keys
+npm install
+npm run dev                  # http://localhost:3000
+npm test                     # grounding + feedback tests (mock graph)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set `QLOO_MODE=live` and `QLOO_API_KEY` to use the real API (`https://hackathon.api.qloo.com`, header `X-Api-Key`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Mock mode** uses a small hand-made synthetic graph (`lib/mock/`) with the same response shape. Per Qloo's hackathon terms, **no Qloo response data is committed to this repo**. Live responses are cached in memory only.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Stack
 
-## Learn More
+Next.js 15 (App Router, TypeScript), Tailwind v4, a hand-written tool-calling agent loop over any OpenAI-compatible API, an in-memory LRU cache for Qloo calls and finished runs, a per-IP rate limit, and Vitest.
 
-To learn more about Next.js, take a look at the following resources:
+## License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
