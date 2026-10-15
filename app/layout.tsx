@@ -1,22 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Serif, Inter } from "next/font/google";
+import { Bricolage_Grotesque, Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
+import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
-const serif = Instrument_Serif({ variable: "--font-serif-display", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
+const display = Bricolage_Grotesque({ variable: "--nf-display", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
+const serif = Instrument_Serif({ variable: "--nf-serif", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
+const sans = Inter({ variable: "--nf-sans", subsets: ["latin"] });
+const mono = JetBrains_Mono({ variable: "--nf-mono", subsets: ["latin"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "TasteMirror: your taste already knows your style",
+  title: `${BRAND.name}: ${BRAND.tagline}`,
   description:
-    "An agent that reads your taste in music, film, books and places through Qloo's taste graph and turns it into a personal Style DNA, with brands that actually fit you, and shows its work.",
+    "Tell it what you love. An agent reads Qloo's cross-domain taste graph and mints your style identity as a holographic collectible card, with the brands that fit you and the receipts for every pick.",
 };
 
-export const viewport: Viewport = { themeColor: "#f6f2ea", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#07070a", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${serif.variable} ${inter.variable} antialiased`}>{children}</body>
+      <body className={`${display.variable} ${serif.variable} ${sans.variable} ${mono.variable} antialiased`}>{children}</body>
     </html>
   );
 }

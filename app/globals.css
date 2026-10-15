@@ -1,22 +1,28 @@
 @import "tailwindcss";
 
+/* Dark, cinematic base. Token names are semantic ("paper" = page background). */
 :root {
-  --paper: #f6f2ea;
-  --paper-2: #efe8dc;
-  --card: #fffdf8;
-  --ink: #1b1915;
-  --ink-2: #57524a;
-  --ink-3: #8c867b;
-  --line: #ddd5c6;
-  --accent: #c2410c;
-  --accent-soft: #fbe6d8;
-  --good: #3f6212;
-  --good-soft: #e7f0d6;
-  --warn: #a16207;
-  --warn-soft: #fbf0cf;
-  --bad: #9f1239;
-  --bad-soft: #fbe1e7;
-  --mirror: linear-gradient(135deg, #f8f4ec 0%, #e9e2d4 45%, #fbf8f2 55%, #e4dccb 100%);
+  --font-sans: var(--nf-sans), system-ui, sans-serif;
+  --font-serif: var(--nf-serif), Georgia, serif;
+  --font-mono: var(--nf-mono), ui-monospace, monospace;
+  --font-display: var(--nf-display), var(--nf-sans), sans-serif;
+  --paper: #07070a;
+  --paper-2: #121218;
+  --card: #0e0e13;
+  --ink: #f3f1ec;
+  --ink-2: #b9b5ad;
+  --ink-3: #77736c;
+  --line: #24242c;
+  --accent: #c6ff3d;
+  --accent-soft: #1f2a0a;
+  --good: #86efac;
+  --good-soft: #0f2a1a;
+  --warn: #fbbf24;
+  --warn-soft: #2a2008;
+  --bad: #fb7185;
+  --bad-soft: #2a0f15;
+  --holo: linear-gradient(115deg, #ff7773, #ffed5f, #a8ff5f, #83fff7, #7894ff, #d875ff, #ff7773);
+  --mirror: radial-gradient(120% 80% at 100% 0%, #2a1f4a 0%, transparent 55%), radial-gradient(90% 70% at 0% 100%, #0f3a3a 0%, transparent 55%), #0e0e13;
 }
 
 @theme inline {
@@ -35,9 +41,10 @@
   --color-warn-soft: var(--warn-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
-  --font-sans: var(--font-inter);
-  --font-serif: var(--font-serif-display);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--nf-sans), system-ui, sans-serif;
+  --font-serif: var(--nf-serif), Georgia, serif;
+  --font-mono: var(--nf-mono), ui-monospace, monospace;
+  --font-display: var(--nf-display), var(--nf-sans), sans-serif;
 }
 
 html {
@@ -47,7 +54,7 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--nf-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
