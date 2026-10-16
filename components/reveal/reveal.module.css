@@ -223,6 +223,62 @@
   100% { transform: translateX(60px); opacity: 0; }
 }
 
+/* tear affordance: notch + label + idle-nudging arrow, and the grab band along the seam */
+.grip {
+  position: absolute;
+  left: -14px;
+  right: -14px;
+  z-index: 8;
+  cursor: grab;
+  touch-action: none;
+}
+.grip:active {
+  cursor: grabbing;
+}
+.tearCue {
+  position: absolute;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  translate: 0 -50%;
+  pointer-events: none;
+}
+.notch {
+  width: 11px;
+  height: 18px;
+  background: #050508;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  filter: drop-shadow(0 0 5px var(--a));
+}
+.cueArrow {
+  width: 26px;
+  height: 12px;
+  color: #fff;
+  filter: drop-shadow(0 0 6px var(--a));
+  animation: nudge 2.6s cubic-bezier(0.3, 0, 0.2, 1) 1.4s infinite;
+}
+.tearCue[data-tearing] .cueArrow {
+  animation: none;
+}
+@keyframes nudge {
+  0%, 55%, 100% { transform: translateX(0); opacity: 0.75; }
+  66% { transform: translateX(11px); opacity: 1; }
+  76% { transform: translateX(3px); }
+  86% { transform: translateX(8px); }
+}
+.scar {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  z-index: 4;
+  pointer-events: none;
+  border-radius: 0 3px 3px 0;
+  background: #050508;
+  box-shadow: 0 -1px 0 rgb(255 255 255 / 0.6), 0 0 10px color-mix(in oklab, var(--a) 70%, transparent);
+}
+
 /* --------------------------------------------------------------- orbiting seed posters */
 
 .poster {
@@ -271,7 +327,8 @@
   .scan,
   .foil,
   .rays,
-  .hintSweep {
+  .hintSweep,
+  .cueArrow {
     animation: none;
   }
 }

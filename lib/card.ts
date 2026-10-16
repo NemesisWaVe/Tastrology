@@ -226,3 +226,27 @@ export function displayName(name: string): string {
 
 /** Same-origin image URL so the share export can draw it onto a canvas. */
 export const proxied = (url: string) => `/api/img?u=${encodeURIComponent(url)}`;
+
+/* ------------------------------------------------------------------ print edition + digital twin (additive) */
+
+/** Season the card was minted in. Bump per seasonal set. */
+export const SEASON = "01";
+/** Host printed under the QR on physical cards. Placeholder until the production domain is final. */
+export const TWIN_HOST = "tastrology.app";
+const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32: no I, L, O, U
+
+/** Short, human-typeable verify code: the serial plus 4 check characters hashed from the card's own fields. */
+export function cardCode(card: Pick<CardData, "serial" | "rarity" | "mrz">): string {
+  let h = hash(`${card.serial}|${card.rarity}|${card.mrz?.join("|") ?? ""}`);
+  let c = "";
+  for (let i = 0; i < 4; i++) {
+    c += B32[h & 31];
+    h >>>= 5;
+  }
+  return `${card.serial}-${c}`;
+}
+
+/** Path of the verifiable digital twin, e.g. /c/0427-H7K2. */
+export const twinPath = (card: Pick<CardData, "serial" | "rarity" | "mrz">) => `/c/${cardCode(card)}`;
+/** Absolute URL encoded in the printed QR. */
+export const twinUrl = (card: Pick<CardData, "serial" | "rarity" | "mrz">) => `https://${TWIN_HOST}${twinPath(card)}`;

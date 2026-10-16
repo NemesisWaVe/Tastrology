@@ -1,9 +1,10 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import type { CardData, CardType } from "@/lib/card";
+import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef } from "react";
+import { SEASON, TWIN_HOST, cardCode, twinUrl, type CardData, type CardType } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { KindSigil, Sigil, Sparkle, TypeSigil } from "./Sigils";
+import { qr, qrPath } from "./qr";
 import s from "./holo.module.css";
 
 export interface HoloCardHandle {
@@ -321,10 +322,10 @@ const ROSETTE = (() => {
   return out;
 })();
 
-function Rosette({ className }: { className?: string }) {
+function Rosette({ className, paths = ROSETTE }: { className?: string; paths?: string[] }) {
   return (
     <svg className={className} viewBox="-50 -50 100 100" aria-hidden>
-      {ROSETTE.map((d, i) => (
+      {paths.map((d, i) => (
         <path key={i} d={d} />
       ))}
       <circle r="48.5" />
@@ -335,63 +336,170 @@ function Rosette({ className }: { className?: string }) {
 
 /* ------------------------------------------------------------------ card back */
 
+const fnv = (str: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+
+/** Seeded generative linework, unique to the card: a guilloche rosette and a "taste fingerprint" tick ring. */
+function backArt(seed: number, stars: { cx: number; cy: number; weight: number }[]) {
+  let st = seed || 1;
+  const rnd = () => (st = (Math.imul(st, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const rosette: string[] = [];
+  const fam = (N: number, R: number, amp: number, k: number) => {
+    for (let j = 0; j < N; j++) {
+      const ph = (j / N) * ((Math.PI * 2) / k);
+      let d = "";
+      for (let i = 0; i <= 180; i++) {
+        const t = (i / 180) * Math.PI * 2;
+        const r = R + amp * Math.sin(k * (t + ph));
+        d += `${i ? "L" : "M"}${(Math.cos(t) * r).toFixed(2)} ${(Math.sin(t) * r).toFixed(2)}`;
+      }
+      rosette.push(d + "Z");
+    }
+  };
+  fam(12, 38, 6 + rnd() * 5, 7 + Math.floor(rnd() * 5));
+  fam(9, 24, 4 + rnd() * 3, 5 + Math.floor(rnd() * 4));
+  // Fingerprint: 120 radial ticks; each seed raises a crest at its own bearing, scaled by how much it drives the brands.
+  const sky = stars.map((p) => ({ a: Math.atan2(p.cy - 50, p.cx - 50), w: p.weight }));
+  let ticks = "";
+  for (let i = 0; i < 120; i++) {
+    const a = (i / 120) * Math.PI * 2 - Math.PI / 2;
+    let len = 0.8 + rnd() * 1.6;
+    for (const p of sky) {
+      const da = Math.atan2(Math.sin(a - p.a), Math.cos(a - p.a));
+      len += 4.2 * (0.35 + p.w) * Math.exp(-((da / 0.13) ** 2));
+    }
+    const r0 = 41.5;
+    const r1 = r0 + Math.min(5, len);
+    ticks += `M${(50 + Math.cos(a) * r0).toFixed(2)} ${(50 + Math.sin(a) * r0).toFixed(2)}L${(50 + Math.cos(a) * r1).toFixed(2)} ${(50 + Math.sin(a) * r1).toFixed(2)}`;
+  }
+  return { rosette, ticks };
+}
+
 /**
- * The face-down side: a constellation drawn from the user's own seeds (one domain sigil per love,
- * brightness = how much it drives the brands), a dot-matrix serial, and an edge glow in the rarity
- * colour so the tier is hinted before the flip. A parent can set `--charge` (0-1) on any ancestor
- * to brighten the glow and speed the foil sweep (hold-to-mint).
+ * The face-down side, designed as the printed back of a 63 x 88 mm card:
+ * brand + set/season, a generative sky (seed constellation, fingerprint ring, seeded guilloche, micro-text),
+ * a 1st-edition rarity stamp, a holo-foil seal zone, the edition number, a certificate-of-taste line and a QR
+ * plus short code to the verifiable digital twin (/c/<code>).
+ * A parent can set `--charge` (0-1) on any ancestor to brighten the glow and speed the foil sweep (hold-to-mint).
+ * `printSafe` drops every screen-only effect (glows, sheen, animation, blend modes) for print/PDF export.
  */
-export function CardBack({ card, className = "", crack = false }: { card: CardData; className?: string; crack?: boolean }) {
+export function CardBack({ card, className = "", crack = false, printSafe = false }: { card: CardData; className?: string; crack?: boolean; printSafe?: boolean }) {
   const stars = card.stars ?? [];
   // Map stars into a centred square field, so the constellation reads as a sigil, not a chart.
-  const pts = stars.map((p) => ({ ...p, cx: 14 + p.x * 72, cy: 16 + ((p.y - 0.18) / 0.6) * 60 }));
+  const pts = stars.map((p) => ({ ...p, cx: 20 + p.x * 60, cy: 20 + Math.max(0, Math.min(1, (p.y - 0.18) / 0.6)) * 60 }));
   const path = [...pts].sort((a, b) => a.cx - b.cx);
   const chords = path.length > 3 ? [[0, 2], [1, path.length - 1]] : [];
   const glow = RARITY_GLOW[card.rarity];
+  const code = cardCode(card);
+  const url = twinUrl(card);
+  const seedKey = stars.map((p) => `${p.name}:${p.weight.toFixed(2)}`).join("|") + card.serial;
+  const art = useMemo(() => backArt(fnv(seedKey), pts), [seedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const code2d = useMemo(() => {
+    const m = qr(url);
+    return { n: m.length, d: qrPath(m) };
+  }, [url]);
+  const ring = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const micro = `${BRAND.name} · certified taste · ${BRAND.cardSet} · S${SEASON} · No ${card.serial} · ${code} · `.toUpperCase();
+  const q = code2d.n + 8; // 4-module quiet zone on each side
+
   return (
-    <div className={`${s.backScene} ${className}`} data-rarity={card.rarity} style={{ ["--glow" as string]: glow }}>
+    <div className={`${s.backScene} ${className}`} data-rarity={card.rarity} data-print-safe={printSafe ? "1" : undefined} style={{ ["--glow" as string]: glow }}>
       <DotoFont />
       <div className={s.backCard}>
         <div className={s.backFace}>
-          <Rosette className={s.backRosette} />
+          <Rosette className={s.backRosette} paths={art.rosette} />
           <header className={s.backTop}>
             <span className={s.brand}>
               <Sparkle className={s.brandMark} />
               {BRAND.name}
             </span>
-            <span>{BRAND.cardSet}</span>
+            <span>
+              {BRAND.cardSet} · Season {SEASON}
+            </span>
           </header>
 
-          <div className={s.backSky} aria-hidden>
-            <svg viewBox="0 0 100 100">
-              <circle cx="50" cy="46" r="40" className={s.orbit} />
-              <circle cx="50" cy="46" r="31" className={s.orbit} strokeDasharray="0.6 2.2" />
-              <polyline points={path.map((p) => `${p.cx},${p.cy}`).join(" ")} />
-              {chords.map(([a, b]) => (
-                <line key={`${a}-${b}`} x1={path[a].cx} y1={path[a].cy} x2={path[b].cx} y2={path[b].cy} className={s.faint} />
+          <div className={s.backMid}>
+            <div className={s.backSky} aria-hidden>
+              <svg viewBox="0 0 100 100">
+                <defs>
+                  <path id={ring} d="M50 2.6a47.4 47.4 0 1 1 0 94.8a47.4 47.4 0 1 1 0-94.8" />
+                </defs>
+                <text className={s.micro}>
+                  <textPath href={`#${ring}`} textLength="296" lengthAdjust="spacing">
+                    {micro.repeat(3)}
+                  </textPath>
+                </text>
+                <path d={art.ticks} className={s.ticks} />
+                <circle cx="50" cy="50" r="40" className={s.orbit} />
+                <circle cx="50" cy="50" r="30" className={s.orbit} strokeDasharray="0.6 2.2" />
+                <polyline points={path.map((p) => `${p.cx},${p.cy}`).join(" ")} />
+                {chords.map(([a, b]) => (
+                  <line key={`${a}-${b}`} x1={path[a].cx} y1={path[a].cy} x2={path[b].cx} y2={path[b].cy} className={s.faint} />
+                ))}
+              </svg>
+              {pts.map((p, i) => (
+                <span
+                  key={p.name + i}
+                  className={s.node}
+                  style={{ left: `${p.cx}%`, top: `${p.cy}%`, ["--w" as string]: p.weight.toFixed(2), ["--i" as string]: i }}
+                  title={p.name}
+                >
+                  <KindSigil kind={p.kind} />
+                </span>
               ))}
-            </svg>
-            {pts.map((p, i) => (
-              <span
-                key={p.name + i}
-                className={s.node}
-                style={{ left: `${p.cx}%`, top: `${p.cy}%`, ["--w" as string]: p.weight.toFixed(2), ["--i" as string]: i }}
-                title={p.name}
-              >
-                <KindSigil kind={p.kind} />
+            </div>
+            <div className={s.edition}>
+              <b>1st edition</b>
+              <span>
+                {GEMS[card.rarity]} {card.rarityLabel}
               </span>
-            ))}
+            </div>
+            <div className={s.foilSeal} data-layer="foil" aria-hidden>
+              <svg viewBox="-50 -50 100 100">
+                <defs>
+                  <path id={`${ring}s`} d="M0-37a37 37 0 1 1 0 74a37 37 0 1 1 0-74" />
+                </defs>
+                <text>
+                  <textPath href={`#${ring}s`} textLength="230" lengthAdjust="spacing">
+                    {`AUTHENTIC · ${BRAND.name.toUpperCase()} · S${SEASON} · `}
+                  </textPath>
+                </text>
+                <circle r="27" />
+              </svg>
+              <Sparkle className={s.sealMark} />
+            </div>
           </div>
 
-          <footer className={s.backFoot}>
-            <span className={s.backLabel}>specimen</span>
-            <b className={`${s.dots} ${s.backSerial}`}>№{card.serial}</b>
-            <span className={s.backLabel}>
-              {stars.length} loves · {card.domains} domains · 1 of 1
-            </span>
-          </footer>
+          <div className={s.backId}>
+            <span className={s.backLabel}>No.</span>
+            <b className={`${s.dots} ${s.backSerial}`}>{card.serial}</b>
+            <span className={s.backLabel}>/ Season {SEASON}</span>
+          </div>
+          <p className={s.cert}>
+            <b>Certificate of taste.</b> {stars.length} loves across {card.domains} domains, read from Qloo’s taste graph. One of one.
+          </p>
+
+          <div className={s.verify}>
+            <svg className={s.qr} viewBox={`-4 -4 ${q} ${q}`} shapeRendering="crispEdges" role="img" aria-label={`QR code: verify this card at ${url}`}>
+              <rect x="-4" y="-4" width={q} height={q} fill="#fff" />
+              <path d={code2d.d} />
+            </svg>
+            <div className={s.verifyText}>
+              <span className={s.backLabel}>scan · verify the digital twin</span>
+              <b className={s.code}>{code}</b>
+              <span className={s.url}>
+                {TWIN_HOST}/c/{code}
+              </span>
+            </div>
+          </div>
+          <p className={s.microLine} aria-hidden>
+            {micro.repeat(4)}
+          </p>
         </div>
-        <div className={s.backSheen} aria-hidden />
+        {!printSafe && <div className={s.backSheen} aria-hidden />}
         {crack && (
           <svg className={s.crack} viewBox="0 0 100 140" preserveAspectRatio="none" aria-hidden>
             <path d="M54 -2 L47 14 L57 27 L43 44 L55 58 L41 74 L53 90 L44 106 L56 121 L49 142" />
@@ -401,3 +509,4 @@ export function CardBack({ card, className = "", crack = false }: { card: CardDa
     </div>
   );
 }
+
