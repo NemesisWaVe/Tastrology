@@ -58,6 +58,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Tailwind v4's preflight resets buttons to cursor:default */
+button:not(:disabled),
+[role="button"],
+a[href],
+summary,
+select,
+label[for],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
 ::selection {
   background: var(--accent-soft);
 }
