@@ -8,6 +8,8 @@
   inset: 0;
   z-index: 60;
   overflow: hidden;
+  /* clip, not just hide: the oversized grain layer makes this box scrollable, and focus or find-in-page could slide the stage sideways */
+  overflow: clip;
   background: var(--paper);
   color: var(--ink);
   text-align: left;
