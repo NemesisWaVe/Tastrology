@@ -1,5 +1,6 @@
 "use client";
 
+import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
 import { Magnetic, Reveal } from "./primitives";
 import s from "./landing.module.css";
@@ -22,7 +23,7 @@ export function Footer({ onPick }: { onPick: () => void }) {
             className="group inline-flex h-14 shrink-0 items-center gap-3 rounded-full bg-ink pl-6 pr-2 text-[15px] font-semibold text-paper"
           >
             Get my taste sign
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-accent text-paper transition-transform duration-500 group-hover:-rotate-45">→</span>
+            <CursorArrow className="h-10 w-10 bg-accent text-paper" />
           </Magnetic>
         </Reveal>
 
