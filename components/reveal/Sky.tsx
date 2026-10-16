@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { displayName } from "@/lib/card";
+import { figureFor, rng, TAU, type FigureShape } from "./skyFigures";
 import { KIND_LABEL, pullShares, type Folded } from "./traceModel";
 
 /**
@@ -13,22 +14,6 @@ import { KIND_LABEL, pullShares, type Folded } from "./traceModel";
  *    reacting to the reading: engraves in when the love resolves, dims while pulled out, lime when it steers.
  * Every event is a trace event; nothing random fires (no shooting stars).
  */
-
-const TAU = Math.PI * 2;
-
-/** Small deterministic PRNG (mulberry32) seeded from a string. */
-function rng(seed: string) {
-  let h = 1779033703 ^ seed.length;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
-  let a = (h << 13) | (h >>> 19);
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 /* ------------------------------------------------------------------ noise (value noise, fBm, ridged) */
 
@@ -211,44 +196,12 @@ function buildPlate(W: number, H: number, dpr: number, M: number) {
 
 /* ------------------------------------------------------------------ constellations */
 
-interface Figure {
+interface Figure extends FigureShape {
   id: string;
   name: string;
   kind: string;
-  stars: { x: number; y: number; m: number }[];
-  edges: [number, number][];
-  /** index of the brightest star (gets the ring, the ignition, the lime halo) */
-  alpha: number;
   born: number;
   a: number;
-  /** graticule arc: start angle */
-  arc: number;
-}
-
-/** 5–7 stars in a loose cluster, joined nearest-neighbour style, with one branch: reads as a figure, not a polygon. */
-function figureFor(id: string, size: number): Pick<Figure, "stars" | "edges" | "alpha" | "arc"> {
-  const r = rng(id);
-  const k = 5 + Math.floor(r() * 3);
-  const stars = Array.from({ length: k }, () => ({ x: (r() - 0.5) * size * 2, y: (r() - 0.5) * size * 1.4, m: 0.35 + Math.pow(r(), 2) * 0.65 }));
-  const edges: [number, number][] = [];
-  const used = new Set([0]);
-  let cur = 0;
-  while (used.size < k) {
-    let best = -1;
-    let bd = Infinity;
-    for (let j = 0; j < k; j++) {
-      if (used.has(j)) continue;
-      const d = Math.hypot(stars[j].x - stars[cur].x, stars[j].y - stars[cur].y);
-      if (d < bd) [best, bd] = [j, d];
-    }
-    const from = used.size === Math.ceil(k / 2) ? Math.floor(r() * cur) : cur;
-    edges.push([from, best]);
-    used.add(best);
-    cur = best;
-  }
-  const alpha = stars.reduce((bi, s, i) => (s.m > stars[bi].m ? i : bi), 0);
-  stars[alpha].m = 1;
-  return { stars, edges, alpha, arc: r() * TAU };
 }
 
 /** Text set along a gentle arc (centre of curvature above the text), like a caption on an engraved plate. */
@@ -282,6 +235,7 @@ export function Sky({
   dim = 1,
   drawn = false,
   fixed = false,
+  quiet = false,
 }: {
   f: Folded;
   anchor?: RefObject<HTMLElement | null>;
@@ -289,6 +243,8 @@ export function Sky({
   dim?: number;
   drawn?: boolean;
   fixed?: boolean;
+  /** Background for a reading page: no captions, graticule or flares, and it sits behind the content (-z-10). */
+  quiet?: boolean;
 }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const fRef = useRef(f);
@@ -508,7 +464,7 @@ export function Sky({
         const sway = reduce ? 0 : Math.sin(t * 0.3 + i) * 2;
 
         // graticule: a faint arc with tick marks behind the figure, like an atlas plate
-        if (!narrow) {
+        if (!narrow && !quiet) {
           const gr = size * 1.35;
           ctx.globalAlpha = fig.a * 0.16 * grow;
           ctx.strokeStyle = C.ink;
@@ -573,7 +529,7 @@ export function Sky({
             ctx.arc(x, y, r + 3, 0, TAU);
             ctx.stroke();
             // ignition when the love resolves: spikes flare over ~600ms, then settle
-            const flare = reduce || drawn ? 0 : Math.max(0, 1 - Math.abs(age - 350) / 450);
+            const flare = reduce || drawn || quiet ? 0 : Math.max(0, 1 - Math.abs(age - 350) / 450);
             spikes(x, y, r * (4 + flare * 9), fig.a * (0.35 + flare * 0.6), tone);
             if (lead) {
               ctx.globalAlpha = fig.a * 0.8;
@@ -586,7 +542,7 @@ export function Sky({
         });
 
         // caption: name set along an arc, with a spaced mono sub-caption carrying only real values
-        if (narrow) return;
+        if (narrow || quiet) return;
         const low = fig.stars.reduce((m, p) => Math.max(m, p.y), 0);
         const fs = Math.round(Math.max(13, size * 0.2));
         ctx.globalAlpha = fig.a * grow * 0.7;
@@ -618,7 +574,7 @@ export function Sky({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("deviceorientation", onTilt);
     };
-  }, [anchor, reduce, drawn]);
+  }, [anchor, reduce, drawn, quiet]);
 
-  return <canvas ref={cv} className={`pointer-events-none ${fixed ? "fixed" : "absolute"} inset-0 h-full w-full`} aria-hidden />;
+  return <canvas ref={cv} className={`pointer-events-none ${fixed ? "fixed" : "absolute"} inset-0 h-full w-full ${quiet ? "-z-10" : ""}`} aria-hidden />;
 }

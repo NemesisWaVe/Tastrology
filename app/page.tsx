@@ -1,6 +1,9 @@
 "use client";
 
+import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Sky } from "@/components/reveal/Sky";
+import { skyState } from "@/components/reveal/traceModel";
 import { ShareSheet } from "@/components/card/ShareSheet";
 import { Landing } from "@/components/landing/Landing";
 import { ResultsView, type Vote } from "@/components/results/ResultsView";
@@ -259,6 +262,13 @@ export default function Home() {
 
   const shareable = useMemo(() => (shown ? { ...shown, brands: shown.brands.filter((b) => votes[b.entity.id] !== "down") } : null), [shown, votes]);
 
+  // Your sky stays with you on the results page: far back, no captions (quiet), so the receipt and cards lead.
+  const reduce = Boolean(useReducedMotion());
+  const sky = useMemo(
+    () => (result ? skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id)) : null),
+    [result],
+  );
+
   if (!ready) return <div className="min-h-screen" aria-hidden />;
 
   if (stage === "home")
@@ -292,7 +302,9 @@ export default function Home() {
     );
 
   return (
-    <div className="min-h-screen">
+    // isolate: the quiet sky (-z-10) stacks inside this root, above the body background and behind the content
+    <div className="relative isolate min-h-screen">
+      {sky && <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.4} />}
       <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-4 py-3 backdrop-blur-md sm:px-6">
         <button onClick={reset} className="font-display text-lg font-bold tracking-tight">
           {BRAND.name}
