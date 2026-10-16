@@ -279,6 +279,35 @@
   box-shadow: 0 -1px 0 rgb(255 255 255 / 0.6), 0 0 10px color-mix(in oklab, var(--a) 70%, transparent);
 }
 
+/* pull-the-card-out cue */
+.pullCue {
+  position: absolute;
+  left: 50%;
+  top: 3%;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  translate: -50% 0;
+  pointer-events: none;
+}
+.pullArrow {
+  width: 12px;
+  height: 26px;
+  color: #fff;
+  filter: drop-shadow(0 0 6px var(--a));
+  animation: nudgeUp 2.6s cubic-bezier(0.3, 0, 0.2, 1) 1.2s infinite;
+}
+.pullCue[data-pulling] .pullArrow {
+  animation: none;
+}
+@keyframes nudgeUp {
+  0%, 55%, 100% { transform: translateY(0); opacity: 0.75; }
+  66% { transform: translateY(-10px); opacity: 1; }
+  76% { transform: translateY(-3px); }
+  86% { transform: translateY(-7px); }
+}
+
 /* --------------------------------------------------------------- orbiting seed posters */
 
 .poster {
@@ -328,7 +357,8 @@
   .foil,
   .rays,
   .hintSweep,
-  .cueArrow {
+  .cueArrow,
+  .pullArrow {
     animation: none;
   }
 }
