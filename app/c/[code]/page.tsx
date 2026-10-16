@@ -3,7 +3,7 @@
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { HoloCard } from "@/components/card/HoloCard";
+import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { CursorArrow } from "@/components/CursorArrow";
@@ -67,7 +67,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       {card && (
         <>
           <div ref={cardRef} className="relative">
-            <HoloCard card={card} width={340} idle />
+            <FlipCard card={card} width={340} idle flipButton />
           </div>
           <section className="relative max-w-md">
             <p className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] ${source === "server" ? "border-good/40 text-good" : "border-warn/40 text-warn"}`}>
