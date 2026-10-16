@@ -59,7 +59,9 @@ export interface CardData {
 }
 
 /** Score thresholds, calibrated to roughly 55% Common / 30% Rare / 12% Holo / 3% Secret. */
-export const RARITY_CUTS = { rare: 47, holo: 55, secret: 63 };
+export const RARITY_CUTS = { rare: 55, holo: 64, secret: 74 };
+/** Qloo popularity is a percentile and real loves cluster at 0.95+, so obscurity is scored over the top 15% only. */
+const OBSCURE_SPAN = 0.15;
 
 const TYPE_STYLES: [RegExp, Omit<CardType, "name">][] = [
   [/futur|tech|industrial|architect|precision|engineer|cyber|sharp/i, { glyph: "⚡", a: "#38bdf8", b: "#8b5cf6" }],
@@ -138,7 +140,7 @@ export function buildCard(r: StyleResult): CardData {
   const avgPop = seedPops.length >= Math.ceil(n / 2) ? seedPops.reduce((t, p) => t + p, 0) / seedPops.length : undefined;
   const con = r.contradictions[0];
   const pts = {
-    obscurity: avgPop === undefined ? 0 : Math.round(40 * (1 - avgPop)),
+    obscurity: avgPop === undefined ? 0 : Math.round(40 * Math.min(1, Math.max(0, (1 - avgPop) / OBSCURE_SPAN))),
     pairing: r.overlap === undefined ? 0 : Math.round(25 * (1 - r.overlap)),
     spread: Math.round((20 * domains) / Math.min(n, SEED_DOMAINS)),
     tension: con ? Math.round(15 * (1 - con.overlap)) : 0,
@@ -148,12 +150,12 @@ export function buildCard(r: StyleResult): CardData {
   const rarityLabel = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[rarity];
   const pc = (v: number) => `${Math.round(v * 100)}%`;
   const rarityWhy = [
-    ...(avgPop === undefined ? [] : [`+${pts.obscurity} obscurity: your picks average ${pc(avgPop)} popularity`]),
+    ...(avgPop === undefined ? [] : [`+${pts.obscurity} obscurity: your picks sit in the top ${Math.max(1, Math.round((1 - avgPop) * 100))}% by popularity`]),
     ...(r.overlap === undefined ? [] : [`+${pts.pairing} odd pairing: your loves share ${pc(r.overlap)} of their aesthetic tags`]),
     `+${pts.spread} spread: ${domains} ${domains === 1 ? "domain" : "domains"} across ${n} ${n === 1 ? "love" : "loves"}`,
     ...(con ? [`+${pts.tension} tension: ${seedLabel(r, con.a)} and ${seedLabel(r, con.b)} share ${pc(con.overlap)}`] : []),
   ];
-  const deepCut = avgPop !== undefined && avgPop < 0.3;
+  const deepCut = avgPop !== undefined && avgPop < 0.9;
 
   const sideB = r.dna.lobes[1];
   // Weakness: the seed that moved none (well, next to none) of your brand picks, straight from the critique. Absent if there isn't one.
