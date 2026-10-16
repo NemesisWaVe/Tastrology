@@ -13,8 +13,8 @@ const EASE = [0.2, 0.7, 0.2, 1] as const;
 type Enter = "rise" | "wipe" | "iris" | "drop" | "zoom";
 const ENTER: Record<Enter, { initial: TargetAndTransition; animate: TargetAndTransition; exit: TargetAndTransition }> = {
   rise: { initial: { opacity: 0, y: 24, filter: "blur(10px)" }, animate: { opacity: 1, y: 0, filter: "blur(0px)" }, exit: { opacity: 0, y: -16, filter: "blur(10px)" } },
-  wipe: { initial: { opacity: 1, clipPath: "inset(0 100% 0 0)" }, animate: { opacity: 1, clipPath: "inset(0 0% 0 0)" }, exit: { opacity: 0, x: -40 } },
-  iris: { initial: { opacity: 1, clipPath: "circle(0% at 50% 40%)" }, animate: { opacity: 1, clipPath: "circle(140% at 50% 40%)" }, exit: { opacity: 0, scale: 0.94 } },
+  wipe: { initial: { opacity: 1, clipPath: "inset(-60% 160% -60% -60%)" }, animate: { opacity: 1, clipPath: "inset(-60% -60% -60% -60%)" }, exit: { opacity: 0, x: -40 } },
+  iris: { initial: { opacity: 1, clipPath: "circle(0% at 50% 40%)" }, animate: { opacity: 1, clipPath: "circle(300% at 50% 40%)" }, exit: { opacity: 0, scale: 0.94 } },
   drop: { initial: { opacity: 0, y: -60 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: 60, rotate: 3 } },
   zoom: { initial: { opacity: 0, scale: 1.18 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.9 } },
 };
@@ -261,10 +261,10 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
     render: (reduce) => (
       <div className="text-center">
         <Eyebrow>01 · the input</Eyebrow>
-        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(28px,7vw,40px)] italic leading-none text-ink-2">
+        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(28px,7vw,64px)] italic leading-none text-ink-2">
           We read your
         </motion.p>
-        <motion.h2 {...rise(reduce, 0.2)} className="mt-1 font-display text-[clamp(64px,19vw,128px)] font-bold leading-[0.9] tracking-[-0.04em]">
+        <motion.h2 {...rise(reduce, 0.2)} className="mt-1 font-display text-[clamp(64px,19vw,205px)] font-bold leading-[0.9] tracking-[-0.04em]">
           {n} loves
         </motion.h2>
         <div className="relative mx-auto mt-8 flex h-[150px] max-w-md items-center justify-center sm:h-[180px]">
@@ -318,7 +318,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
       <div className="relative isolate">
         <Watermark kind="sun" color={sun.a} reduce={reduce} className="-right-16 -top-24 h-[78vw] max-h-[420px] w-[78vw] max-w-[420px]" />
         <Eyebrow color={sun.a} sigil="sun">your sun · main aesthetic</Eyebrow>
-        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(26px,6.6vw,38px)] italic leading-tight text-ink-2">
+        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(26px,6.6vw,61px)] italic leading-tight text-ink-2">
           Qloo says they share…
         </motion.p>
         <div className="mt-5 space-y-1">
@@ -334,7 +334,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
                   {w}
                 </Big>
               ) : (
-                <span className="block font-display text-[clamp(26px,8vw,48px)] font-semibold leading-[1.02] tracking-[-0.02em] text-ink">{w}</span>
+                <span className="block font-display text-[clamp(26px,8vw,77px)] font-semibold leading-[1.02] tracking-[-0.02em] text-ink">{w}</span>
               )}
             </motion.div>
           ))}
@@ -360,7 +360,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
       render: (reduce) => (
         <div className="text-center">
           <Eyebrow color="var(--bad)">the plot twist</Eyebrow>
-          <motion.h2 {...rise(reduce, 0.05)} className="font-serif text-[clamp(48px,14vw,96px)] italic leading-[0.95]">
+          <motion.h2 {...rise(reduce, 0.05)} className="font-serif text-[clamp(48px,14vw,154px)] italic leading-[0.95]">
             …except one.
           </motion.h2>
           <div className="relative mx-auto mt-8 w-[150px] sm:w-[180px]">
@@ -398,7 +398,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
               </motion.svg>
             </motion.div>
           </div>
-          <motion.p {...rise(reduce, 1.2, 10)} className="mt-6 font-display text-[clamp(20px,5.4vw,28px)] font-semibold leading-tight">
+          <motion.p {...rise(reduce, 1.2, 10)} className="mt-6 font-display text-[clamp(20px,5.4vw,45px)] font-semibold leading-tight">
             {oddNames}
           </motion.p>
           {ov && (
@@ -421,7 +421,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
         <div className="relative isolate">
           <Watermark kind="moon" color={moon.a} reduce={reduce} className="-left-20 -top-16 h-[70vw] max-h-[380px] w-[70vw] max-w-[380px]" />
           <Eyebrow color={moon.a} sigil="moon">your moon · the hidden side</Eyebrow>
-          <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,36px)] italic leading-tight text-ink-2">
+          <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,58px)] italic leading-tight text-ink-2">
             So we didn&apos;t average it away. {oddNames.split(" ").length > 4 ? "It" : oddNames} gets its own side:
           </motion.p>
           <motion.div {...rise(reduce, 0.5, 40)} className="mt-6">
@@ -429,7 +429,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
               {moon.name}
             </Big>
           </motion.div>
-          <motion.p {...rise(reduce, 0.9, 12)} className="mt-3 font-display text-[clamp(18px,5vw,26px)] text-ink-2">
+          <motion.p {...rise(reduce, 0.9, 12)} className="mt-3 font-display text-[clamp(18px,5vw,42px)] text-ink-2">
             {sideB.keywords
               .slice(1, 4)
               .map((k) => k.name)
@@ -455,7 +455,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
         <div className="relative isolate">
           <Watermark kind="moon" color={moon.a} reduce={reduce} className="-left-20 -top-16 h-[70vw] max-h-[380px] w-[70vw] max-w-[380px]" />
           <Eyebrow color={moon.a} sigil="moon">your moon · the hidden side</Eyebrow>
-          <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,36px)] italic leading-tight text-ink-2">
+          <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,58px)] italic leading-tight text-ink-2">
             Underneath it, a quieter thread:
           </motion.p>
           <motion.div {...rise(reduce, 0.45, 40)} className="mt-6">
@@ -464,7 +464,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
             </Big>
           </motion.div>
           {rest.length > 0 && (
-            <motion.p {...rise(reduce, 0.9, 12)} className="mt-4 font-display text-[clamp(18px,5vw,26px)] text-ink-2">
+            <motion.p {...rise(reduce, 0.9, 12)} className="mt-4 font-display text-[clamp(18px,5vw,42px)] text-ink-2">
               with notes of {rest.join(", ")}
             </motion.p>
           )}
@@ -501,7 +501,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
     render: (reduce) => (
       <div>
         <Eyebrow color={rising.a} sigil="rising">your rising · how you come across</Eyebrow>
-        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,36px)] italic leading-tight text-ink-2">
+        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,58px)] italic leading-tight text-ink-2">
           To everyone else, you read as
         </motion.p>
         {/* horizon: the word rises from below a line, like a sign clearing the horizon */}
@@ -552,10 +552,10 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
     render: (reduce) => (
       <div className="text-center">
         <Eyebrow>{card.rarity === "secret" || card.rarity === "holo" ? "this one's rare" : "fresh off the press"}</Eyebrow>
-        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(30px,8vw,48px)] italic leading-tight text-ink-2">
+        <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(30px,8vw,77px)] italic leading-tight text-ink-2">
           Sun, Moon, Rising.
         </motion.p>
-        <motion.h2 {...rise(reduce, 0.35)} className="mt-2 font-display text-[clamp(40px,12vw,84px)] font-bold leading-[0.95] tracking-[-0.03em]">
+        <motion.h2 {...rise(reduce, 0.35)} className="mt-2 font-display text-[clamp(40px,12vw,134px)] font-bold leading-[0.95] tracking-[-0.03em]">
           Your sign has been <Big t={sun} size="1em">minted.</Big>
         </motion.h2>
         <motion.div {...rise(reduce, 0.9, 10)} className="mt-8 flex justify-center gap-3 text-[13px] text-ink-2">
@@ -610,7 +610,7 @@ function ReceiptSlide({ r, shown, kept, reduce }: { r: StyleResult; shown: Style
   return (
     <div>
       <Eyebrow color="var(--bad)">the self-critique</Eyebrow>
-      <motion.h2 {...rise(reduce, 0.05, 14)} className="font-display text-[clamp(32px,9vw,60px)] font-bold leading-[0.95] tracking-[-0.03em]">
+      <motion.h2 {...rise(reduce, 0.05, 14)} className="font-display text-[clamp(32px,9vw,96px)] font-bold leading-[0.95] tracking-[-0.03em]">
         We threw <span className="font-serif font-normal italic">these</span> out.
       </motion.h2>
 
