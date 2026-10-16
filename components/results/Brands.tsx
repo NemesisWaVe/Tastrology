@@ -25,7 +25,7 @@ export function BrandCard({
         vote === "up"
           ? "border-accent/70 bg-[linear-gradient(180deg,rgba(198,255,61,0.07),transparent_45%),var(--card)] shadow-[0_0_0_1px_rgba(198,255,61,0.25),0_20px_50px_-30px_rgba(198,255,61,0.6)]"
           : vote === "down"
-            ? "border-line bg-card opacity-50 saturate-0"
+            ? "border-bad/30 bg-card saturate-0 [&>*:not(:first-child)]:opacity-40 [&>*:first-child>*:not(:last-child)]:opacity-40"
             : "border-line bg-card hover:border-ink-3/60"
       }`}
       style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}

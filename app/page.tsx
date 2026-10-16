@@ -1,20 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Results, type Vote } from "@/components/Results";
-import { SeedPicker, type Seed } from "@/components/SeedPicker";
-import { ShareCard } from "@/components/ShareCard";
+import { ShareSheet } from "@/components/card/ShareSheet";
+import { Landing } from "@/components/landing/Landing";
+import { ResultsView, type Vote } from "@/components/results/ResultsView";
+import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
-import { PERSONAS, type Persona } from "@/lib/personas";
-import type { AgentRequest, BrandMatch, StyleResult, TraceEvent } from "@/lib/types";
+import { BRAND } from "@/lib/brand";
+import type { AgentRequest, BrandMatch, StyleResult } from "@/lib/types";
+import { useAgentRun } from "@/lib/useAgentRun";
 
-type Stage = "home" | "run" | "result";
-const STORE = "tastemirror:v1";
+type Stage = "home" | "reveal" | "result";
+const STORE = "tastrology:v1";
 
 interface Saved {
-  seeds: Seed[];
-  budget?: 1 | 2 | 3;
-  goal?: string;
+  req?: AgentRequest;
   result?: StyleResult;
   votes: Record<string, Vote>;
   pinned: BrandMatch[];
@@ -30,95 +30,57 @@ function load(): Saved | null {
 }
 
 export default function Home() {
+  const { events, result, running, error, run, setResult } = useAgentRun();
   const [stage, setStage] = useState<Stage>("home");
-  const [seeds, setSeeds] = useState<Seed[]>([]);
-  const [budget, setBudget] = useState<1 | 2 | 3 | undefined>();
-  const [goal, setGoal] = useState("");
-  const [events, setEvents] = useState<TraceEvent[]>([]);
-  const [result, setResult] = useState<StyleResult | null>(null);
+  const [req, setReq] = useState<AgentRequest | undefined>();
   const [votes, setVotes] = useState<Record<string, Vote>>({});
   const [pinned, setPinned] = useState<BrandMatch[]>([]);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [replanning, setReplanning] = useState(false);
   const [share, setShare] = useState(false);
   const [returning, setReturning] = useState(false);
 
+  // Memory: a return visit lands straight on your sign.
   useEffect(() => {
     const s = load();
-    if (!s) return;
-    setSeeds(s.seeds ?? []);
-    setBudget(s.budget);
-    setGoal(s.goal ?? "");
+    if (!s?.result) return;
+    setReq(s.req);
+    setResult(s.result);
     setVotes(s.votes ?? {});
     setPinned(s.pinned ?? []);
-    if (s.result) {
-      setResult(s.result);
-      setStage("result");
-      setReturning(true);
-    }
-  }, []);
+    setStage("result");
+    setReturning(true);
+  }, [setResult]);
 
   useEffect(() => {
+    if (stage === "home") return;
     try {
-      localStorage.setItem(STORE, JSON.stringify({ seeds, budget, goal, result: result ?? undefined, votes, pinned } satisfies Saved));
+      localStorage.setItem(STORE, JSON.stringify({ req, result: result ?? undefined, votes, pinned } satisfies Saved));
     } catch {}
-  }, [seeds, budget, goal, result, votes, pinned]);
+  }, [stage, req, result, votes, pinned]);
 
-  const run = useCallback(async (req: AgentRequest) => {
-    setStage("run");
-    setRunning(true);
-    setError(null);
-    setEvents([]);
-    setReturning(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const start = useCallback(
+    (r: AgentRequest) => {
+      setReq(r);
+      setVotes({});
+      setPinned([]);
+      setReturning(false);
+      setStage("reveal");
+      window.scrollTo({ top: 0 });
+      run(r);
+    },
+    [run],
+  );
+
+  const reset = () => {
     try {
-      const res = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
-      if (!res.ok || !res.body) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `Request failed (${res.status})`);
-      }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      let got: StyleResult | null = null;
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const e = JSON.parse(line) as TraceEvent;
-          if (e.type === "result") got = e.result;
-          else if (e.type === "error") throw new Error(e.message);
-          else setEvents((prev) => [...prev, e]);
-        }
-      }
-      if (!got) throw new Error("The agent stopped without an answer.");
-      setResult(got);
-      setStage("result");
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setRunning(false);
-    }
-  }, []);
-
-  const startPersona = (p: Persona) => {
-    const s = p.seeds.map((x) => ({ id: `${x.kind}:${x.name}`, name: x.name, kind: x.kind }));
-    setSeeds(s);
-    setBudget(p.budget);
-    setGoal("");
+      localStorage.removeItem(STORE);
+    } catch {}
+    setResult(null);
     setVotes({});
     setPinned([]);
-    run({ seeds: p.seeds.map((x) => ({ id: "", ...x })), budget: p.budget });
-  };
-
-  const startCustom = () => {
-    setVotes({});
-    setPinned([]);
-    run({ seeds: seeds.map(seedReq), budget, goal: goal.trim() || undefined });
+    setReturning(false);
+    setStage("home");
+    window.scrollTo({ top: 0 });
   };
 
   const vote = (id: string, v: Vote | null) =>
@@ -134,217 +96,86 @@ export default function Home() {
   const pending = useMemo(() => {
     const prev = result?.feedback ?? { liked: [], disliked: [] };
     const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
-    return !(same(liked, prev.liked) && same(disliked, prev.disliked)) && liked.length + disliked.length > 0;
+    return liked.length + disliked.length > 0 && !(same(liked, prev.liked) && same(disliked, prev.disliked));
   }, [liked, disliked, result]);
 
-  const replan = () => {
-    if (!result) return;
-    const pins = [...pinned.filter((p) => liked.includes(p.entity.id)), ...result.brands.filter((b) => liked.includes(b.entity.id) && !pinned.some((p) => p.entity.id === b.entity.id))];
+  // Feedback loop: 👍 brands become Qloo signals, 👎 brands are excluded, and the agent re-plans.
+  const replan = async () => {
+    if (!result || running) return;
+    const pins = [
+      ...pinned.filter((p) => liked.includes(p.entity.id)),
+      ...result.brands.filter((b) => liked.includes(b.entity.id) && !pinned.some((p) => p.entity.id === b.entity.id)),
+    ];
     setPinned(pins);
     const names: Record<string, string> = {};
     for (const b of [...result.brands, ...pins]) names[b.entity.id] = b.entity.name;
-    run({
+    setReplanning(true);
+    const next = await run({
       seeds: result.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind })),
-      budget,
-      goal: goal.trim() || undefined,
+      budget: req?.budget,
+      goal: req?.goal,
       feedback: { liked, disliked },
       previous: { brandIds: result.brands.map((b) => b.entity.id), names },
     });
+    setReplanning(false);
+    if (next) window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const reset = () => {
-    setStage("home");
-    setResult(null);
-    setEvents([]);
-    setVotes({});
-    setPinned([]);
-    setError(null);
-    setReturning(false);
-  };
+  // Liked brands stay visible even when Qloo excludes them from the next round (they're signals now).
+  const shown = useMemo(() => {
+    if (!result) return null;
+    const keep = pinned.filter((p) => votes[p.entity.id] === "up" && !result.brands.some((b) => b.entity.id === p.entity.id));
+    return { ...result, brands: [...keep, ...result.brands] };
+  }, [result, pinned, votes]);
 
-  const shown = result ? { ...result, brands: [...pinned.filter((p) => !result.brands.some((b) => b.entity.id === p.entity.id) && votes[p.entity.id] === "up"), ...result.brands] } : null;
+  if (stage === "home") return <Landing onStart={start} />;
+
+  if (stage === "reveal")
+    return (
+      <Reveal
+        events={events}
+        result={result}
+        running={running}
+        error={error}
+        seeds={req?.seeds.map((s) => ({ name: s.name, kind: s.kind }))}
+        onDone={() => {
+          setStage("result");
+          window.scrollTo({ top: 0 });
+        }}
+        onRetry={() => (req ? start(req) : reset())}
+      />
+    );
 
   return (
     <div className="min-h-screen">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <button onClick={reset} className="flex items-center gap-2">
-          <span className="mirror grid h-8 w-8 place-items-center rounded-full border border-line font-serif text-lg">T</span>
-          <span className="font-serif text-2xl tracking-tight">TasteMirror</span>
+      <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-4 py-3 backdrop-blur-md sm:px-6">
+        <button onClick={reset} className="font-display text-lg font-bold tracking-tight">
+          {BRAND.name}
         </button>
-        <span className="hidden rounded-full border border-line px-3 py-1 text-[11px] text-ink-2 sm:block">Agents, but with taste · powered by Qloo</span>
+        <button onClick={reset} className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink">
+          New sign
+        </button>
       </nav>
 
-      {stage === "home" && (
-        <main className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
-          <section className="grid gap-10 pt-6 lg:grid-cols-[1.1fr_1fr] lg:pt-14">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-accent">No quiz · no purchase history</p>
-              <h1 className="mt-4 font-serif text-[56px] leading-[0.92] sm:text-[76px]">
-                Your taste already
-                <br />
-                knows <em>your style.</em>
-              </h1>
-              <p className="mt-6 max-w-lg text-[17px] leading-relaxed text-ink-2">
-                Name a few things you love: films, music, books, places. An agent interrogates <b className="text-ink">Qloo&apos;s cross-domain taste graph</b>, stress-tests what it finds, and
-                hands you the fashion & beauty brands that fit who you are. It shows its work for every one.
-              </p>
-              <div className="mt-8">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-3">Try a persona: one click, ~10 seconds</p>
-                <div className="grid gap-2.5 sm:grid-cols-3">
-                  {PERSONAS.map((p) => (
-                    <button
-                      key={p.key}
-                      onClick={() => startPersona(p)}
-                      className="group rounded-2xl border border-line bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-ink hover:shadow-md"
-                    >
-                      <span className="text-2xl">{p.emoji}</span>
-                      <p className="mt-2 font-serif text-[21px] leading-tight">{p.name}</p>
-                      <p className="mt-1 text-xs leading-snug text-ink-3">{p.blurb}</p>
-                      <p className="mt-3 text-xs font-semibold text-accent group-hover:underline">Run agent →</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-line bg-card p-5 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:p-7">
-              <h2 className="font-serif text-3xl">Or bring your own taste</h2>
-              <p className="mb-5 mt-1 text-sm text-ink-2">Autocomplete searches Qloo&apos;s entity graph directly.</p>
-              <SeedPicker seeds={seeds.filter((s) => !s.id.includes(":"))} onChange={setSeeds} />
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-ink-2">
-                  Budget
-                  <select
-                    value={budget ?? ""}
-                    onChange={(e) => setBudget(e.target.value ? (Number(e.target.value) as 1 | 2 | 3) : undefined)}
-                    className="mt-1 block w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm font-normal"
-                  >
-                    <option value="">Any</option>
-                    <option value="1">$ · entry (from under ₹5k / $60)</option>
-                    <option value="2">$$ · mid (from ₹5k–20k / $60–250)</option>
-                    <option value="3">$$$ · premium</option>
-                  </select>
-                </label>
-                <label className="text-xs font-semibold text-ink-2">
-                  Style goal (optional)
-                  <input
-                    value={goal}
-                    onChange={(e) => setGoal(e.target.value.slice(0, 120))}
-                    placeholder="e.g. office-ready but not boring"
-                    className="mt-1 block w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm font-normal placeholder:text-ink-3"
-                  />
-                </label>
-              </div>
-              <button
-                onClick={startCustom}
-                disabled={seeds.filter((s) => !s.id.includes(":")).length < 3}
-                className="mt-6 w-full rounded-xl bg-ink py-3.5 text-[15px] font-semibold text-paper transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                Find my style
-              </button>
-            </div>
-          </section>
-
-          <section className="mt-20 grid gap-6 border-t border-line pt-10 sm:grid-cols-3">
-            {[
-              ["01", "Grounded, always", "Every brand, place and title comes from a Qloo API response. The AI explains; it never invents."],
-              ["02", "Shows its work", "Leave-one-out re-queries and Qloo explainability prove which of your loves earned each brand."],
-              ["03", "Doubts itself", "Contradicting tastes get split, not averaged. One-seed flukes get rejected before you see them."],
-            ].map(([n, t, d]) => (
-              <div key={n}>
-                <p className="font-mono text-xs text-accent">{n}</p>
-                <p className="mt-1 font-serif text-2xl">{t}</p>
-                <p className="mt-1 text-sm leading-relaxed text-ink-2">{d}</p>
-              </div>
-            ))}
-          </section>
-        </main>
+      {returning && (
+        <p className="rise mx-auto mt-4 max-w-6xl px-4 text-sm text-ink-3 sm:px-6">
+          Welcome back. Your sign and your feedback are where you left them.
+        </p>
       )}
+      {error && !replanning && <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">Re-plan failed: {error}</p>}
 
-      {stage !== "home" && (
-        <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 pb-28 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="order-2 min-w-0 lg:order-1">
-            {returning && stage === "result" && (
-              <p className="rise mb-4 rounded-xl bg-paper-2 px-4 py-2.5 text-sm text-ink-2">
-                Welcome back. Your Style DNA and feedback are where you left them.{" "}
-                <button onClick={reset} className="font-semibold text-ink underline">
-                  Start over
-                </button>
-              </p>
-            )}
-            {error && (
-              <div className="rise rounded-2xl border border-bad/30 bg-bad-soft p-5 text-bad">
-                <p className="font-semibold">The agent hit a snag: {error}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button onClick={reset} className="rounded-full bg-bad px-4 py-2 text-sm font-semibold text-white">
-                    Back
-                  </button>
-                  {PERSONAS.map((p) => (
-                    <button key={p.key} onClick={() => startPersona(p)} className="rounded-full border border-bad/40 px-4 py-2 text-sm">
-                      Try {p.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {stage === "run" && !error && <Skeleton seeds={seeds} />}
-            {stage === "result" && shown && <Results result={shown} votes={votes} onVote={vote} onShare={() => setShare(true)} />}
-          </div>
-          <aside className="order-1 lg:order-2">
-            <div className="lg:sticky lg:top-4">
-              <TracePanel events={stage === "result" && events.length === 0 && result ? [{ type: "step", id: "restore", label: "Restored from your last visit", status: "done" }] : events} running={running} compact={stage === "result"} />
-              {stage === "result" && (
-                <button onClick={reset} className="mt-3 w-full rounded-xl border border-line bg-card py-2.5 text-sm font-medium text-ink-2 hover:border-ink-3">
-                  ← New taste profile
-                </button>
-              )}
-            </div>
-          </aside>
-        </main>
-      )}
+      {shown && <ResultsView result={shown} votes={votes} onVote={vote} onShare={() => setShare(true)} onReplan={replan} pending={pending} />}
 
-      {stage === "result" && pending && (
-        <div className="rise fixed inset-x-0 bottom-4 z-40 mx-auto w-[calc(100%-2rem)] max-w-xl">
-          <div className="flex items-center gap-3 rounded-2xl bg-ink p-2 pl-5 text-paper shadow-2xl">
-            <p className="flex-1 text-sm">
-              <b>{liked.length}</b> ↑ · <b>{disliked.length}</b> ↓ feedback ready
-            </p>
-            <button onClick={replan} disabled={running} className="rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-              Re-plan with Qloo →
-            </button>
+      {replanning && (
+        <div className="rise fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-xl p-3">
+          <div className="rounded-2xl border border-line bg-paper/95 p-2 shadow-2xl backdrop-blur-md">
+            <p className="px-3 pt-2 font-mono text-[11px] uppercase tracking-[0.2em] text-accent">Re-reading your stars with your feedback…</p>
+            <TracePanel events={events} running={running} compact />
           </div>
         </div>
       )}
 
-      {share && result && <ShareCard result={result} onClose={() => setShare(false)} />}
-    </div>
-  );
-}
-
-function seedReq(s: Seed) {
-  return { id: s.id.includes(":") ? "" : s.id, name: s.name, kind: s.kind };
-}
-
-function Skeleton({ seeds }: { seeds: Seed[] }) {
-  return (
-    <div className="space-y-6">
-      <div className="mirror rounded-3xl border border-line p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-ink-2">Reading your taste</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {seeds.map((s, i) => (
-            <span key={s.id} className="rise rounded-full bg-ink px-3 py-1.5 text-sm text-paper" style={{ animationDelay: `${i * 80}ms` }}>
-              {s.name}
-            </span>
-          ))}
-        </div>
-        <div className="shimmer mt-6 h-12 w-2/3 rounded-xl" />
-        <div className="shimmer mt-3 h-4 w-1/2 rounded" />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="shimmer h-36 rounded-2xl" />
-        ))}
-      </div>
+      {share && result && <ShareSheet result={result} onClose={() => setShare(false)} />}
     </div>
   );
 }

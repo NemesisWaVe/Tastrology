@@ -88,7 +88,7 @@ export function Receipts({ result }: { result: StyleResult | null }) {
   const v = useMemo(() => toView(result), [result]);
 
   return (
-    <section id="receipts" className="relative py-24 sm:py-32">
+    <section id="receipts" className="relative py-20 sm:py-28">
       <div className="mx-auto max-w-[1320px] px-4 sm:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
@@ -348,7 +348,7 @@ function Receipt({ v }: { v: View }) {
                 </div>
                 <p className="mt-1 text-[10.5px] leading-snug opacity-60">{v.voided.reason}</p>
                 <motion.span
-                  className="pointer-events-none absolute -right-2 -top-4 rotate-[14deg] rounded border-2 border-[#d9365b] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[#d9365b]"
+                  className="pointer-events-none absolute right-12 -top-5 rotate-[-8deg] rounded border-2 border-[#d9365b] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[#d9365b]"
                   initial={reduce ? false : { scale: 2.2, opacity: 0 }}
                   animate={on ? { scale: 1, opacity: 0.85 } : undefined}
                   transition={{ duration: 0.35, ease: [0.5, 0, 0.75, 0], delay: 1.5 }}

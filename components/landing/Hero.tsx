@@ -77,13 +77,13 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
       <div className={s.spot} aria-hidden />
       <div className={s.constellation} aria-hidden>
         {STAR_POS.map((p) => (
-          <span key={p.w} className="absolute font-mono text-[10px] uppercase tracking-[0.25em] text-ink" style={{ left: `${p.x}%`, top: `${p.y}%`, opacity: p.o }}>
+          <span key={p.w} className={`${s.star} absolute font-mono text-[10px] uppercase tracking-[0.25em] text-ink`} style={{ left: `${p.x}%`, top: `${p.y}%`, opacity: p.o }}>
             ✦ {p.w}
           </span>
         ))}
       </div>
 
-      <div className="mx-auto grid max-w-[1320px] items-center gap-14 px-4 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:gap-8 lg:px-12">
+      <div className="mx-auto grid max-w-[1320px] items-center gap-10 px-4 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:gap-8 lg:px-12">
         <motion.div style={{ y: textY, opacity: textO }} className="relative z-10 min-w-0">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -95,7 +95,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             <span className="text-[13px] text-ink-2">{BRAND.tagline}</span>
           </motion.div>
 
-          <h1 className="font-display text-[clamp(3.05rem,12.6vw,7.4rem)] font-bold leading-[0.86] tracking-[-0.045em] text-ink">
+          <h1 className="font-display text-[clamp(3.05rem,12.6vw,7.4rem)] lg:text-[clamp(4.5rem,7.3vw,7.6rem)] font-bold leading-[0.86] tracking-[-0.045em] text-ink">
             <MaskedWords text="What's your" className="block" delay={0.15} />
             <span className="block">
               <MaskedWords text="taste" delay={0.32} />
@@ -184,18 +184,6 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
         </motion.div>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.8, duration: 1 }}
-        className="pointer-events-none absolute bottom-6 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-ink-3 lg:flex"
-        aria-hidden
-      >
-        scroll
-        <span className="relative h-10 w-px overflow-hidden bg-line">
-          <motion.span className="absolute inset-x-0 top-0 h-4 bg-accent" animate={reduce ? undefined : { y: [-16, 40] }} transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }} />
-        </span>
-      </motion.div>
     </section>
   );
 }

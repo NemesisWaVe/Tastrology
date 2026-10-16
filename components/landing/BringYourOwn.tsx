@@ -36,7 +36,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   };
 
   return (
-    <section id="byo" className="relative scroll-mt-10 py-24 sm:py-32">
+    <section id="byo" className="relative scroll-mt-10 py-20 sm:py-28">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[60%] opacity-60"
         style={{ background: "radial-gradient(60% 50% at 70% 30%, rgba(120,148,255,0.10), transparent 70%)" }}

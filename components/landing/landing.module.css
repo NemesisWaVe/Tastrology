@@ -119,6 +119,10 @@
   transition: transform 0.6s cubic-bezier(0.7, 0, 0.2, 1) var(--d, 0s);
 }
 
+@media (hover: none) {
+  .star { display: none; }
+}
+
 /* ---------- specimen ---------- */
 .halo {
   position: absolute;

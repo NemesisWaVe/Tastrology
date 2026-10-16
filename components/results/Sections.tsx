@@ -215,6 +215,13 @@ export function Matrix({ result, n }: { result: StyleResult; n: string }) {
 
 /* ------------------------------------------------------------------ capsule + bridges */
 
+function BridgeImg({ src, icon }: { src?: string; icon: string }) {
+  const [bad, setBad] = useState(false);
+  if (!src || bad) return <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-paper-2 text-xl text-ink-2">{icon}</span>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" loading="lazy" onError={() => setBad(true)} className="h-16 w-16 shrink-0 rounded-2xl bg-paper-2 object-cover" />;
+}
+
 export function CapsuleAndBridges({ result, n }: { result: StyleResult; n: [string, string] }) {
   const brand = (id: string) => result.brands.find((b) => b.entity.id === id)?.entity;
   return (
@@ -254,12 +261,7 @@ export function CapsuleAndBridges({ result, n }: { result: StyleResult; n: [stri
         <div className="space-y-2.5">
           {result.bridges.map((b) => (
             <div key={b.entity.id} className="flex gap-3.5 rounded-[22px] border border-line bg-card p-3.5 sm:p-4">
-              {b.entity.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={b.entity.image} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
-              ) : (
-                <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-paper-2 text-xl text-ink-2">{KIND_ICON[b.entity.kind] ?? "◆"}</span>
-              )}
+              <BridgeImg src={b.entity.image} icon={KIND_ICON[b.entity.kind] ?? "◆"} />
               <div className="min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
                   {KIND_ICON[b.entity.kind]} {KIND_LABEL[b.entity.kind] ?? b.entity.kind}
