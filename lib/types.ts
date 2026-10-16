@@ -136,8 +136,22 @@ export interface StyleResult {
   changes?: { added: QTag[]; removed: QTag[]; why: string[] };
 }
 
+/**
+ * Values a run has already computed from Qloo, streamed as they land so the reading scene can draw them.
+ * Never anything the final result doesn't also back. Scores are whole 0–100.
+ */
+export type SceneData =
+  | { kind: "seeds"; seeds: { id: string; name: string; kind: string; image?: string }[] }
+  | { kind: "tags"; perSeed: Record<string, string[]>; consensus: string[]; sides: string[][] }
+  | { kind: "brands"; brands: { id: string; name: string; affinity: number }[] }
+  /** One leave-one-out call: how far each top brand's affinity fell without `seed`. */
+  | { kind: "ablation"; seed: string; drops: Record<string, number> }
+  | { kind: "critique"; kept: string[]; rejected: { id: string; why: "fluke" | "budget" }[]; strongest?: string; inert: string[] }
+  | { kind: "bridges"; bridges: { id: string; name: string; kind: string }[] };
+
 export type TraceEvent =
   | { type: "step"; id: string; label: string; status: "run" | "done" | "warn"; detail?: string }
+  | { type: "data"; data: SceneData }
   | { type: "thought"; text: string }
   | { type: "tool"; name: string; args: string; calls: QlooCallLog[]; summary: string }
   | { type: "result"; result: StyleResult }

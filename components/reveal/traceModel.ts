@@ -1,5 +1,5 @@
 import { proxied } from "@/lib/card";
-import type { QlooCallLog, StyleResult, TraceEvent } from "@/lib/types";
+import type { QlooCallLog, SceneData, StyleResult, TraceEvent } from "@/lib/types";
 
 /**
  * Turns the raw agent trace into what the "reading your taste" scene draws. Everything here is
@@ -49,6 +49,55 @@ export interface SceneModel {
   words: Word[];
   split: boolean;
   planner: boolean;
+  /** Streamed scene data, in arrival order. The Gravity Well plays them one beat at a time. */
+  beats: SceneData[];
+}
+
+/** The scene's state after playing some beats. Everything here is a value Qloo returned in this run. */
+export interface Folded {
+  seeds: { id: string; name: string; kind: string; image?: string }[];
+  perSeed: Record<string, string[]>;
+  consensus: string[];
+  sides: string[][];
+  brands: { id: string; name: string; affinity: number }[];
+  /** seed id → brand id → affinity drop (0–100) without that seed. */
+  drops: Record<string, Record<string, number>>;
+  /** Seeds in the order their leave-one-out call landed; the last one is the current beat. */
+  ablated: string[];
+  critique?: Extract<SceneData, { kind: "critique" }>;
+  bridges: { id: string; name: string; kind: string }[];
+  /** Kind of the newest beat applied. */
+  last?: SceneData["kind"];
+}
+
+export function foldBeats(beats: SceneData[]): Folded {
+  const f: Folded = { seeds: [], perSeed: {}, consensus: [], sides: [], brands: [], drops: {}, ablated: [], bridges: [] };
+  for (const b of beats) {
+    f.last = b.kind;
+    if (b.kind === "seeds") f.seeds = b.seeds;
+    else if (b.kind === "tags") Object.assign(f, { perSeed: b.perSeed, consensus: b.consensus, sides: b.sides });
+    else if (b.kind === "brands") f.brands = b.brands;
+    else if (b.kind === "ablation") {
+      f.drops[b.seed] = b.drops;
+      f.ablated.push(b.seed);
+    } else if (b.kind === "critique") f.critique = b;
+    else if (b.kind === "bridges") f.bridges = b.bridges;
+  }
+  return f;
+}
+
+/**
+ * Each seed's share of the measured pull on the kept brands (leave-one-out drops), and the seed that carries most.
+ * The agent's own `strongest` wins when it sent one, so this always agrees with the sign.
+ */
+export function pullShares(f: Folded): { shares: Record<string, number>; top?: string } {
+  const kept = new Set(f.critique?.kept ?? f.brands.map((b) => b.id));
+  const sum: Record<string, number> = {};
+  for (const [seed, row] of Object.entries(f.drops)) sum[seed] = Object.entries(row).reduce((t, [id, v]) => t + (kept.has(id) ? v : 0), 0);
+  const total = Object.values(sum).reduce((a, b) => a + b, 0);
+  const shares = Object.fromEntries(Object.entries(sum).map(([k, v]) => [k, total > 0 ? v / total : 0]));
+  const top = f.critique?.strongest ?? Object.entries(shares).sort((a, b) => b[1] - a[1])[0]?.[0];
+  return { shares, top };
 }
 
 const entityIds = (c: QlooCallLog) => (c.params["signal.interests.entities"] ?? "").split(",").filter(Boolean);
@@ -69,6 +118,7 @@ export function buildScene(events: TraceEvent[], hints?: SeedHint[]): SceneModel
   const oddIds = new Set<string>();
   let oddName: string | undefined;
   const words: Word[] = [];
+  const beats: SceneData[] = [];
   const addWords = (list: string[], tone: Word["tone"]) => {
     for (const raw of list) {
       const m = raw.trim().match(/^(.*?)(?:\s+(0?\.\d+))?(?:\s+\((\w+)\))?$/);
@@ -78,7 +128,8 @@ export function buildScene(events: TraceEvent[], hints?: SeedHint[]): SceneModel
   };
 
   events.forEach((e, i) => {
-    if (e.type === "step") {
+    if (e.type === "data") beats.push(e.data);
+    else if (e.type === "step") {
       headline = e.label;
       status = e.status;
       const at = rows.findIndex((r) => r.kind === "step" && r.id === e.id);
@@ -142,7 +193,7 @@ export function buildScene(events: TraceEvent[], hints?: SeedHint[]): SceneModel
     };
   });
 
-  return { seeds, rows, calls, cached, headline, status, active, words, split, planner };
+  return { seeds, rows, calls, cached, headline, status, active, words, split, planner, beats };
 }
 
 /** "tag overlap 1% vs 10% among the rest" from the critique, when the agent wrote it. */

@@ -2,11 +2,57 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TraceEvent } from "@/lib/types";
-import { buildScene, KIND_LABEL, type FeedRow, type SceneModel, type SeedHint, type SeedNode, type ToolEvent } from "./traceModel";
+import { shortSeed } from "@/lib/grounding";
+import type { SceneData, TraceEvent } from "@/lib/types";
+import { Orrery } from "./Orrery";
+import { buildScene, foldBeats, KIND_LABEL, pullShares, type FeedRow, type Folded, type SceneModel, type SeedHint, type SeedNode, type ToolEvent } from "./traceModel";
 import s from "./reveal.module.css";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
+
+/** How long each beat holds the stage. A finished run (or a replay) plays the backlog fast instead. */
+const DWELL: Record<SceneData["kind"], number> = { seeds: 1000, tags: 1700, brands: 1600, ablation: 1150, critique: 1900, bridges: 1300 };
+
+/**
+ * Plays streamed scene data one beat at a time, so a burst (prefetched steps, parallel calls, a cached replay)
+ * still reads as a sequence. Once the run is done and every beat has played, the well collapses and `settled` fires.
+ */
+function useBeats(beats: SceneData[], done: boolean, reduce: boolean, onSettled?: () => void) {
+  const [applied, setApplied] = useState(0);
+  const [collapsing, setCollapsing] = useState(false);
+  const settledRef = useRef(onSettled);
+  settledRef.current = onSettled;
+  const beatsRef = useRef(beats);
+  beatsRef.current = beats;
+  const lastAt = useRef(0);
+  const n = beats.length;
+  useEffect(() => {
+    if (applied < n) {
+      const prev = beatsRef.current[applied - 1];
+      // The critique is the payoff (bet result, noun lock, flukes flung), so it keeps its hold even on a fast finish.
+      const hold = !prev ? 0 : done ? (prev.kind === "critique" ? 1600 : 300) : DWELL[prev.kind];
+      // Measured from the previous beat, so new trace events arriving mid-hold don't restart the clock.
+      const wait = Math.max(0, (reduce ? Math.min(hold, 400) : hold) - (performance.now() - lastAt.current));
+      const t = setTimeout(() => {
+        lastAt.current = performance.now();
+        setApplied((x) => x + 1);
+      }, wait);
+      return () => clearTimeout(t);
+    }
+    if (!done) return;
+    if (!n) {
+      settledRef.current?.(); // a replay recorded before scene data existed: nothing to play
+      return;
+    }
+    if (!collapsing) {
+      const t = setTimeout(() => setCollapsing(true), reduce ? 600 : 1800);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => settledRef.current?.(), reduce ? 200 : 1000);
+    return () => clearTimeout(t);
+  }, [applied, n, done, reduce, collapsing]);
+  return { applied, collapsing };
+}
 
 /**
  * Phase 1: "reading your taste". A constellation of the user's loves with the agent's live Qloo
@@ -24,6 +70,8 @@ export function Reading({
   reduce,
   onRetry,
   onSkip,
+  finalName,
+  onSettled,
 }: {
   events: TraceEvent[];
   seeds?: SeedHint[];
@@ -35,8 +83,25 @@ export function Reading({
   reduce: boolean;
   onRetry?: () => void;
   onSkip?: () => void;
+  /** The sign's name once the result is in; the slot plate locks its noun to it. */
+  finalName?: string;
+  /** The Gravity Well has played every beat and collapsed: safe to move on. */
+  onSettled?: () => void;
 }) {
   const m = useMemo(() => buildScene(events, hints), [events, hints]);
+  const { applied, collapsing } = useBeats(m.beats, done, reduce, onSettled);
+  const beatsRef = useRef(m.beats);
+  beatsRef.current = m.beats;
+  const f = useMemo(() => foldBeats(beatsRef.current.slice(0, applied)), [applied]);
+  const [bet, setBet] = useState<string>();
+  // The well from the first frame of a live run; the old constellation only for replays recorded before scene data existed.
+  const well = m.beats.length > 0 || (!done && !error);
+  const pickable = f.seeds.length > 1 && !f.critique && !bet && !done && !error;
+  // Until Qloo resolves them, your loves show as unlit placeholder stars (names you typed, no ids, no bets).
+  const shownF = useMemo(
+    () => (f.seeds.length ? f : { ...f, seeds: m.seeds.filter((x) => x.name).map((x, i) => ({ id: `pending-${i}`, name: x.name, kind: x.kind ?? "" })) }),
+    [f, m.seeds],
+  );
 
   return (
     <motion.div
@@ -74,9 +139,28 @@ export function Reading({
       <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-5 pb-4 pt-2 sm:px-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-1 lg:items-center lg:gap-10 lg:pb-8">
         <div className="flex flex-col items-center">
           <p className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.28em] text-ink-3">reading your taste</p>
-          <Constellation m={m} done={done || Boolean(error)} reduce={reduce} />
-          <Headline m={m} done={done} error={error} />
-          <Words m={m} />
+          {well ? (
+            <>
+              <Orrery
+                f={shownF}
+                collapsing={collapsing}
+                reduce={reduce}
+                bet={bet}
+                pickable={pickable}
+                onPick={setBet}
+                center={<Core calls={m.calls} done={done} reduce={reduce} />}
+              />
+              <BetLine f={f} bet={bet} pickable={pickable} />
+              <SignSlots f={f} finalName={done ? finalName : undefined} reduce={reduce} />
+              <Headline m={m} done={done} error={error} small />
+            </>
+          ) : (
+            <>
+              <Constellation m={m} done={done || Boolean(error)} reduce={reduce} />
+              <Headline m={m} done={done} error={error} />
+              <Words m={m} />
+            </>
+          )}
         </div>
         <Feed m={m} running={!done && !error} />
       </div>
@@ -195,31 +279,7 @@ function Constellation({ m, done, reduce }: { m: SceneModel; done: boolean; redu
 
       {/* core: live call counter */}
       <div className="absolute left-1/2 top-1/2 h-[34%] w-[34%] -translate-x-1/2 -translate-y-1/2">
-        <motion.div
-          className={`${s.core} absolute inset-0 rounded-full`}
-          animate={done ? { scale: [1, 1.18, 1], opacity: 1 } : { scale: 1, opacity: 0.9 }}
-          transition={{ duration: 0.8, ease: EASE }}
-          style={{ boxShadow: "0 0 60px -10px var(--a)" }}
-        />
-        <div className="absolute inset-[5%] grid place-items-center rounded-full bg-paper/95 text-center">
-          <div>
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.b
-                key={m.calls}
-                className="block font-display text-[clamp(26px,8vw,46px)] font-bold leading-none tabular-nums"
-                initial={reduce ? { opacity: 0 } : { y: 14, opacity: 0, filter: "blur(4px)" }}
-                animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
-                exit={reduce ? { opacity: 0 } : { y: -14, opacity: 0, filter: "blur(4px)" }}
-                transition={{ duration: 0.35, ease: EASE }}
-              >
-                {m.calls}
-              </motion.b>
-            </AnimatePresence>
-            <span className="mt-1 block font-mono text-[8.5px] uppercase tracking-[0.2em] text-ink-3 sm:text-[9.5px]">
-              Qloo calls
-            </span>
-          </div>
-        </div>
+        <Core calls={m.calls} done={done} reduce={reduce} />
       </div>
 
       {/* seed nodes */}
@@ -259,6 +319,155 @@ function Constellation({ m, done, reduce }: { m: SceneModel; done: boolean; redu
   );
 }
 
+/** Live Qloo call counter at the centre of the scene. Fills its parent. */
+function Core({ calls, done, reduce }: { calls: number; done: boolean; reduce: boolean }) {
+  return (
+    <div className="absolute inset-0">
+      <motion.div
+        className={`${s.core} absolute inset-0 rounded-full`}
+        animate={done ? { scale: [1, 1.18, 1], opacity: 1 } : { scale: 1, opacity: 0.9 }}
+        transition={{ duration: 0.8, ease: EASE }}
+        style={{ boxShadow: "0 0 60px -10px var(--a)" }}
+      />
+      <div className="absolute inset-[5%] grid place-items-center rounded-full bg-paper/95 text-center [container-type:inline-size]">
+        <div>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.b
+              key={calls}
+              className="block font-display text-[clamp(20px,34cqi,46px)] font-bold leading-none tabular-nums"
+              initial={reduce ? { opacity: 0 } : { y: 14, opacity: 0, filter: "blur(4px)" }}
+              animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
+              exit={reduce ? { opacity: 0 } : { y: -14, opacity: 0, filter: "blur(4px)" }}
+              transition={{ duration: 0.35, ease: EASE }}
+            >
+              {calls}
+            </motion.b>
+          </AnimatePresence>
+          <span className="mt-1 block font-mono text-[8px] uppercase tracking-[0.2em] text-ink-3 sm:text-[9px]">Qloo calls</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ bet + sign slots */
+
+/** "Which love steers your taste?" Tap a star; the leave-one-out numbers settle the bet. */
+function BetLine({ f, bet, pickable }: { f: Folded; bet?: string; pickable: boolean }) {
+  const name = (id?: string) => f.seeds.find((x) => x.id === id)?.name ?? "";
+  let text: React.ReactNode = null;
+  let key = "none";
+  if (f.critique) {
+    const { shares, top } = pullShares(f);
+    const p = top ? Math.round((shares[top] ?? 0) * 100) : 0;
+    const pct = p > 0 ? <b className="font-semibold text-accent">{p}%</b> : null;
+    key = "result";
+    text = !top ? null : bet === top ? (
+      <>
+        Called it. <b className="font-semibold text-ink">{name(top)}</b> carries {pct ?? "most"} of your brand pull.
+      </>
+    ) : bet ? (
+      <>
+        You said {name(bet)}. Qloo says <b className="font-semibold text-ink">{name(top)}</b>
+        {pct ? <>: {pct} of the pull.</> : "."}
+      </>
+    ) : (
+      <>
+        <b className="font-semibold text-ink">{name(top)}</b> steers it{pct ? <>: {pct} of your brand pull.</> : "."}
+      </>
+    );
+  } else if (bet) {
+    key = "bet";
+    text = (
+      <>
+        Your bet: <b className="font-semibold text-accent">{name(bet)}</b>. Qloo is pulling each love out to check.
+      </>
+    );
+  } else if (pickable) {
+    key = "ask";
+    text = (
+      <>
+        Which love steers your taste? <span className="text-accent">Tap one.</span>
+      </>
+    );
+  }
+  return (
+    <div className="mt-1 flex min-h-[2.6em] max-w-md items-center justify-center text-center" aria-live="polite">
+      <AnimatePresence mode="wait" initial={false}>
+        {text && (
+          <motion.p
+            key={key}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.35, ease: EASE }}
+            className="text-balance text-[13.5px] leading-snug text-ink-2"
+          >
+            {text}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * THE ______ WHO ______. The noun reel spins only through your own loves, drops the quiet ones once the
+ * critique lands, and locks on the strongest (then on the sign's real noun). The verb stays blank for the pack.
+ */
+function SignSlots({ f, finalName, reduce }: { f: Folded; finalName?: string; reduce: boolean }) {
+  const inert = new Set(f.critique?.inert ?? []);
+  const reel = [...new Set(f.seeds.filter((x) => !inert.has(x.id)).map((x) => shortSeed(x.name)))];
+  const struck = f.seeds.filter((x) => inert.has(x.id)).map((x) => shortSeed(x.name));
+  const finalNoun = finalName?.match(/^The\s+(.+?)\s+Who\s/)?.[1];
+  const strongest = f.critique ? pullShares(f).top : undefined;
+  const locked = finalNoun ?? (strongest ? shortSeed(f.seeds.find((x) => x.id === strongest)?.name ?? "") : undefined);
+  const speed = f.ablated.length ? 330 : f.brands.length ? 240 : 160;
+  const [i, setI] = useState(0);
+  const spinning = !locked && reel.length > 1 && !reduce;
+  useEffect(() => {
+    if (!spinning) return;
+    const t = setInterval(() => setI((x) => x + 1), speed);
+    return () => clearInterval(t);
+  }, [spinning, speed]);
+  if (!f.seeds.length) return null;
+  const noun = locked || (reduce ? "" : reel[i % Math.max(1, reel.length)]);
+  return (
+    <div className="mt-1 flex flex-col items-center">
+      <div className="flex max-w-full items-baseline gap-2 rounded-xl border border-line/80 bg-paper-2/60 px-4 py-2 font-display text-[clamp(15px,4.2vw,22px)] font-semibold tracking-tight backdrop-blur">
+        <span className="text-ink-3">THE</span>
+        <span className="relative inline-flex min-w-[5.5em] justify-center overflow-hidden">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={noun || "blank"}
+              initial={reduce ? { opacity: 0 } : { y: "-100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={reduce ? { opacity: 0 } : { y: "100%", opacity: 0 }}
+              transition={{ duration: locked ? 0.45 : speed / 1000, ease: EASE }}
+              className={`truncate font-serif font-normal italic ${locked ? "text-accent" : "text-ink-2"}`}
+            >
+              {noun || "______"}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+        <span className="text-ink-3">WHO</span>
+        <span className="pulse-dot font-mono text-ink-3">______</span>
+      </div>
+      <p className="mt-1 h-4 font-mono text-[9.5px] uppercase tracking-[0.16em] text-ink-3">
+        {locked ? (
+          "the rest is in the pack"
+        ) : struck.length ? (
+          <>
+            struck: <s>{struck.join(", ")}</s>
+          </>
+        ) : (
+          "narrowing it down"
+        )}
+      </p>
+    </div>
+  );
+}
+
 function SeedOrb({ seed, on }: { seed: SeedNode; on: boolean }) {
   const [broken, setBroken] = useState(false);
   const ring = seed.odd ? "var(--m)" : on ? "var(--accent)" : seed.read ? "rgb(255 255 255 / .35)" : "var(--line)";
@@ -293,10 +502,16 @@ function SeedOrb({ seed, on }: { seed: SeedNode; on: boolean }) {
 
 /* ------------------------------------------------------------------ headline + words */
 
-function Headline({ m, done, error }: { m: SceneModel; done: boolean; error: string | null }) {
+function Headline({ m, done, error, small }: { m: SceneModel; done: boolean; error: string | null; small?: boolean }) {
   const text = error ? "Something broke mid-read" : done ? "Your taste sign is ready" : m.headline;
   return (
-    <div className="mt-8 flex min-h-[3.6em] w-full max-w-xl items-start justify-center text-center lg:mt-10">
+    <div
+      className={
+        small
+          ? "mt-2 flex min-h-[2.4em] w-full max-w-xl items-start justify-center text-center [&_h2]:text-[clamp(13px,3.4vw,16px)] [&_h2]:font-medium [&_h2]:text-ink-2"
+          : "mt-8 flex min-h-[3.6em] w-full max-w-xl items-start justify-center text-center lg:mt-10"
+      }
+    >
       <AnimatePresence mode="wait" initial={false}>
         <motion.h2
           key={text}

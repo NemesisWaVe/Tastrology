@@ -174,6 +174,7 @@ async function resolveSeeds(st: RunState) {
   });
   st.seeds = resolved.filter((s, i) => resolved.findIndex((x) => x.id === s.id) === i);
   st.ledger.record(st.seeds);
+  st.emit({ type: "data", data: { kind: "seeds", seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind, image: s.image })) } });
   st.done.add("resolve");
   st.emit({ type: "step", id: "resolve", label: "Seeds resolved", status: "done", detail: st.seeds.map((s) => s.name).join(" · ") });
   if (st.seeds.length < 2) throw new Error("Need at least 2 seeds that Qloo recognises.");
@@ -222,6 +223,7 @@ async function brandInsights(st: RunState) {
   );
   st.candidates = cands.filter((c) => !st.disliked.includes(c.id));
   st.ledger.record(st.candidates);
+  st.emit({ type: "data", data: { kind: "brands", brands: st.candidates.slice(0, 24).map((c) => ({ id: c.id, name: c.name, affinity: to100(c.affinity) })) } });
   st.done.add("insights");
   st.emit({ type: "step", id: "insights", label: `${st.candidates.length} candidate brands with explainability`, status: "done" });
   return { candidates: st.candidates.slice(0, 15).map((c) => ({ id: c.id, name: c.name, affinity: round(c.affinity), explain: shortExplain(st, c) })) };
@@ -238,19 +240,15 @@ async function ablateSeeds(st: RunState) {
         const signal = [...main.filter((x) => x.id !== s.id).map((x) => x.id), ...st.liked];
         const r = await insights({ type: "brand", entityIds: signal, tagIds: st.signalTags, filterTags: st.filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 50 }, log);
         st.ledger.record(r);
-        return { seed: s.id, r };
+        const floor = r.length ? Math.min(...r.map((x) => x.affinity ?? 0)) : 0;
+        // fell out of the top 50 → at most the floor
+        const drops = Object.fromEntries(top.map((c) => [c.id, Math.max(0, (c.affinity ?? 0) - (r.find((x) => x.id === c.id)?.affinity ?? floor))]));
+        // Streamed per seed as each call lands, so the scene can show that seed's pull on its own.
+        st.emit({ type: "data", data: { kind: "ablation", seed: s.id, drops: Object.fromEntries(Object.entries(drops).map(([k, v]) => [k, to100(v)])) } });
+        return { seed: s.id, drops };
       }),
     );
-    for (const c of top) {
-      const row: Record<string, number> = {};
-      for (const { seed, r } of runs) {
-        const hit = r.find((x) => x.id === c.id);
-        const floor = r.length ? Math.min(...r.map((x) => x.affinity ?? 0)) : 0;
-        const without = hit?.affinity ?? floor; // fell out of the top 50 → at most the floor
-        row[seed] = Math.max(0, (c.affinity ?? 0) - without);
-      }
-      st.ablation.set(c.id, row);
-    }
+    for (const c of top) st.ablation.set(c.id, Object.fromEntries(runs.map(({ seed, drops }) => [seed, drops[c.id] ?? 0])));
     return { value: null, summary: `Attribution matrix: ${top.length} brands × ${main.length} seeds` };
   });
   st.done.add("ablate");
@@ -366,6 +364,16 @@ async function critique(st: RunState) {
     st.critique = st.critique.filter((c) => !picks.some((p) => c.startsWith(`Rejected ${p.name} (`)));
     st.emit({ type: "step", id: "sideb", label: `${picks.length} side-B picks added`, status: "done" });
   }
+  st.emit({
+    type: "data",
+    data: {
+      kind: "critique",
+      kept: st.final.map((b) => b.entity.id),
+      rejected: st.rejected.map((r) => ({ id: r.entity.id, why: r.reason.startsWith("Over") ? "budget" : "fluke" })),
+      strongest: strongestSeed(st)?.id,
+      inert: st.inert,
+    },
+  });
   st.done.add("critique");
   st.emit({
     type: "step",
@@ -410,6 +418,15 @@ async function styleTags(st: RunState) {
     return { value: null, summary: `Consensus: ${st.keywords.slice(0, 5).map((k) => k.name).join(", ")}` };
   });
   aestheticSplit(st);
+  st.emit({
+    type: "data",
+    data: {
+      kind: "tags",
+      perSeed: Object.fromEntries(st.seeds.map((s) => [s.id, (st.seedTags.get(s.id) ?? []).slice(0, 4).map((t) => t.name)])),
+      consensus: st.keywords.slice(0, 5).map((k) => k.name),
+      sides: st.lobes.map((l) => l.seedIds),
+    },
+  });
   st.done.add("tags_dna");
   st.emit({
     type: "step",
@@ -493,6 +510,7 @@ async function tasteBridges(st: RunState) {
     st.bridges = picks.slice(0, 3);
     return { value: null, summary: st.bridges.map((b) => `${b.entity.name} (${b.entity.kind})`).join(", ") };
   });
+  st.emit({ type: "data", data: { kind: "bridges", bridges: st.bridges.map((b) => ({ id: b.entity.id, name: b.entity.name, kind: b.entity.kind })) } });
   st.done.add("bridges");
   st.emit({ type: "step", id: "bridges", label: `${st.bridges.length} taste bridges found`, status: "done" });
   return { bridges: st.bridges.map((b) => ({ id: b.entity.id, name: b.entity.name, kind: b.entity.kind, driven_by: b.because.map((x) => st.seedName(x)) })) };
@@ -904,6 +922,8 @@ function shortExplain(st: RunState, c: QEntity) {
 
 
 const round = (v: number | undefined) => Math.round((v ?? 0) * 1000) / 1000;
+/** 0–1 score → 0–100 with one decimal, for the streamed scene data. */
+const to100 = (v: number | undefined) => Math.round((v ?? 0) * 1000) / 10;
 
 const STYLE_TAG_TYPES = ["urn:tag:personal_style:qloo", "urn:tag:aesthetic_property:qloo"];
 
