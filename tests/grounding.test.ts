@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runAgent } from "@/lib/agent";
-import { GroundingLedger, chooseTagline, shortSeed, tagMentionsSeed } from "@/lib/grounding";
+import { GroundingLedger, chooseTagline, groundSignName, shortSeed, tagMentionsSeed } from "@/lib/grounding";
 import * as qloo from "@/lib/qloo";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import type { QEntity } from "@/lib/types";
@@ -80,6 +80,14 @@ describe("taglines must name a seed", () => {
     expect(shortSeed("The Lunchbox")).toBe("Lunchbox");
     expect(shortSeed("Blade Runner 2049")).toBe("Blade Runner");
     expect(shortSeed("Made in Heaven")).toBe("Heaven");
+  });
+  it("grounds the LLM's sign noun in a real seed", () => {
+    const s = ["Daft Punk", "Neuromancer (Sprawl, #1)", "Blade Runner 2049"];
+    expect(groundSignName("The Neuromancer Who Bakes", s)).toBe("The Neuromancer Who Bakes");
+    expect(groundSignName("The Daft Who Blooms Understated", s)).toBe("The Daft Punk Who Blooms Understated");
+    expect(groundSignName("The Replicant Who Bakes", s, "Blade Runner 2049")).toBe("The Blade Runner Who Bakes");
+    expect(groundSignName("The Replicant Who Bakes", s)).toBeNull();
+    expect(groundSignName("Daft Punk Forever", s)).toBeNull();
   });
   it("accepts a tagline that names a seed, ignoring case and subtitles", () => {
     expect(tagMentionsSeed("neuromancer did this to you.", seeds)).toBe(true);

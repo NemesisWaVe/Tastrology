@@ -48,6 +48,25 @@ export function shortSeed(name: string): string {
   return w.length <= 2 ? w.join(" ") : w.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
+/**
+ * Grounds an LLM sign name "The <Noun> Who <Verb>" in the run's seeds. An exact seed noun is kept; a clipped one
+ * ("The Daft Who…") gets its seed's full short name back; an invented noun is swapped for `lead`. Null if it can't be fixed.
+ */
+export function groundSignName(name: string, seedNames: string[], lead?: string): string | null {
+  const m = /^The\s+(.+?)\s+Who\s+(.+)$/.exec(name.trim());
+  if (!m) return null;
+  const [, noun, verb] = m;
+  const lc = (t: string) => t.toLowerCase();
+  const seeds = seedNames.map((n) => ({ short: shortSeed(n), full: stripSeed(n) }));
+  if (seeds.some((x) => lc(x.short) === lc(noun) || lc(x.full) === lc(noun))) return name.trim();
+  const nounWords = lc(noun).split(/\s+/);
+  const clipped = seeds.find((x) => nounWords.every((w) => lc(x.full).split(/\s+/).includes(w)));
+  const pick = clipped?.short ?? (lead ? shortSeed(lead) : "");
+  if (!pick) return null;
+  const out = `The ${pick} Who ${verb}`;
+  return out.split(/\s+/).length <= 6 && out.length <= 48 ? out : null;
+}
+
 /** A tagline is only allowed if it names at least one of the run's seeds (case-insensitive). */
 export function tagMentionsSeed(tagline: string, seedNames: string[]): boolean {
   const t = tagline.toLowerCase();
