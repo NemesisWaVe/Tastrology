@@ -6,7 +6,7 @@ import type { StyleResult } from "@/lib/types";
 import { buildCard } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { FlipCard } from "@/components/card/FlipCard";
-import { ReceiptBody, ReceiptPaper } from "@/components/card/Receipt";
+import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
 import { Sparkle } from "@/components/card/Sigils";
 import { BigThree } from "./BigThree";
 import { BrandCard } from "./Brands";
@@ -181,11 +181,9 @@ export function ResultsView({
           }
           note={<>Your loves in, brands out, the critic&apos;s voids crossed off. Tap any brand line for the agent&apos;s reason and which loves drove it.</>}
         />
-        <div className="mx-auto w-full max-w-[420px]">
-          <ReceiptPaper curl>
-            <ReceiptBody card={card} result={result} />
-          </ReceiptPaper>
-        </div>
+        <ReceiptPrinter>
+          <ReceiptBody card={card} result={result} stagger={false} faded />
+        </ReceiptPrinter>
         <div className="mt-8 flex justify-center">
           <button
             type="button"

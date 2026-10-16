@@ -1,7 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion, type Variants } from "motion/react";
-import { createContext, useContext, useState, type CSSProperties, type ReactNode } from "react";
+import { motion, useAnimationControls, useInView, useReducedMotion, type Variants } from "motion/react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
 import { TWIN_HOST, cardCode, displayName, twinPath, type CardData } from "@/lib/card";
 import type { BrandMatch, StyleResult } from "@/lib/types";
@@ -104,9 +104,9 @@ export function ReceiptPaper({ children, curl = false, className = "", style }: 
 
 /* ------------------------------------------------------------------ body */
 
-export function ReceiptBody({ card, result, compact = false }: { card: CardData; result: StyleResult; compact?: boolean }) {
+export function ReceiptBody({ card, result, compact = false, stagger = true, faded = false }: { card: CardData; result: StyleResult; compact?: boolean; stagger?: boolean; faded?: boolean }) {
   const reduce = useReducedMotion();
-  const live = !compact && !reduce;
+  const live = !compact && !reduce && stagger;
   const [open, setOpen] = useState<string | null>(null);
   const brands = result.brands.filter((x) => !x.side).slice(0, compact ? 5 : 8);
   const loves = result.seeds.slice(0, compact ? 6 : 8);
@@ -219,11 +219,11 @@ export function ReceiptBody({ card, result, compact = false }: { card: CardData;
   return (
     <Live.Provider value={live}>
       {live ? (
-        <motion.div className={cls} style={{ fontFamily: MONO }} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.12 }} transition={{ staggerChildren: 0.045 }}>
+        <motion.div className={cls} style={{ fontFamily: MONO, ...(faded ? { color: "rgb(58 42 30 / 0.86)", textShadow: "0 0 0.4px rgb(58 42 30 / 0.5)" } : null) }} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.12 }} transition={{ staggerChildren: 0.045 }}>
           {body}
         </motion.div>
       ) : (
-        <div className={cls} style={{ fontFamily: MONO }}>
+        <div className={cls} style={{ fontFamily: MONO, ...(faded ? { color: "rgb(58 42 30 / 0.86)", textShadow: "0 0 0.4px rgb(58 42 30 / 0.5)" } : null) }}>
           {body}
         </div>
       )}
@@ -254,6 +254,94 @@ function Why({ b, seedName }: { b: BrandMatch; seedName: (id: string) => string 
       <p className="mt-0.5 opacity-60">
         source: Qloo insights · {b.category || "brand"} · affinity {aff(b.affinity)}
       </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ the register */
+
+/**
+ * A small thermal register drawn in CSS: brand plate, status LED, paper slot. When it scrolls into view the
+ * paper feeds out of the slot in short stepper-motor jerks (one text line per step, with a hitch every few),
+ * then the cutter snaps the zigzag edge and the receipt settles into a soft hanging curl.
+ * Reduced motion: the receipt is simply there, complete.
+ */
+export function ReceiptPrinter({ children }: { children: ReactNode }) {
+  const reduce = useReducedMotion();
+  const box = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLDivElement>(null);
+  const inView = useInView(box, { once: true, amount: 0.25 });
+  const [h, setH] = useState<number | null>(0);
+  const [done, setDone] = useState(false);
+  const snap = useAnimationControls();
+  const body = useAnimationControls();
+
+  useEffect(() => {
+    if (reduce) {
+      setH(null);
+      setDone(true);
+      return;
+    }
+    if (!inView) return;
+    let shown = 0;
+    let n = 0;
+    let t: ReturnType<typeof setTimeout>;
+    const step = () => {
+      const full = paper.current?.scrollHeight ?? 0;
+      shown = Math.min(full, shown + 17); // one line per motor step
+      setH(shown);
+      body.start({ y: [0, 0.8, 0], transition: { duration: 0.05 } });
+      n++;
+      if (shown >= full) {
+        // the cutter: a tiny snap, then hand the height back to the layout
+        setTimeout(() => {
+          setH(null);
+          setDone(true);
+          snap.start({ y: [0, 5, -1, 0], rotate: [0, 0.6, -0.9, -0.7], transition: { duration: 0.45, ease: "easeOut" } });
+          body.start({ x: [0, -1.5, 1, 0], transition: { duration: 0.18 } });
+        }, 220);
+        return;
+      }
+      t = setTimeout(step, n % 5 === 0 ? 150 : 46); // stepper rhythm: short jerks, a hitch every few lines
+    };
+    t = setTimeout(step, 350);
+    return () => clearTimeout(t);
+  }, [inView, reduce, snap, body]);
+
+  const printing = inView && !done;
+  return (
+    <div ref={box} className="relative mx-auto w-full max-w-[420px]">
+      {/* register */}
+      <motion.div animate={body} className="relative z-10 mx-[-10px] rounded-[18px] px-4 pb-3 pt-3 sm:mx-[-16px]" style={{ background: "linear-gradient(180deg, #34343c, #1d1d23 55%, #141418)", boxShadow: "0 18px 40px -16px rgb(0 0 0 / .9), inset 0 1px 0 rgb(255 255 255 / .12), inset 0 -2px 0 rgb(0 0 0 / .5)" }}>
+        <div className="flex items-center justify-between">
+          <span className="rounded-[5px] px-2 py-[3px] font-mono text-[10px] font-bold tracking-[0.28em] text-[#d9d4c7]" style={{ background: "linear-gradient(180deg, #4a4a52, #2b2b31)", boxShadow: "inset 0 1px 0 rgb(255 255 255 / .18), 0 1px 2px rgb(0 0 0 / .6)" }}>
+            TASTROLOGY
+          </span>
+          <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/45">
+            {printing ? "printing" : done ? "ready" : "standby"}
+            <motion.i
+              className="block h-2 w-2 rounded-full"
+              style={{ background: printing ? "#fbbf24" : "#a3e635", boxShadow: `0 0 8px ${printing ? "#fbbf24" : "#a3e635"}` }}
+              animate={printing ? { opacity: [1, 0.25, 1] } : { opacity: 1 }}
+              transition={printing ? { duration: 0.5, repeat: Infinity } : undefined}
+            />
+          </span>
+        </div>
+        {/* paper slot */}
+        <div className="mt-3 h-[9px] rounded-full" style={{ background: "#050507", boxShadow: "inset 0 2px 3px rgb(0 0 0 / .9), 0 1px 0 rgb(255 255 255 / .08)" }} />
+      </motion.div>
+      {/* paper, fed out under the slot */}
+      <motion.div animate={snap} className="relative z-0 -mt-[10px] mx-auto w-[94%]" style={{ transformOrigin: "50% 0" }}>
+        <div style={{ height: h ?? "auto", overflow: h === null ? "visible" : "hidden" }}>
+          <div ref={paper}>
+            <ReceiptPaper curl={done} style={done ? undefined : { filter: "drop-shadow(0 10px 14px rgba(0,0,0,0.6))" }}>
+              {children}
+            </ReceiptPaper>
+          </div>
+        </div>
+        {/* shadow under the slot lip */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-5" style={{ background: "linear-gradient(rgb(0 0 0 / .45), transparent)" }} />
+      </motion.div>
     </div>
   );
 }
