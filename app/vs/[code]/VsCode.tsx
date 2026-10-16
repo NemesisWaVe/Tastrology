@@ -1,10 +1,13 @@
 "use client";
 
+import { useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BattleStage } from "@/components/battle/BattleArena";
 import { HoloCard } from "@/components/card/HoloCard";
+import { Sky } from "@/components/reveal/Sky";
+import { skyState } from "@/components/reveal/traceModel";
 import type { BattleResult } from "@/lib/battle";
 import type { CardData } from "@/lib/card";
 import { TWIN_CODE } from "@/lib/twins";
@@ -34,10 +37,17 @@ export function VsCode({ code }: { code: string }) {
     };
   }, [code, b]);
 
+  // The challenger's card hangs in their sky.
+  const reduce = Boolean(useReducedMotion());
+  const cardRef = useRef<HTMLDivElement>(null);
+  const challenger = st.kind === "card" ? st.card : null;
+  const sky = useMemo(() => (challenger ? skyState(challenger.evolvesFrom, challenger.archetype) : null), [challenger]);
+
   if (st.kind === "fight") return <BattleStage out={st.out} />;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">
+    <main className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">
+      {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {st.kind === "loading" && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding the challenger…</p>}
       {st.kind === "missing" && (
         <>
@@ -49,10 +59,12 @@ export function VsCode({ code }: { code: string }) {
       )}
       {st.kind === "card" && (
         <>
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{st.card.archetype} wants a fight</p>
-          <HoloCard card={st.card} width={300} idle />
-          <Link href={`/?vs=${code}`} className="rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
-          <p className="text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
+          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{st.card.archetype} wants a fight</p>
+          <div ref={cardRef} className="relative">
+            <HoloCard card={st.card} width={300} idle />
+          </div>
+          <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
+          <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
         </>
       )}
     </main>

@@ -1,4 +1,5 @@
 import { proxied } from "@/lib/card";
+import { shortSeed } from "@/lib/grounding";
 import type { QlooCallLog, SceneData, StyleResult, TraceEvent } from "@/lib/types";
 
 /**
@@ -84,6 +85,27 @@ export function foldBeats(beats: SceneData[]): Folded {
     else if (b.kind === "bridges") f.bridges = b.bridges;
   }
   return f;
+}
+
+/**
+ * A finished reading's sky, for screens after the reading (story, pack, /c, /vs). The lit constellation is the
+ * love the sign is named after ("The <noun> Who…"), so the sky and the card always agree.
+ */
+export function skyState(seeds: { id?: string; name: string; kind?: string }[], signName: string, sides: string[][] = [], inert: string[] = []): Folded {
+  const noun = signName.match(/^The\s+(.+?)\s+Who\s/)?.[1]?.toLowerCase();
+  const list = seeds.map((s) => ({ id: s.id ?? s.name, name: s.name, kind: s.kind ?? "" }));
+  const strongest = noun ? list.find((s) => shortSeed(s.name).toLowerCase() === noun)?.id : undefined;
+  return {
+    seeds: list,
+    perSeed: {},
+    consensus: [],
+    sides,
+    brands: [],
+    drops: {},
+    ablated: [],
+    bridges: [],
+    critique: { kind: "critique", kept: [], rejected: [], strongest, inert },
+  };
 }
 
 /**

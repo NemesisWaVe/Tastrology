@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
+import { displayName } from "@/lib/card";
 import { pullShares, type Folded } from "./traceModel";
 
 /**
@@ -60,10 +61,33 @@ function figureFor(id: string, size: number): Pick<Figure, "stars" | "edges"> {
   return { stars, edges };
 }
 
-export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLElement | null>; reduce: boolean }) {
+/**
+ * `dim` scales the whole sky (the pack and story sit it further back). `drawn` skips the draw-in, for screens that
+ * arrive with the reading already done. Figures are keyed on the love's display name, so the same love draws the
+ * same constellation on every screen (reading, story, pack, /c, /vs).
+ */
+export function Sky({
+  f,
+  anchor,
+  reduce,
+  dim = 1,
+  drawn = false,
+  fixed = false,
+}: {
+  f: Folded;
+  anchor?: RefObject<HTMLElement | null>;
+  reduce: boolean;
+  dim?: number;
+  drawn?: boolean;
+  /** Pin to the viewport (pages that scroll) instead of filling the parent. */
+  fixed?: boolean;
+}) {
   const cv = useRef<HTMLCanvasElement>(null);
   const fRef = useRef(f);
   fRef.current = f;
+  const dimRef = useRef(dim);
+  dimRef.current = dim;
+  const dimNow = useRef(dim);
 
   useEffect(() => {
     const canvas = cv.current;
@@ -117,6 +141,8 @@ export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLEl
       raf = requestAnimationFrame(frame);
       const t = (now - t0) / 1000;
       const st = fRef.current;
+      dimNow.current += (dimRef.current - dimNow.current) * (reduce ? 1 : 0.05);
+      const D = dimNow.current;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
@@ -125,13 +151,13 @@ export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLEl
       ctx.fillStyle = C.ink;
       for (const s of field) {
         const tw = reduce ? 0.6 : 0.35 + 0.35 * Math.sin(t * s.v + s.p);
-        ctx.globalAlpha = tw * (s.s > 1.2 ? 0.9 : 0.55);
+        ctx.globalAlpha = tw * (s.s > 1.2 ? 0.9 : 0.55) * Math.min(1, 0.4 + D * 0.6);
         const x = (s.x + drift * (s.s / 2)) % W;
         ctx.fillRect(x, s.y, s.s, s.s);
       }
 
       // Constellations: one per resolved love, parked around the well in its seed's direction.
-      const box = anchor.current?.getBoundingClientRect();
+      const box = anchor?.current?.getBoundingClientRect();
       const host = canvas.getBoundingClientRect();
       const cx = box ? box.left - host.left + box.width / 2 : W / 2;
       const cy = box ? box.top - host.top + box.height / 2 : H / 2;
@@ -144,11 +170,13 @@ export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLEl
       const strongest = st.critique ? pullShares(st).top : undefined;
       const size = Math.max(46, Math.min(110, Math.min(W, H) * 0.09));
 
+      const keyOf = (name: string) => displayName(name).toLowerCase();
       for (const s of real) {
-        if (!figures.has(s.id)) figures.set(s.id, { id: s.id, name: s.name, ...figureFor(s.id, size), born: now, a: 0 });
+        const k = keyOf(s.name);
+        if (!figures.has(k)) figures.set(k, { id: k, name: displayName(s.name), ...figureFor(k, size), born: drawn ? now - 5000 : now, a: 0 });
       }
       real.forEach((s) => {
-        const fig = figures.get(s.id)!;
+        const fig = figures.get(keyOf(s.name))!;
         const i = st.seeds.indexOf(s);
         const ang = -Math.PI / 2 + (TAU * i) / Math.max(1, n);
         // Out past the well, kept on screen.
@@ -161,7 +189,7 @@ export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLEl
         const target = s.id === current ? 0.25 : inert.has(s.id) ? 0.35 : st.critique && s.id === strongest ? 1 : 0.7;
         // Phones: the well fills the width, so the sky stays texture (softer, no names) instead of competing with it.
         const narrow = W < 640;
-        fig.a += ((narrow ? target * 0.5 : target) - fig.a) * (reduce ? 1 : 0.06);
+        fig.a += ((narrow ? target * 0.5 : target) * D - fig.a) * (reduce ? 1 : 0.06);
         // Lines draw in over ~1.6s after the love resolves.
         const grow = reduce ? 1 : Math.min(1, (now - fig.born) / 1600);
         const sway = reduce ? 0 : Math.sin(t * 0.3 + i) * 3;
@@ -199,7 +227,7 @@ export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLEl
         ctx.font = `italic ${Math.round(Math.max(13, size * 0.2))}px ${serif}`;
         ctx.textAlign = "center";
         const low = fig.stars.reduce((m, p) => Math.max(m, p.y), 0);
-        ctx.fillText(s.name.length > 26 ? `${s.name.slice(0, 25)}…` : s.name, ax, ay + low + sway + 22);
+        ctx.fillText(fig.name.length > 26 ? `${fig.name.slice(0, 25)}…` : fig.name, ax, ay + low + sway + 22);
       });
       ctx.globalAlpha = 1;
     };
@@ -208,7 +236,7 @@ export function Sky({ f, anchor, reduce }: { f: Folded; anchor: RefObject<HTMLEl
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [anchor, reduce]);
+  }, [anchor, reduce, drawn]);
 
-  return <canvas ref={cv} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden />;
+  return <canvas ref={cv} className={`pointer-events-none ${fixed ? "fixed" : "absolute"} inset-0 h-full w-full`} aria-hidden />;
 }

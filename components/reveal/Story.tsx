@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { displayName, proxied, type CardData, type CardType } from "@/lib/card";
 import type { StyleResult } from "@/lib/types";
-import { KIND_LABEL, overlapFigures } from "./traceModel";
+import { Sky } from "./Sky";
+import { KIND_LABEL, overlapFigures, skyState } from "./traceModel";
 import s from "./reveal.module.css";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
@@ -35,6 +36,10 @@ interface Beat {
  */
 export function Story({ result, card, reduce, onFinish }: { result: StyleResult; card: CardData; reduce: boolean; onFinish: () => void }) {
   const beats = useMemo(() => buildBeats(result, card), [result, card]);
+  const sky = useMemo(
+    () => skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id)),
+    [result],
+  );
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const fill = useRef<HTMLDivElement>(null);
@@ -115,19 +120,8 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
       exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
     >
-      {/* colour field */}
-      <motion.div
-        className={s.orb}
-        style={{ width: "80vmax", height: "80vmax", left: "-30vmax", top: "-35vmax" }}
-        animate={{ background: beat.tint[0], x: reduce ? 0 : i * 18, scale: reduce ? 1 : 1 + (i % 2) * 0.08 }}
-        transition={{ duration: 1.4, ease: EASE }}
-      />
-      <motion.div
-        className={s.orb}
-        style={{ width: "70vmax", height: "70vmax", right: "-30vmax", bottom: "-35vmax" }}
-        animate={{ background: beat.tint[1], y: reduce ? 0 : -i * 14 }}
-        transition={{ duration: 1.4, ease: EASE }}
-      />
+      {/* your sky, carried over from the reading (replaces the colour washes) */}
+      <Sky f={sky} reduce={reduce} dim={0.75} drawn />
 
       {/* progress */}
       <div className="absolute inset-x-0 top-0 z-20 px-3 pt-3 sm:px-6 sm:pt-5">
@@ -556,7 +550,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
           Sun, Moon, Rising.
         </motion.p>
         <motion.h2 {...rise(reduce, 0.35)} className="mt-2 font-display text-[clamp(40px,12vw,134px)] font-bold leading-[0.95] tracking-[-0.03em]">
-          Your sign has been <Big t={sun} size="1em">minted.</Big>
+          Your sign has been <span className="font-serif font-normal italic text-accent">minted.</span>
         </motion.h2>
         <motion.div {...rise(reduce, 0.9, 10)} className="mt-8 flex justify-center gap-3 text-[13px] text-ink-2">
           {(

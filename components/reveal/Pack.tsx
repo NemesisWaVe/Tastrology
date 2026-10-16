@@ -8,6 +8,8 @@ import { FlipCard } from "@/components/card/FlipCard";
 import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
+import { Sky } from "./Sky";
+import { skyState } from "./traceModel";
 import s from "./reveal.module.css";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
@@ -385,13 +387,19 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     [r.sparks, sun.a, moon.a, rising.a],
   );
 
-  const showRays = stage === "opening" || stage === "inpack" || stage === "facedown" || stage === "charging" || stage === "revealed";
+  const stageRef = useRef<HTMLDivElement>(null);
+  const sky = useMemo(() => skyState(card.evolvesFrom, card.archetype), [card]);
 
   return (
     <motion.div className="absolute inset-0 flex flex-col" style={vars} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      {/* ambient */}
-      <div className={s.orb} style={{ width: "70vmax", height: "70vmax", left: "-25vmax", top: "-30vmax", background: `color-mix(in oklab, ${sun.a} 40%, transparent)` }} />
-      <div className={s.orb} style={{ width: "60vmax", height: "60vmax", right: "-25vmax", bottom: "-30vmax", background: `color-mix(in oklab, ${moon.a} 35%, transparent)` }} />
+      {/* your sky: dim while sealed, brightening as you hold to mint, then lit around the card */}
+      <Sky
+        f={sky}
+        anchor={stageRef}
+        reduce={reduce}
+        drawn
+        dim={stage === "sealed" ? 0.45 : stage === "charging" ? 1.15 : stage === "revealed" ? 0.85 : 0.6}
+      />
 
       <motion.div animate={shake} className="relative z-10 flex flex-1 flex-col">
         {/* header copy */}
@@ -439,19 +447,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
         </div>
 
         {/* stage */}
-        <div className="relative grid flex-1 place-items-center">
-          {/* burst rays */}
-          <AnimatePresence>
-            {showRays && (
-              <motion.div
-                className={s.rays}
-                initial={{ opacity: 0, scale: 0.4 }}
-                animate={{ opacity: stage === "revealed" ? r.rays : stage === "charging" ? 0.9 : 0.35, scale: stage === "revealed" ? 1.15 : stage === "charging" ? 0.9 : 0.7 }}
-                transition={{ duration: 0.9, ease: EASE }}
-                style={card.rarity === "holo" ? ({ "--ray": stage === "revealed" ? moon.a : sun.a } as React.CSSProperties) : undefined}
-              />
-            )}
-          </AnimatePresence>
+        <div ref={stageRef} className="relative grid flex-1 place-items-center">
 
           {/* flash */}
           <AnimatePresence>
