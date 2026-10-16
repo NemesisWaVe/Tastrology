@@ -8,6 +8,7 @@ import { buildCard, proxied, type CardData } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { HoloCard, glyph } from "./HoloCard";
 import { Sigil, Sparkle } from "./Sigils";
+import { ReceiptBody, ReceiptPaper } from "./Receipt";
 
 type Format = "story" | "receipt" | "square";
 const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label: string; for: string }> = {
@@ -308,89 +309,14 @@ const Story = forwardRef<HTMLDivElement, { card: CardData }>(function Story({ ca
   );
 });
 
-const KIND: Record<string, string> = { artist: "music", movie: "film", tv_show: "tv", book: "book", place: "place", podcast: "pod", videogame: "game" };
-
-/** Deterministic bars from the card's own machine-readable line. */
-function barcode(seed: string): string {
-  const stops: string[] = [];
-  let x = 0;
-  for (let i = 0; i < seed.length && x < 250; i++) {
-    const c = seed.charCodeAt(i);
-    const w = 1 + (c % 3);
-    const gap = 1 + ((c >> 2) % 3);
-    stops.push(`#151418 ${x}px ${x + w}px`, `transparent ${x + w}px ${x + w + gap}px`);
-    x += w + gap;
-  }
-  return `linear-gradient(90deg, ${stops.join(", ")}, transparent ${x}px)`;
-}
-
-function ReceiptRow({ l, r, strong }: { l: string; r: string; strong?: boolean }) {
-  return (
-    <div className={`flex items-baseline gap-1.5 ${strong ? "font-bold" : ""}`}>
-      <span className="min-w-0 truncate">{l}</span>
-      <span className="min-w-[10px] flex-1 border-b border-dotted border-black/35" />
-      <span className="shrink-0 tabular-nums">{r}</span>
-    </div>
-  );
-}
-const Rule = () => <div className="my-2 border-t border-dashed border-black/40" />;
-
-/* Receiptify-style thermal printout: every line is a field from the run, nothing invented. */
+/* Receiptify-style thermal printout, shared with the results page (components/card/Receipt.tsx). */
 const Receipt = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult }>(function Receipt({ card, result }, ref) {
-  const brands = result.brands.filter((x) => !x.side).slice(0, 6);
-  const loves = result.seeds.slice(0, 8);
-  const d = new Date(result.createdAt || Date.now());
-  const date = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
-  const zigB = "conic-gradient(from -45deg at bottom, transparent, #000 1deg 89deg, transparent 90deg) 50% / 12px 100%";
-  const zigT = "conic-gradient(from 135deg at top, transparent, #000 1deg 89deg, transparent 90deg) 50% / 12px 100%";
   return (
     <div ref={ref} className="relative overflow-hidden" style={{ width: 360, height: 640, background: "#0b0b0e" }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(70% 50% at 50% 45%, rgba(255,255,255,0.08), transparent 70%)" }} />
-      <div className="absolute left-1/2 top-[16px] w-[300px] -translate-x-1/2 rotate-[-1.2deg]" style={{ filter: "drop-shadow(0 24px 30px rgba(0,0,0,0.7))" }}>
-        <div style={{ WebkitMask: zigT, mask: zigT, paddingTop: 6, background: "linear-gradient(#f3f0e8 0 12px, transparent 12px)" }}>
-          <div
-            className="px-5 pt-3 text-[9.5px] uppercase leading-[1.45] text-[#151418]"
-            style={{ fontFamily: "var(--nf-mono), ui-monospace, Menlo, monospace", WebkitMask: zigB, mask: zigB, paddingBottom: 20, background: "#f3f0e8" }}
-          >
-            <p className="text-center text-[19px] font-bold tracking-[0.18em]">{BRAND.name}</p>
-            <p className="text-center text-[8.5px] tracking-[0.1em]">· {BRAND.poweredBy} ·</p>
-            <div className="mt-1.5 flex justify-between text-[8.5px]">
-              <span>order #{card.serial}</span>
-              <span>{BRAND.cardSet}</span>
-              <span>{date}</span>
-            </div>
-            <Rule />
-            <p className="mb-0.5 font-bold">loves</p>
-            {loves.map((s, i) => (
-              <ReceiptRow key={s.id} l={`${i + 1}. ${s.name}`} r={KIND[s.kind] ?? s.kind} />
-            ))}
-            <Rule />
-            <div className="mb-0.5 flex justify-between font-bold">
-              <span>brands</span>
-              <span>affinity</span>
-            </div>
-            {brands.map((b) => (
-              <ReceiptRow key={b.entity.id} l={b.entity.name} r={`.${String(Math.round(b.affinity * 100)).padStart(2, "0")}`} />
-            ))}
-            <Rule />
-            <ReceiptRow l={`sun ${card.bigThree.sun.name}`} r="" />
-            <ReceiptRow l={`moon ${card.bigThree.moon.name}`} r={card.bigThree.moonIsContradiction ? "split" : ""} />
-            <ReceiptRow l={`rising ${card.bigThree.rising.name}`} r="" />
-            <Rule />
-            <div className="text-[14px]">
-              <ReceiptRow l="total taste" r={String(card.power)} strong />
-            </div>
-            <ReceiptRow l={card.rarityLabel} r={`${card.domains} domain${card.domains === 1 ? "" : "s"}`} />
-            <div className="mt-3 h-[34px]" style={{ background: barcode(card.mrz.join("")) }} />
-            <p className="mt-1.5 overflow-hidden whitespace-nowrap text-[7.6px] leading-[1.35]">
-              {card.mrz[0]}
-              <br />
-              {card.mrz[1]}
-            </p>
-            <p className="mt-2 text-center text-[8.5px] tracking-[0.14em]">{BRAND.question}</p>
-          </div>
-        </div>
-      </div>
+      <ReceiptPaper className="absolute left-1/2 top-[16px] w-[300px] -translate-x-1/2 rotate-[-1.2deg]">
+        <ReceiptBody card={card} result={result} compact />
+      </ReceiptPaper>
     </div>
   );
 });

@@ -73,8 +73,9 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Translucent lime with the text kept as-is: readable on the dark UI and on light receipt paper */
 ::selection {
-  background: var(--accent-soft);
+  background: rgb(198 255 61 / 0.38);
 }
 
 @keyframes rise {

@@ -6,6 +6,7 @@ import type { StyleResult } from "@/lib/types";
 import { buildCard } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { FlipCard } from "@/components/card/FlipCard";
+import { ReceiptBody, ReceiptPaper } from "@/components/card/Receipt";
 import { Sparkle } from "@/components/card/Sigils";
 import { BigThree } from "./BigThree";
 import { BrandCard } from "./Brands";
@@ -41,6 +42,7 @@ export function ResultsView({
   const heroRef = useRef<HTMLElement>(null);
   const [navOn, setNavOn] = useState(false);
   const [showBack, setShowBack] = useState(false);
+  const [math, setMath] = useState(false);
   useEffect(() => {
     const el = heroRef.current;
     if (!el) return;
@@ -136,7 +138,7 @@ export function ResultsView({
               >
                 {showBack ? "Front ⟲" : "Back ⟲"}
               </button>
-              <a href="#matches" className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink">
+              <a href="#receipt" className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink">
                 See the receipts ↓
               </a>
               <BattleLink />
@@ -154,7 +156,7 @@ export function ResultsView({
           {[
             ["matches", "Matches"],
             ["doubts", "Doubts"],
-            ["receipts", "Receipts"],
+            ["receipt", "Receipt"],
             ["capsule", "Capsule"],
             ["bridges", "Bridges"],
           ].map(([id, label]) => (
@@ -167,6 +169,39 @@ export function ResultsView({
           </button>
         </div>
       </nav>
+
+      {/* ------------------------------------------------------------ the receipt */}
+      <section id="receipt" className="scroll-mt-20">
+        <SectionHead
+          kicker="The receipt"
+          title={
+            <>
+              Every line, <em className="text-ink-2">itemised</em>
+            </>
+          }
+          note={<>Your loves in, brands out, the critic&apos;s voids crossed off. Tap any brand line for the agent&apos;s reason and which loves drove it.</>}
+        />
+        <div className="mx-auto w-full max-w-[420px]">
+          <ReceiptPaper curl>
+            <ReceiptBody card={card} result={result} />
+          </ReceiptPaper>
+        </div>
+        <div className="mt-8 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setMath((m) => !m)}
+            aria-expanded={math}
+            className="rounded-full border border-line px-5 py-2.5 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-2 transition hover:border-ink-3 hover:text-ink"
+          >
+            {math ? "Hide the math" : "Show the math"}
+          </button>
+        </div>
+        {math && (
+          <div className="mt-10">
+            <Matrix result={result} />
+          </div>
+        )}
+      </section>
 
       <Changes result={result} />
 
@@ -213,8 +248,6 @@ export function ResultsView({
       </section>
 
       {(result.critique.length > 0 || result.rejected.length > 0) && <Critique result={result} />}
-
-      <Matrix result={result} />
 
       <CapsuleAndBridges result={result} />
 
