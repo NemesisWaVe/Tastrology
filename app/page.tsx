@@ -8,8 +8,9 @@ import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode } from "@/lib/card";
+import { slim, trimResult } from "@/lib/saved";
 import { TWIN_CODE } from "@/lib/twins";
-import type { AgentRequest, BrandMatch, QEntity, StyleResult } from "@/lib/types";
+import type { AgentRequest, BrandMatch, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 
 type Stage = "home" | "reveal" | "result";
@@ -22,21 +23,7 @@ interface Saved {
   pinned: BrandMatch[];
 }
 
-/** Drop the heavy per-entity fields the UI never renders (~200KB -> a few KB). */
-function slim(e: QEntity): QEntity {
-  const { explain: _explain, popularity: _popularity, ...rest } = e;
-  return { ...rest, tags: (e.tags ?? []).slice(0, 4) };
-}
-
-function trim(r: StyleResult): StyleResult {
-  return {
-    ...r,
-    seeds: r.seeds.map(slim),
-    brands: r.brands.map((b) => ({ ...b, entity: slim(b.entity) })),
-    rejected: r.rejected.map((x) => ({ ...x, entity: slim(x.entity) })),
-    bridges: r.bridges.map((b) => ({ ...b, entity: slim(b.entity) })),
-  };
-}
+const trim = trimResult;
 
 function trimPins(p: BrandMatch[]): BrandMatch[] {
   return p.map((b) => ({ ...b, entity: slim(b.entity) }));
