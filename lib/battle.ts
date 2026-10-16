@@ -7,6 +7,9 @@ import type { QEntity, StyleResult } from "./types";
  * contradictions, rejected picks, inert seeds, shared brands and keywords. It roasts the taste, never the person.
  */
 
+/** Bump when battle() output changes; part of the stored-result key. */
+export const ENGINE_V = "1";
+
 export type Side = "a" | "b";
 export type StatName = "Range" | "Edge" | "Cohesion" | "Signal";
 

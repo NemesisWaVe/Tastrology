@@ -20,6 +20,7 @@ import { BRAND } from "@/lib/brand";
 import type { StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 import { loadFighter, ME } from "./data";
+import { FightShare } from "./FightShare";
 import { ResultPanel } from "./ResultPanel";
 
 const COL: Record<Side, string> = { a: "#c6ff3d", b: "#d875ff" };
@@ -67,14 +68,12 @@ function useCardWidth() {
 let fontCSS: Promise<string> | null = null;
 
 export function BattleArena({ a, b }: { a: string; b: string }) {
-  const reduce = useReducedMotion() ?? false;
   const { run, events, error: runError } = useAgentRun();
   const [res, setRes] = useState<{ a: StyleResult; b: StyleResult } | null>(
     null,
   );
   const [loading, setLoading] = useState<Side | null>("a");
   const [err, setErr] = useState<string | null>(null);
-  const [phase, setPhase] = useState(0);
   const [nonce, setNonce] = useState(0);
 
   // Sequential: the second run starts once the first is in (both hit the server cache for personas).
@@ -109,20 +108,6 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
   }, [a, b, run, nonce]);
 
   const out = useMemo(() => (res ? battle(res.a, res.b) : null), [res]);
-
-  // The cinematic clock. Reduced motion jumps straight to the reveal.
-  useEffect(() => {
-    if (!out) return;
-    if (reduce) return setPhase(PH_REVEAL);
-    setPhase(0);
-    const at = [
-      T_INTRO,
-      ...[1, 2, 3, 4].map((i) => T_INTRO + i * T_ROUND),
-      T_INTRO + 4 * T_ROUND + T_SLAM,
-    ];
-    const ids = at.map((ms, i) => setTimeout(() => setPhase(i + 1), ms));
-    return () => ids.forEach(clearTimeout);
-  }, [out, reduce, nonce]);
 
   if (err)
     return (
@@ -183,6 +168,36 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
       </Shell>
     );
 
+  return <BattleStage out={out} a={a} b={b} />;
+}
+
+/** Order rounds so the biggest margin lands last. Presentation only: battle() is untouched. */
+export function biggestLast(out: BattleResult): BattleResult {
+  const margin = (r: BattleRound) => (r.winner === "tie" ? -1 : Math.abs(r.a - r.b));
+  const rounds = out.rounds.map((r, i) => ({ r, i })).sort((x, y) => margin(x.r) - margin(y.r) || x.i - y.i).map((x) => x.r);
+  return { ...out, rounds };
+}
+
+/** The cinematic clock plus the sequence, for any BattleResult (client-side or from /api/battle). */
+export function BattleStage({ out: raw, a = "a", b = "b", onReplay }: { out: BattleResult; a?: string; b?: string; onReplay?: () => void }) {
+  const reduce = useReducedMotion() ?? false;
+  const [phase, setPhase] = useState(0);
+  const [nonce, setNonce] = useState(0);
+  const out = useMemo(() => biggestLast(raw), [raw]);
+  // The cinematic clock. Reduced motion jumps straight to the reveal.
+  useEffect(() => {
+    if (!out) return;
+    if (reduce) return setPhase(PH_REVEAL);
+    setPhase(0);
+    const at = [
+      T_INTRO,
+      ...[1, 2, 3, 4].map((i) => T_INTRO + i * T_ROUND),
+      T_INTRO + 4 * T_ROUND + T_SLAM,
+    ];
+    const ids = at.map((ms, i) => setTimeout(() => setPhase(i + 1), ms));
+    return () => ids.forEach(clearTimeout);
+  }, [out, reduce, nonce]);
+
   return (
     <Sequence
       key={nonce}
@@ -192,7 +207,10 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
       a={a}
       b={b}
       onSkip={() => setPhase(PH_REVEAL)}
-      onReplay={() => setNonce((n) => n + 1)}
+      onReplay={() => {
+        setNonce((n) => n + 1);
+        onReplay?.();
+      }}
     />
   );
 }
@@ -276,7 +294,7 @@ function Sequence({
       await document.fonts.ready;
       fontCSS ??= getFontEmbedCSS(el).catch(() => "");
       const opts = {
-        pixelRatio: 1080 / el.offsetWidth,
+        pixelRatio: 3,
         backgroundColor: "#07070a",
         fontEmbedCSS: await fontCSS,
         includeQueryParams: true,
@@ -484,7 +502,8 @@ function Sequence({
             }}
             className="mt-6"
           >
-            <ResultPanel ref={panel} res={out} />
+            <ResultPanel res={out} />
+            <FightShare ref={panel} res={out} />
           </motion.div>
 
           <motion.div

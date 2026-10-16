@@ -29,7 +29,10 @@ export function ResultsView({
   onShare,
   onReplan,
   pending = false,
+  fight,
 }: {
+  /** Set when the visitor arrived from someone's /vs link: answers that fighter. */
+  fight?: { href: string; name: string };
   result: StyleResult;
   votes: Record<string, Vote>;
   onVote: (id: string, v: Vote | null) => void;
@@ -158,6 +161,11 @@ export function ResultsView({
               <a href="#receipt" className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink">
                 See the receipts ↓
               </a>
+              {fight && (
+                <a href={fight.href} className="rounded-full bg-accent px-5 py-3.5 text-[14px] font-semibold text-paper">
+                  Fight {fight.name}
+                </a>
+              )}
               <BattleLink />
             </div>
           </div>

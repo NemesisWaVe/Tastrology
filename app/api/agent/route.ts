@@ -4,6 +4,7 @@ import { buildCard } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
 import { PERSONAS } from "@/lib/personas";
 import { allow, bumpDaily, clientId } from "@/lib/ratelimit";
+import { registerFighter, toSheet } from "@/lib/fighters";
 import { registerTwin } from "@/lib/twins";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
@@ -55,7 +56,10 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest): Fligh
     async (result) => {
       const rec = { events: f.events, result };
       // Register the card's twin server-side, before the result is returned or cached. (Stage C: also write the fighter sheet here.)
-      if (result.mode !== "mock") await registerTwin(buildCard(result));
+      if (result.mode !== "mock") {
+        const code = await registerTwin(buildCard(result));
+        await registerFighter(code, toSheet(result));
+      }
       // Don't pin a fallback run: next time the LLM may be back (Qloo calls are cached either way).
       if (!llmConfigured() || result.planner === "llm") await results.set(key, rec);
       await lastGood.set(fallbackKey, rec);
