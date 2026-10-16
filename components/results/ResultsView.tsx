@@ -1,5 +1,6 @@
 "use client";
 
+import { BattleLink } from "@/components/battle/BattleLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StyleResult } from "@/lib/types";
 import { buildCard } from "@/lib/card";
@@ -129,6 +130,7 @@ export function ResultsView({
               <a href="#matches" className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink">
                 See the receipts ↓
               </a>
+              <BattleLink />
             </div>
           </div>
         </div>

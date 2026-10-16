@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import type { StyleResult } from "@/lib/types";
 import { buildCard, proxied, type CardData } from "@/lib/card";
@@ -15,6 +16,7 @@ const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label:
   square: { w: 400, h: 400, out: [1080, 1080], label: "Square", for: "feeds & group chats" },
 };
 
+const SPRING = { type: "spring" as const, stiffness: 500, damping: 28 };
 let fontCSS: Promise<string> | null = null;
 
 /** Share sheet: live preview of the export, then a 1080px PNG via the native share sheet (mobile) or a download. */
@@ -145,17 +147,19 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
         <div className="flex w-full max-w-[400px] flex-col gap-2">
           <div className="flex gap-2">
             {canShare && (
-              <button onClick={() => go("share")} disabled={!!busy} className="flex-1 rounded-full bg-accent py-3.5 text-[15px] font-semibold text-black transition active:scale-[0.98] disabled:opacity-60">
+              <motion.button whileTap={{ scale: 0.97 }} transition={SPRING} onClick={() => go("share")} disabled={!!busy} className="flex-1 rounded-full bg-accent py-3.5 text-[15px] font-semibold text-black disabled:opacity-60">
                 {busy === "share" ? "Minting…" : "Share"}
-              </button>
+              </motion.button>
             )}
-            <button
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              transition={SPRING}
               onClick={() => go("save")}
               disabled={!!busy}
-              className={`flex-1 rounded-full py-3.5 text-[15px] font-semibold transition active:scale-[0.98] disabled:opacity-60 ${canShare ? "border border-line text-ink" : "bg-accent text-black"}`}
+              className={`flex-1 rounded-full py-3.5 text-[15px] font-semibold disabled:opacity-60 ${canShare ? "border border-line text-ink" : "bg-accent text-black"}`}
             >
               {busy === "save" ? "Minting PNG…" : canShare ? "Save image" : `Download ${SIZE[fmt].label.toLowerCase()} PNG`}
-            </button>
+            </motion.button>
           </div>
           <p className="min-h-[18px] text-center font-mono text-[11px] text-ink-3" aria-live="polite" data-share-status>
             {err ? <span className="text-bad">{err}</span> : done ?? `${size.out[0]}×${size.out[1]} · made for ${size.for}`}
@@ -349,7 +353,7 @@ const Receipt = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult
             style={{ fontFamily: "var(--nf-mono), ui-monospace, Menlo, monospace", WebkitMask: zigB, mask: zigB, paddingBottom: 20, background: "#f3f0e8" }}
           >
             <p className="text-center text-[19px] font-bold tracking-[0.18em]">{BRAND.name}</p>
-            <p className="text-center text-[8.5px] tracking-[0.1em]">{BRAND.poweredBy}</p>
+            <p className="text-center text-[8.5px] tracking-[0.1em]">· {BRAND.poweredBy} ·</p>
             <div className="mt-1.5 flex justify-between text-[8.5px]">
               <span>order #{card.serial}</span>
               <span>{BRAND.cardSet}</span>

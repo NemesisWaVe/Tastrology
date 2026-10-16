@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform } from "motion/react";
+import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardBack, HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
 import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
@@ -13,10 +13,10 @@ const EASE = [0.2, 0.7, 0.2, 1] as const;
 type Stage = "sealed" | "opening" | "facedown" | "charging" | "revealed";
 
 const RARITY = {
-  common: { sparks: 0, shake: 0, ray: "rgb(255 255 255 / .5)", rays: 0.3, stamp: "●" },
-  rare: { sparks: 12, shake: 0, ray: "", rays: 0.45, stamp: "✦" },
-  holo: { sparks: 26, shake: 9, ray: "", rays: 0.6, stamp: "✦✦" },
-  secret: { sparks: 40, shake: 16, ray: "#fcd34d", rays: 0.7, stamp: "✦✦✦" },
+  common: { sparks: 0, ray: "rgb(255 255 255 / .5)", rays: 0.3, stamp: "●" },
+  rare: { sparks: 12, ray: "", rays: 0.45, stamp: "✦" },
+  holo: { sparks: 26, ray: "", rays: 0.6, stamp: "✦✦" },
+  secret: { sparks: 40, ray: "#fcd34d", rays: 0.7, stamp: "✦✦✦" },
 };
 
 function useViewport() {
@@ -44,7 +44,9 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   const [stage, setStage] = useState<Stage>("sealed");
   const [face, setFace] = useState<"back" | "front">("back");
   const busy = useRef(false);
-  const p = useMotionValue(0);
+  const pt = useMotionValue(0); // raw tension target
+  const p = useSpring(pt, { stiffness: 220, damping: 17, mass: 0.7 }); // stretchy, slightly bouncy follow
+  const fl = useMotionValue(0); // inner light flare just before the snap
   const rotY = useMotionValue(0);
   const shake = useAnimationControls();
   const r = RARITY[card.rarity];
@@ -61,32 +63,56 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
 
   /* ---------------------------------------------------------------- tear */
 
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+  /** The SNAP: light floods out of the seam, then the strip is released with ONE heavy damped impact. */
   const open = useCallback(async () => {
     if (busy.current) return;
     busy.current = true;
-    if (!reduce) await animate(p, 1, { duration: Math.max(0.12, (1 - p.get()) * 0.5), ease: "easeIn" });
-    else p.set(1);
+    if (reduce) {
+      pt.set(1);
+      setStage("opening");
+      setTimeout(() => {
+        setStage("facedown");
+        busy.current = false;
+      }, 350);
+      return;
+    }
+    pt.set(1);
+    animate(fl, 1, { type: "spring", stiffness: 700, damping: 28 });
+    await sleep(120);
+    navigator.vibrate?.([34, 18, 70]);
+    shake.set({ x: 20, y: -8, rotate: 0.6 });
+    shake.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 380, damping: 9, mass: 1.2 } });
     setStage("opening");
     setTimeout(() => {
       setStage("facedown");
       busy.current = false;
-    }, reduce ? 350 : 1150);
-  }, [p, reduce]);
+    }, 1150);
+  }, [pt, fl, shake, reduce]);
 
-  const drag = useRef<{ x: number; y: number; t: number; moved: boolean } | null>(null);
+  const SNAP = 0.62; // fraction of the pack width you must drag before it gives
+  const drag = useRef<{ x: number; moved: boolean; tick: number } | null>(null);
   const onDown = (e: React.PointerEvent) => {
-    if (stage !== "sealed" || busy.current) return;
+    if (stage !== "sealed" || busy.current || reduce) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false };
+    drag.current = { x: e.clientX, moved: false, tick: 0 };
   };
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
-    const dx = Math.abs(e.clientX - d.x);
+    const dx = Math.max(0, e.clientX - d.x);
     if (dx > 6) d.moved = true;
-    const v = Math.min(1, dx / (packW * 0.75));
-    p.set(v);
-    if (v >= 0.92) {
+    const raw = dx / (packW * SNAP);
+    // resistance: the foil fights you, the harder the pull the less it gives
+    const t = (1 - Math.pow(1 - Math.min(1, raw), 1.8)) * 0.94;
+    pt.set(t);
+    const bucket = Math.floor(t * 5);
+    if (bucket > d.tick) {
+      d.tick = bucket;
+      navigator.vibrate?.(5 + bucket * 2);
+    }
+    if (raw >= 1) {
       drag.current = null;
       open();
     }
@@ -95,8 +121,8 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     const d = drag.current;
     drag.current = null;
     if (!d) return;
-    if (!d.moved || p.get() > 0.4) open();
-    else animate(p, 0, { type: "spring", stiffness: 400, damping: 30 });
+    if (!d.moved) open();
+    else pt.set(0); // not torn far enough: the spring pulls it back
   };
 
   /* ---------------------------------------------------------------- hold to mint + flip */
@@ -108,6 +134,8 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   const backEl = useRef<HTMLButtonElement>(null);
   const jitterEl = useRef<HTMLDivElement>(null);
   const orbitEl = useRef<HTMLDivElement>(null);
+  const glowEl = useRef<HTMLDivElement>(null);
+  const sweepEl = useRef<HTMLDivElement>(null);
   const posters = useMemo(() => card.evolvesFrom.slice(0, 6), [card.evolvesFrom]);
   const posterW = Math.round(Math.max(54, Math.min(84, cardW * 0.24)));
   const orbitRx = Math.min(cardW * 0.78, w / 2 - posterW * 0.35);
@@ -136,9 +164,8 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     rotY.set(-90);
     animate(rotY, 0, { type: "spring", stiffness: 260, damping: 18 });
     setStage("revealed");
-    if (r.shake) shake.start({ x: [0, -r.shake, r.shake * 0.8, -r.shake * 0.6, r.shake * 0.4, -r.shake * 0.2, 0], y: [0, r.shake * 0.4, -r.shake * 0.5, r.shake * 0.3, 0, 0, 0], transition: { duration: 0.55 } });
     busy.current = false;
-  }, [card.rarity, r.shake, reduce, rotY, shake, stage]);
+  }, [card.rarity, reduce, rotY, stage]);
 
   const startHold = useCallback(() => {
     if (busy.current || stage !== "facedown" || reduce) return;
@@ -163,8 +190,15 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
       backEl.current?.style.setProperty("--charge", v.toFixed(3));
       if (backEl.current) backEl.current.toggleAttribute("data-charging", c.holding || c.collapse >= 0);
       if (jitterEl.current) {
-        const j = (big ? 5 : 2.5) * v * v;
-        jitterEl.current.style.transform = `translate(${((Math.random() - 0.5) * j).toFixed(2)}px, ${((Math.random() - 0.5) * j).toFixed(2)}px) scale(${1 + v * 0.035})`;
+        jitterEl.current.style.transform = `scale(${(1 + v * v * 0.05).toFixed(4)})`;
+      }
+      if (glowEl.current) {
+        glowEl.current.style.opacity = (0.18 + 0.8 * v).toFixed(3);
+        glowEl.current.style.transform = `scale(${(1 + 0.3 * v).toFixed(3)})`;
+      }
+      if (sweepEl.current) {
+        sweepEl.current.style.opacity = (v * 0.9).toFixed(3);
+        sweepEl.current.style.backgroundPosition = `${(160 - ((c.ang * 40) % 220) - v * 60).toFixed(1)}% 0`;
       }
       if (c.holding) {
         c.tick += dt;
@@ -241,10 +275,16 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     animate(ty, 0, { duration: 0.6 });
   };
 
-  const stripRotate = useTransform(p, [0, 1], [0, -9]);
-  const stripY = useTransform(p, [0, 1], [0, -10]);
-  const seamW = useTransform(p, (v) => `${v * 100}%`);
-  const leak = useTransform(p, [0, 0.05, 1], [0, 0.6, 1]);
+  const stripRotate = useTransform(p, [0, 1], [0, -6]);
+  const stripY = useTransform(p, [0, 1], [0, -9]);
+  const stripSX = useTransform(p, [0, 1], [1, 1.035]);
+  const stripSY = useTransform(p, [0, 1], [1, 1.14]);
+  const packSX = useTransform(p, [0, 1], [1, 0.985]);
+  const crinkle = useTransform(p, [0, 0.15, 1], [0, 0.1, 1]);
+  const seamW = useTransform([p, fl], ([a, f]) => `${Math.min(100, ((a as number) * 0.8 + (f as number) * 0.2) * 100)}%`);
+  const leak = useTransform([p, fl], ([a, f]) => Math.min(1, (a as number) * 0.55 + (f as number) * 0.9));
+  const leakH = useTransform(fl, [0, 1], [60, 150]);
+  const leakY = useTransform(leakH, (v) => (60 - v) / 2);
 
   const sparks = useMemo(
     () =>
@@ -356,7 +396,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   tabIndex={0}
                   aria-label="Tear open the pack"
                   className={`${s.pack} outline-none`}
-                  style={{ width: packW, height: packH, rotateX: tiltX, rotateY: tiltY, transformStyle: "preserve-3d" }}
+                  style={{ width: packW, height: packH, rotateX: tiltX, rotateY: tiltY, scaleX: packSX, transformStyle: "preserve-3d" }}
                   animate={stage === "sealed" && !reduce ? { y: [0, -6, 0] } : undefined}
                   transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
                   onPointerDown={onDown}
@@ -366,6 +406,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   }}
                   onPointerUp={onUp}
                   onPointerCancel={onUp}
+                  onClick={reduce ? open : undefined}
                   onPointerLeave={onLeave}
                 >
                   {/* drop shadow */}
@@ -377,18 +418,24 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   {/* light leaking from the tear */}
                   <motion.div
                     className="pointer-events-none absolute left-0 right-0"
-                    style={{ top: tearY - 30, height: 60, opacity: leak, background: `radial-gradient(60% 50% at 50% 50%, white, ${sun.a} 40%, transparent 75%)`, filter: "blur(6px)" }}
+                    style={{ top: tearY - 30, height: leakH, y: leakY, opacity: leak, background: `radial-gradient(60% 50% at 50% 50%, white, ${sun.a} 40%, transparent 75%)`, filter: "blur(6px)" }}
                   />
+                  {/* foil crinkle as tension builds */}
+                  {stage === "sealed" && <motion.div className={s.crinkle} style={{ opacity: crinkle, height: tearY * 2.2, clipPath: stripClip(packW, tearY * 2.2) }} />}
                   {/* top strip */}
                   <motion.div
                     className="absolute inset-0"
                     style={{ transformOrigin: `${packW}px ${tearY}px` }}
-                    animate={stage === "opening" ? (reduce ? { opacity: 0 } : { x: packW * 0.7, y: -packH * 0.5, rotate: 38, opacity: 0 }) : undefined}
-                    transition={{ duration: 0.7, ease: [0.3, 0, 0.6, 1] }}
+                    animate={stage === "opening" ? (reduce ? { opacity: 0 } : { x: packW * 1.3, y: -packH * 0.85, rotate: 300, opacity: 0 }) : undefined}
+                    transition={
+                      reduce
+                        ? { duration: 0.3 }
+                        : { x: { type: "spring", stiffness: 26, damping: 10, velocity: 900 }, y: { type: "spring", stiffness: 22, damping: 9, velocity: -1400 }, rotate: { type: "spring", stiffness: 14, damping: 7, velocity: 500 }, opacity: { duration: 0.45, delay: 0.5 } }
+                    }
                   >
                     <motion.div
                       className="absolute inset-0"
-                      style={{ clipPath: stripClip(packW, tearY), rotate: stripRotate, y: stripY, transformOrigin: `${packW}px ${tearY}px` }}
+                      style={{ clipPath: stripClip(packW, tearY), rotate: stripRotate, y: stripY, scaleX: stripSX, scaleY: stripSY, transformOrigin: `${packW}px ${tearY}px` }}
                     >
                       <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
                     </motion.div>
@@ -419,11 +466,10 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 transition={{ type: "spring", stiffness: 140, damping: 16 }}
               >
                 {/* charge-up glow, in the rarity colour */}
-                <motion.div
+                <div
+                  ref={glowEl}
                   className="pointer-events-none absolute -inset-6 rounded-[28px]"
-                  style={{ background: `radial-gradient(closest-side, ${glow}, transparent)`, filter: "blur(22px)" }}
-                  animate={{ opacity: stage === "charging" ? 0.95 : stage === "revealed" ? (big ? 0.55 : 0.25) : 0.18, scale: stage === "charging" ? 1.22 : 1 }}
-                  transition={{ duration: stage === "charging" ? 1.4 : 0.6, ease: "easeIn" }}
+                  style={{ background: `radial-gradient(closest-side, ${glow}, transparent)`, filter: "blur(22px)", opacity: stage === "revealed" ? (big ? 0.55 : 0.25) : 0.18, transition: stage === "revealed" ? "opacity .6s" : "none" }}
                 />
 
                 {/* seed posters orbiting the face-down card; they spiral in as you hold */}
@@ -462,6 +508,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <CardBack card={card} crack={crack} />
+                        {!reduce && <div ref={sweepEl} className={s.chargeFoil} aria-hidden />}
                       </motion.button>
                     </div>
                   ) : (
