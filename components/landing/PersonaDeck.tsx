@@ -1,5 +1,6 @@
 "use client";
 
+import { CursorArrow } from "@/components/CursorArrow";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { KIND_ICON, KIND_LABEL } from "@/components/SeedPicker";
@@ -135,9 +136,7 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-2 transition-colors group-hover:text-ink">
             {picked ? "Minting…" : "Mint this sign"}
           </span>
-          <span className="grid h-12 w-12 place-items-center rounded-full border border-line text-lg text-ink transition-all duration-500 group-hover:-rotate-45 group-hover:border-accent group-hover:bg-accent group-hover:text-paper">
-            →
-          </span>
+          <CursorArrow className="h-12 w-12 border border-line text-lg text-ink transition-colors duration-500 group-hover:border-accent group-hover:bg-accent group-hover:text-paper" />
         </span>
       </button>
       </motion.div>

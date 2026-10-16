@@ -1,5 +1,6 @@
 "use client";
 
+import { CursorArrow } from "@/components/CursorArrow";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
@@ -97,7 +98,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
               className="group relative inline-flex h-14 items-center gap-3 overflow-hidden rounded-full bg-accent pl-6 pr-2 text-[15px] font-semibold text-paper shadow-[0_0_0_1px_rgba(198,255,61,0.4),0_18px_50px_-12px_rgba(198,255,61,0.55)]"
             >
               Try a ready-made one
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-paper text-accent transition-transform duration-500 group-hover:rotate-[-45deg]">→</span>
+              <CursorArrow className="h-10 w-10 bg-paper text-accent" />
             </Magnetic>
             <Magnetic
               onClick={onCustom}
