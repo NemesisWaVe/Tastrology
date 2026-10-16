@@ -63,7 +63,7 @@ export function Critique({ result }: { result: StyleResult }) {
         <div className="space-y-3 rounded-[22px] border border-line bg-card p-4 sm:p-5">
           {con && (
             <div className="rounded-2xl border border-warn/25 bg-[linear-gradient(135deg,rgba(251,191,36,0.10),transparent_70%)] p-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-warn">☽ Contradiction detected</p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-warn">☽ Contradiction detected</p>
               <p className="mt-1.5 font-display text-[17px] font-semibold leading-snug">
                 {seedName(con.a)} <span className="text-warn">≠</span> {seedName(con.b)}
               </p>
@@ -76,20 +76,20 @@ export function Critique({ result }: { result: StyleResult }) {
           <ul className="space-y-2.5">
             {checks.map((c, i) => (
               <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-ink-2">
-                <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good-soft text-[9px] text-good">✓</span>
+                <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good-soft text-[11px] text-good">✓</span>
                 {c}
               </li>
             ))}
             {!con && (
               <li className="flex gap-2.5 text-[13.5px] text-ink-2">
-                <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good-soft text-[9px] text-good">✓</span>
+                <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good-soft text-[11px] text-good">✓</span>
                 No contradictions: your loves point the same way.
               </li>
             )}
           </ul>
         </div>
         <div className="rounded-[22px] border border-line bg-card p-4 sm:p-5">
-          <p className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
+          <p className="flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
             <span>Rejected by the agent</span>
             <span>{result.rejected.length}</span>
           </p>
@@ -150,7 +150,7 @@ export function Matrix({ result }: { result: StyleResult }) {
         <table className="w-full min-w-[620px] border-collapse text-[12.5px]">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-card px-4 py-3 text-left font-mono text-[10px] font-normal uppercase tracking-[0.18em] text-ink-3">Brand ↓ / Seed →</th>
+              <th className="sticky left-0 z-10 bg-card px-4 py-3 text-left font-mono text-[11px] font-normal uppercase tracking-[0.18em] text-ink-3">Brand ↓ / Seed →</th>
               {result.seeds.map((s) => (
                 <th key={s.id} className="px-1 py-3 text-center font-normal" title={s.name}>
                   <span className="mx-auto flex max-w-[96px] flex-col items-center gap-1.5">
@@ -178,7 +178,7 @@ export function Matrix({ result }: { result: StyleResult }) {
                       <button
                         onClick={() => setCell(active ? null : { b: b.entity.id, s: s.id })}
                         aria-label={`${b.entity.name} × ${s.name}: ${raw}`}
-                        className={`h-9 w-full rounded-lg font-mono text-[10.5px] tabular-nums transition hover:ring-1 hover:ring-ink-3 ${active ? "ring-2 ring-ink" : ""}`}
+                        className={`h-9 w-full rounded-lg font-mono text-[11px] tabular-nums transition hover:ring-1 hover:ring-ink-3 ${active ? "ring-2 ring-ink" : ""}`}
                         style={{
                           background: v > 0.005 ? `rgba(198, 255, 61, ${a})` : "rgba(255,255,255,0.025)",
                           color: a > 0.45 ? "#0b0f02" : "var(--ink-2)",
@@ -241,7 +241,7 @@ export function CapsuleAndBridges({ result }: { result: StyleResult }) {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={e.image} alt="" className="h-full w-full object-contain" loading="lazy" />
                         ) : (
-                          <span className="text-[10px] text-black">{e.name[0]}</span>
+                          <span className="text-[11px] text-black">{e.name[0]}</span>
                         )}
                       </span>
                       {e.name}
@@ -260,7 +260,7 @@ export function CapsuleAndBridges({ result }: { result: StyleResult }) {
             <div key={b.entity.id} className="flex gap-3.5 rounded-[22px] border border-line bg-card p-3.5 sm:p-4">
               <BridgeImg src={b.entity.image} icon={KIND_ICON[b.entity.kind] ?? "◆"} />
               <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
                   {KIND_ICON[b.entity.kind]} {KIND_LABEL[b.entity.kind] ?? b.entity.kind}
                 </p>
                 <p className="mt-0.5 font-display text-[16px] font-semibold leading-snug">{b.entity.name}</p>

@@ -10,3 +10,6 @@ export function isAllowedImageUrl(raw: string): boolean {
 }
 
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** Content types /api/img will forward. Never SVG. */
+export const RASTER_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];

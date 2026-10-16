@@ -1,5 +1,5 @@
 import { searchEntities } from "@/lib/qloo";
-import { allow, clientIp } from "@/lib/ratelimit";
+import { allow, clientId } from "@/lib/ratelimit";
 import { SEED_KINDS, type EntityKind } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const kinds = (url.searchParams.get("types") ?? "").split(",").filter((k): k is EntityKind => SEED_KINDS.includes(k as EntityKind));
   if (q.length < 2) return Response.json({ results: [] });
   // Own bucket: typing in autocomplete must not eat into the agent-run allowance.
-  if (!(await allow(`search:${clientIp(request.headers)}`, 240, 10 * 60 * 1000)))
+  if (!(await allow(`search:${clientId(request.headers)}`, 120, 10 * 60 * 1000)))
     return Response.json({ results: [], error: "Too many searches. Give it a minute." }, { status: 429 });
   try {
     const results = await searchEntities(q, kinds.length ? kinds : SEED_KINDS, 10);

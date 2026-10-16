@@ -1,8 +1,10 @@
 import { AGENT_VERSION } from "@/lib/agent";
 import { qlooMode } from "@/lib/qloo";
-import type { AgentRequest } from "@/lib/types";
+import { SEED_KINDS, type AgentRequest } from "@/lib/types";
 
 export const GOAL_MAX = 200;
+export const BODY_MAX_BYTES = 16 * 1024;
+const ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
 const ids = (v: unknown, max = 60): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 128).slice(0, max) : [];
@@ -17,6 +19,8 @@ export function normalizeRequest(raw: unknown): AgentRequest | string {
     kind: s?.kind as AgentRequest["seeds"][number]["kind"],
   }));
   if (seeds.some((s) => !s.name.trim())) return "Every seed needs a name.";
+  if (seeds.some((s) => !SEED_KINDS.includes(s.kind))) return "One of those picks isn't a type we can read.";
+  if (seeds.some((s) => s.id && !ID_RE.test(s.id))) return "One of those picks has a bad id. Pick it from the search list.";
   const req: AgentRequest = { seeds };
   if (b.budget === 1 || b.budget === 2 || b.budget === 3) req.budget = b.budget;
   const goal = typeof b.goal === "string" ? b.goal.trim().slice(0, GOAL_MAX) : "";
@@ -39,7 +43,7 @@ export function cacheKey(req: AgentRequest, llm = process.env.LLM_MODEL ?? ""): 
     v: AGENT_VERSION,
     m: qlooMode(),
     llm,
-    s: req.seeds.map((s) => s.id || `${s.kind}:${s.name.toLowerCase()}`).sort(),
+    s: req.seeds.map((s) => `${s.id}|${s.kind}|${s.name.toLowerCase()}`).sort(),
     b: req.budget ?? 0,
     g: (req.goal ?? "").trim().slice(0, GOAL_MAX).toLowerCase(),
     l: [...(req.feedback?.liked ?? [])].sort(),

@@ -1,7 +1,8 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BRAND } from "./brand";
-import { GroundingLedger } from "./grounding";
+import { GroundingLedger, chooseTagline, shortSeed } from "./grounding";
+import { displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
 import { findTags, insights, qlooMode, searchEntities } from "./qloo";
 import type {
@@ -22,7 +23,7 @@ import type {
 type Emit = (e: TraceEvent) => void;
 
 /** Bump when agent logic changes so cached results from older logic aren't replayed. */
-export const AGENT_VERSION = 9;
+export const AGENT_VERSION = 10;
 
 const FLUKE_SHARE = 0.6; // one seed carries ≥60% of Qloo's explained signal
 const TARGET = 10;
@@ -42,6 +43,9 @@ class RunState {
   signalTags: string[] = [];
   seedTags = new Map<string, QTag[]>();
   inert: string[] = [];
+  inertInfo: { id: string; influence: number }[] = [];
+  /** Average pairwise Jaccard of the seeds' Qloo aesthetic tag sets (0-1): how much your loves overlap. */
+  overlap?: number;
   candidates: QEntity[] = [];
   ablation = new Map<string, Record<string, number>>(); // brandId -> seedId -> drop
   contradictions: Contradiction[] = [];
@@ -273,6 +277,7 @@ async function critique(st: RunState) {
   // Inert seeds: Qloo barely links them to any of these brands. Not a contradiction, just quiet.
   const weight = Object.fromEntries(ids.map((id) => [id, col(id).reduce((a, b) => a + b, 0) / Math.max(1, pool.length)]));
   st.inert = ids.length >= 3 ? ids.filter((id) => weight[id] < 0.35 / ids.length) : [];
+  st.inertInfo = st.inert.map((id) => ({ id, influence: round(weight[id]) }));
   for (const id of st.inert)
     st.critique.push(`${st.seedName(id)} barely moves your brand matches (avg influence ${(weight[id] * 100).toFixed(0)}%). It still shapes your DNA, but it isn't steering brand picks.`);
 
@@ -367,7 +372,16 @@ async function critique(st: RunState) {
     kept: st.final.map((b) => ({ id: b.entity.id, name: b.entity.name, affinity: b.affinity, because: b.because.map((x) => st.seedName(x)) })),
     rejected: st.rejected.map((r) => ({ name: r.entity.name, reason: r.reason })),
     contradictions: st.contradictions.slice(0, 3).map((c) => `${st.seedName(c.a)} vs ${st.seedName(c.b)} (overlap ${c.overlap})`),
+    strongest_seed: strongestSeed(st)?.name,
   };
+}
+
+/** The love that moves your brand picks most: summed leave-one-out affinity drop (Qloo explainability breaks ties). */
+function strongestSeed(st: RunState): QEntity | undefined {
+  const main = st.final.filter((b) => !b.side);
+  const sum = (id: string, pick: (b: BrandMatch) => number | undefined) => main.reduce((t, b) => t + (pick(b) ?? 0), 0);
+  const ranked = st.mainSeeds.map((s) => ({ s, a: sum(s.id, (b) => b.ablation[s.id]), e: sum(s.id, (b) => b.explain[s.id]) })).sort((x, y) => y.a - x.a || y.e - x.e);
+  return ranked[0]?.s;
 }
 
 async function styleTags(st: RunState) {
@@ -418,14 +432,21 @@ function consensus(st: RunState, seedIds: string[]): QTag[] {
 
 /** Seeds whose aesthetic tag sets don't overlap at all form two "sides". */
 function aestheticSplit(st: RunState) {
-  const ids = st.seeds.map((s) => s.id).filter((id) => (st.seedTags.get(id)?.length ?? 0) >= 5);
-  if (ids.length < 3) return;
   const names = (id: string) => new Set((st.seedTags.get(id) ?? []).map((t) => t.name.toLowerCase()));
   const jac = (a: string, b: string) => {
     const A = names(a), B = names(b);
     const inter = [...A].filter((x) => B.has(x)).length;
     return inter / (A.size + B.size - inter || 1);
   };
+  // Overall overlap across every seed that has tags: feeds the "odd pairing" part of the rarity score.
+  const tagged = st.seeds.map((s) => s.id).filter((id) => names(id).size > 0);
+  if (tagged.length >= 2) {
+    let sum = 0, n = 0;
+    for (let i = 0; i < tagged.length; i++) for (let j = i + 1; j < tagged.length; j++, n++) sum += jac(tagged[i], tagged[j]);
+    st.overlap = round(sum / n);
+  }
+  const ids = st.seeds.map((s) => s.id).filter((id) => (st.seedTags.get(id)?.length ?? 0) >= 5);
+  if (ids.length < 3) return;
   // Each seed's average agreement with the others; the odd one out anchors side B.
   const avg = ids.map((id) => ({ id, a: ids.filter((x) => x !== id).reduce((t, x) => t + jac(id, x), 0) / (ids.length - 1) }));
   avg.sort((x, y) => x.a - y.a);
@@ -496,8 +517,8 @@ const TOOLS: ToolDef[] = [
   fn("critique_matches", "Find inert seeds, contradicting seeds (splits the DNA into two sides) and brands carried by a single seed; returns kept and rejected brands.", {}),
   fn("find_taste_bridges", "Ask Qloo for a place, film, artist and book that complete the aesthetic.", {}),
   fn("finalize", "Publish the result. Only reference brand/bridge ids returned by earlier tools.", {
-    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 5 words, e.g. 'The Replicant Who Bakes'. Noun from the Sun keywords, verb phrase from the Moon keywords." },
-    tagline: { type: "string", description: "One blunt line, at most 12 words, grounded in the keywords. No flattery." },
+    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 6 words, built around strongest_seed from critique_matches, e.g. 'The Neuromancer Who Bakes'. The noun is that seed (shortened, no leading 'The'); the verb phrase comes from the Moon keywords." },
+    tagline: { type: "string", description: "One blunt line, at most 12 words, that names at least one of the person's seeds exactly as given. Grounded in the keywords. No flattery." },
     bridge_notes: {
       type: "array",
       items: { type: "object", properties: { id: { type: "string" }, why: { type: "string" } }, required: ["id", "why"] },
@@ -515,7 +536,7 @@ Hard rules:
 - Every brand, place or title you mention must come from a tool result. Never invent recommendations or IDs.
 - Style keywords come from get_style_tags, not from you.
 Plan: resolve_seeds → find_brand_tags (skip in mock mode) → get_style_tags → get_brand_insights → ablate_seeds → critique_matches → find_taste_bridges → finalize.
-In finalize, give the person a taste sign in the form "The <Noun> Who <Verb phrase>" (max 5 words, e.g. "The Replicant Who Bakes"): the noun comes from the Sun keywords (sign_basis.sun), the verb phrase from the Moon keywords (sign_basis.moon), so a split taste shows its tension. Add one blunt tagline of at most 12 words, and a short note per taste bridge citing its driven_by entities.
+In finalize, give the person a taste sign in the form "The <Noun> Who <Verb phrase>" (max 6 words, e.g. "The Neuromancer Who Bakes"): build it around strongest_seed from critique_matches (the love that moves their picks most) as the noun, with a verb phrase from the Moon keywords (sign_basis.moon), so a split taste shows its tension and strangers never share a name. Add one blunt tagline of at most 12 words that names at least one of their seeds, and a short note per taste bridge citing its driven_by entities.
 Before each tool call, write one short sentence of reasoning (what you expect to learn). Be terse.`;
 
 async function dispatch(st: RunState, name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -600,7 +621,7 @@ async function autopilot(st: RunState) {
 function fillCopy(st: RunState) {
   const sign = fallbackSign(st);
   if (!st.name) st.name = sign.name;
-  if (!st.tagline) st.tagline = sign.tagline;
+  st.tagline = chooseTagline(st.tagline, st.seeds.map((s) => s.name), sign.tagline);
   st.final.forEach((b, i) => {
     if (!b.why) b.why = whyLine(st, b, i);
   });
@@ -656,7 +677,7 @@ const moonKeywords = (st: RunState) => (st.lobes.length ? st.lobes[1].keywords :
 
 /** "The <Noun> Who <Verb phrase>", at most 5 words. */
 function isSignName(n: string) {
-  return /^The\s+\S+.*\s+Who\s+\S+/.test(n) && words(n) <= 5 && n.length <= 48;
+  return /^The\s+\S+.*\s+Who\s+\S+/.test(n) && words(n) <= 6 && n.length <= 48;
 }
 
 /** Small lexicon per aesthetic family. Nouns come from the Sun side, verb phrases from the Moon side. */
@@ -687,24 +708,40 @@ function hashOf(t: string) {
   return h;
 }
 
-/** Deterministic sign + tagline when no LLM named it. */
+/** Deterministic sign + tagline when no LLM named it. Built on the strongest love, so strangers stop sharing names. */
 function fallbackSign(st: RunState): { name: string; tagline: string } {
   const sun = sunKeywords(st);
   const moon = moonKeywords(st);
-  const h = hashOf(st.seeds.map((s) => s.id).join(","));
-  const fs = familyOf(sun);
+  const lead = strongestSeed(st) ?? st.seeds[0];
+  const h = hashOf(`${lead?.id ?? ""}|${(moon[0] ?? sun[0] ?? "").toLowerCase()}`);
   const fm = familyOf(moon.length ? moon : sun);
-  const name = `The ${fs.nouns[h % fs.nouns.length]} Who ${fm.verbs[(h >>> 4) % fm.verbs.length]}`;
+  const verb = fm.verbs[h % fm.verbs.length];
+  const S = lead ? shortSeed(lead.name) : "";
+  const fs = familyOf(sun);
+  const noun = S && words(`The ${S} Who ${verb}`) <= 6 ? S : S.split(" ").sort((a, b) => b.length - a.length)[0] || fs.nouns[h % fs.nouns.length];
+  const name = `The ${noun} Who ${verb}`;
   const lc = (t?: string) => (t ?? "").toLowerCase();
-  let tagline = !sun.length
-    ? "Your loves agree more than you'd think."
+  const L = lead ? displayName(lead.name) : "";
+  const odd = st.lobes.length && st.contradictions[0] ? displayName(st.seedName(st.contradictions[0].b)) : "";
+  const pool = !L
+    ? ["Your loves agree more than you'd think."]
     : st.lobes.length && moon[0]
-      ? `${cap(lc(sun[0]))} by default, ${lc(moon[0])} when nobody's watching.`
-      : moon[0]
-        ? `${cap(lc(sun[0]))} first, ${lc(sun[1] ?? moon[0])} second, ${lc(moon[0])} on weekends.`
-        : `${cap(lc(sun[0]))}, and not sorry about it.`;
-  if (words(tagline) > 12) tagline = `${cap(lc(sun[0]))}, and not sorry about it.`;
-  return { name, tagline };
+      ? [
+          `${L} runs the day. ${odd || cap(lc(moon[0]))} runs the night.`,
+          `${cap(lc(sun[0]))} on paper, ${lc(moon[0])} in private. ${L} knows.`,
+          `Your ${L} side and your ${odd || lc(moon[0])} side are not speaking.`,
+        ]
+      : sun[0]
+        ? [
+            `Blame ${L}. ${cap(lc(sun[0]))}, and not sorry about it.`,
+            `${L} did this. ${cap(lc(sun[0]))} first, ${lc(sun[1] ?? moon[0] ?? "everything")} second.`,
+            `It started with ${L}. Now it's ${lc(sun[0])}, no refunds.`,
+            `${L} set the tone. ${cap(lc(sun[0]))} took it from there.`,
+          ]
+        : [`${L} is carrying you.`];
+  const names = st.seeds.map((s) => s.name);
+  const ok = pool.filter((t) => words(t) <= 12 && chooseTagline(t, names, "") === t);
+  return { name, tagline: ok[h % Math.max(1, ok.length)] ?? `${L || "Your loves"}. Say less.` };
 }
 
 function sideExplain(c: QEntity, ids: string[]): Record<string, number> {
@@ -767,6 +804,8 @@ export async function runAgent(req: AgentRequest, emit: Emit, signal?: AbortSign
     capsule: capsule(st.final),
     critique: st.critique,
     stats: { qlooCalls: st.calls, ms: Date.now() - t0, llmSteps: st.llmSteps },
+    overlap: st.overlap,
+    inert: st.inertInfo.length ? st.inertInfo : undefined,
     feedback: req.feedback,
   };
   if (req.previous) result.changes = diff(st, req.previous.brandIds);

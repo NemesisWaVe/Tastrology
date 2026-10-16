@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cacheKey, normalizeRequest } from "@/app/api/agent/key";
 import { isAllowedImageUrl } from "@/app/api/img/allow";
+import { PERSONAS } from "@/lib/personas";
 import type { AgentRequest } from "@/lib/types";
 
 describe("/api/img allowlist", () => {
@@ -30,5 +31,24 @@ describe("/api/agent cache key", () => {
   it("clamps the goal to 200 chars", () => {
     const r = normalizeRequest({ ...base, goal: "x".repeat(500) }) as AgentRequest;
     expect(r.goal).toHaveLength(200);
+  });
+});
+
+describe("/api/agent validation", () => {
+  const seeds = [{ id: "a1", name: "A", kind: "movie" }, { id: "b-2", name: "B", kind: "book" }];
+  it("rejects unknown kinds and bad ids", () => {
+    expect(typeof normalizeRequest({ seeds: [...seeds, { id: "c", name: "C", kind: "brand" }] })).toBe("string");
+    expect(typeof normalizeRequest({ seeds: [...seeds, { id: "x y", name: "C", kind: "movie" }] })).toBe("string");
+    expect(typeof normalizeRequest({ seeds: [...seeds, { id: "a".repeat(65), name: "C", kind: "movie" }] })).toBe("string");
+    expect(typeof normalizeRequest({ seeds })).toBe("object");
+    expect(typeof normalizeRequest({ seeds: [...seeds, { id: "", name: "C", kind: "movie" }] })).toBe("object");
+  });
+  it("accepts every persona", () => {
+    for (const p of PERSONAS) expect(typeof normalizeRequest({ seeds: p.seeds }), p.name).toBe("object");
+  });
+  it("keys on id, kind and lowercased name", () => {
+    const a = cacheKey({ seeds: [{ id: "a1", name: "Real", kind: "movie" }, seeds[1] as never] });
+    expect(cacheKey({ seeds: [{ id: "a1", name: "Fake", kind: "movie" }, seeds[1] as never] })).not.toBe(a);
+    expect(cacheKey({ seeds: [{ id: "a1", name: "REAL", kind: "movie" }, seeds[1] as never] })).toBe(a);
   });
 });

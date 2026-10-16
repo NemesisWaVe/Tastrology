@@ -93,7 +93,7 @@ export function BigThree({ result, card }: { result: StyleResult; card: CardData
             <Sigil kind={r.kind} className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
+            <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
               <span className="text-ink-2">{r.label}</span>
               <span>·</span>
               <span className={r.alert ? "text-warn" : ""}>{r.role}</span>
@@ -119,7 +119,7 @@ export function BigThree({ result, card }: { result: StyleResult; card: CardData
 function Source({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <p className="mt-1.5 flex min-w-0 items-baseline gap-2 font-mono text-[10px] text-ink-3">
+    <p className="mt-1.5 flex min-w-0 items-baseline gap-2 font-mono text-[11px] text-ink-3">
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}

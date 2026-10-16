@@ -1,4 +1,4 @@
-import type { StyleResult } from "./types";
+import type { BrandMatch, StyleResult } from "./types";
 
 /**
  * Turns an agent result into a collectible card. Every number on the card is derived from
@@ -32,10 +32,17 @@ export interface CardData {
   rarity: Rarity;
   rarityLabel: string;
   serial: string;
-  moves: { name: string; value: number; note: string }[];
+  /** `cut`: the love whose removal costs this brand the most affinity points (leave-one-out re-query). */
+  moves: { name: string; value: number; note: string; cut?: { name: string; drop: number } }[];
   /** Each stat carries a one-line `hint` that says exactly what it measures. */
   stats: { label: string; value: number; hint: string }[];
+  /** "Weak to: <love>. Moved N% of your picks." Only when the critique found an inert love. */
   weakness?: string;
+  weak?: { name: string; pct: number };
+  /** Average seed popularity under 30%: you love things few people do. Pure function of the run. */
+  deepCut: boolean;
+  /** Average seed popularity, 0-100, when Qloo gave it for at least half the seeds. */
+  avgPop?: number;
   ignores?: string;
   evolvesFrom: { name: string; kind: string; image?: string }[];
   art: string[]; // seed images (proxied), for the art window collage
@@ -47,9 +54,12 @@ export interface CardData {
   domains: number;
   /** Human reasons for the rarity tier, from the same inputs as the rarity score. */
   rarityWhy: string[];
-  /** Points behind the rarity tier (range + edge + contradiction); thresholds 40 / 58 / 75. */
+  /** 0-100 from your taste: obscurity 40 + odd pairing 25 + spread 20 + tension 15. Tier cuts in RARITY_CUTS. */
   rarityScore: number;
 }
+
+/** Score thresholds, calibrated to roughly 55% Common / 30% Rare / 12% Holo / 3% Secret. */
+export const RARITY_CUTS = { rare: 47, holo: 55, secret: 63 };
 
 const TYPE_STYLES: [RegExp, Omit<CardType, "name">][] = [
   [/futur|tech|industrial|architect|precision|engineer|cyber|sharp/i, { glyph: "⚡", a: "#38bdf8", b: "#8b5cf6" }],
@@ -120,18 +130,42 @@ export function buildCard(r: StyleResult): CardData {
   const drawn = top.length ? top.reduce((t, b) => t + Object.values(b.explain).filter((v) => v >= 0.05).length, 0) / top.length : n;
   const cohesion = clampStat(100 * (0.5 * lobeShare + 0.5 * Math.min(1, drawn / n)));
 
-  // Signal: of everything Qloo returned, how much survived the self-critique.
-  const kept = r.brands.length;
-  const signal = clampStat((100 * kept) / Math.max(1, kept + r.rejected.length));
+  // Signal: how strongly Qloo backs your top brands (avg affinity of the top 3). Same meaning in battle (lib/battle.ts).
+  const signal = clampStat(avgAff * 100);
 
-  // Rarity: breadth + nicheness + a real contradiction. Every point is listed in `rarityWhy`.
-  const pts = { range: Math.round(range * 0.35), edge: Math.round(edge * 0.35), twist: dual ? 20 : 0 };
-  const rarityScore = pts.range + pts.edge + pts.twist;
-  const rarity: Rarity = rarityScore >= 75 ? "secret" : rarityScore >= 58 ? "holo" : rarityScore >= 40 ? "rare" : "common";
+  // Rarity: scored on YOUR taste (not on which brands we picked). Every point is listed in `rarityWhy`.
+  const seedPops = r.seeds.map((s) => s.popularity).filter((p): p is number => typeof p === "number");
+  const avgPop = seedPops.length >= Math.ceil(n / 2) ? seedPops.reduce((t, p) => t + p, 0) / seedPops.length : undefined;
+  const con = r.contradictions[0];
+  const pts = {
+    obscurity: avgPop === undefined ? 0 : Math.round(40 * (1 - avgPop)),
+    pairing: r.overlap === undefined ? 0 : Math.round(25 * (1 - r.overlap)),
+    spread: Math.round((20 * domains) / Math.min(n, SEED_DOMAINS)),
+    tension: con ? Math.round(15 * (1 - con.overlap)) : 0,
+  };
+  const rarityScore = pts.obscurity + pts.pairing + pts.spread + pts.tension;
+  const rarity: Rarity = rarityScore >= RARITY_CUTS.secret ? "secret" : rarityScore >= RARITY_CUTS.holo ? "holo" : rarityScore >= RARITY_CUTS.rare ? "rare" : "common";
   const rarityLabel = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[rarity];
+  const pc = (v: number) => `${Math.round(v * 100)}%`;
+  const rarityWhy = [
+    ...(avgPop === undefined ? [] : [`+${pts.obscurity} obscurity: your picks average ${pc(avgPop)} popularity`]),
+    ...(r.overlap === undefined ? [] : [`+${pts.pairing} odd pairing: your loves share ${pc(r.overlap)} of their aesthetic tags`]),
+    `+${pts.spread} spread: ${domains} ${domains === 1 ? "domain" : "domains"} across ${n} ${n === 1 ? "love" : "loves"}`,
+    ...(con ? [`+${pts.tension} tension: ${seedLabel(r, con.a)} and ${seedLabel(r, con.b)} share ${pc(con.overlap)}`] : []),
+  ];
+  const deepCut = avgPop !== undefined && avgPop < 0.3;
 
   const sideB = r.dna.lobes[1];
-  const inert = r.critique.find((c) => c.includes("barely moves"));
+  // Weakness: the seed that moved none (well, next to none) of your brand picks, straight from the critique. Absent if there isn't one.
+  const inertSeed = r.inert?.length
+    ? [...r.inert].sort((x, y) => x.influence - y.influence)[0]
+    : (() => {
+        const line = r.critique.find((c) => c.includes("barely moves"));
+        const m = line?.match(/^(.*) barely moves .*avg influence (\d+)%/);
+        return m ? { name: m[1], influence: Number(m[2]) / 100 } : undefined;
+      })();
+  const inertName = inertSeed && ("id" in inertSeed ? seedLabel(r, inertSeed.id) : displayName(inertSeed.name));
+  const weak = inertSeed && inertName ? { name: inertName, pct: Math.round(inertSeed.influence * 100) } : undefined;
 
   const kw = r.dna.keywords.map((k) => k.name);
   const styleCounts = new Map<string, number>();
@@ -166,12 +200,6 @@ export function buildCard(r: StyleResult): CardData {
     fit(`${serial}<${rarity.slice(0, 2).toUpperCase()}<${Math.round(avgAff * 100)}<<${domains}DOM<${r.seeds.length}SEEDS<QLOO`),
   ];
 
-  const rarityWhy = [
-    `+${pts.range} range (${domains} of ${SEED_DOMAINS} domains)`,
-    `+${pts.edge} edge (${offMainstream} of ${pops.length} brands off-mainstream)`,
-    ...(dual ? [`+${pts.twist} a real contradiction`] : []),
-  ];
-
   const plural = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
   return {
     stars,
@@ -196,21 +224,34 @@ export function buildCard(r: StyleResult): CardData {
         .filter((x): x is string => Boolean(x))
         .map(displayName)
         .join(" + "),
+      cut: ablationLines(b, r.seeds)[0],
     })),
     stats: [
       { label: "Range", value: range, hint: `Range: ${domains} of ${SEED_DOMAINS} domains, ${evenness > 0.9 ? "evenly" : "unevenly"} spread` },
       { label: "Edge", value: edge, hint: `Edge: how far from the mainstream your brands sit (${offMainstream}/${pops.length} outside Qloo's top 10%)` },
       { label: "Cohesion", value: cohesion, hint: `Cohesion: ${mainLobe}/${n} loves share one aesthetic; brands draw on ${Math.round(drawn)}` },
-      { label: "Signal", value: signal, hint: `Signal: ${plural(kept, "pick")} survived the critique, ${r.rejected.length} thrown out` },
+      { label: "Signal", value: signal, hint: `Signal: how strongly Qloo backs your top ${plural(top.length, "brand")} (avg match ${Math.round(avgAff * 100)})` },
     ],
-    weakness: sideB ? sideB.keywords.map((k) => k.name).slice(0, 2).join(" / ") : undefined,
-    ignores: inert ? displayName(inert.split(" barely moves")[0]) : undefined,
+    weakness: weak ? `Weak to: ${weak.name}. Moved ${weak.pct}% of your picks.` : undefined,
+    weak,
+    deepCut,
+    avgPop: avgPop === undefined ? undefined : Math.round(avgPop * 100),
+    ignores: weak?.name,
     evolvesFrom: r.seeds.map((s) => ({ name: displayName(s.name), kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
     art: r.seeds.map((s) => s.image).filter((x): x is string => Boolean(x)).slice(0, 5).map(proxied),
   };
 }
 
 const SEED_DOMAINS = 7;
+const seedLabel = (r: StyleResult, id: string) => displayName(r.seeds.find((s) => s.id === id)?.name ?? "one of your loves");
+
+/** Affinity points a brand loses when each love is removed (Qloo re-query), biggest first. Only real, measured drops. */
+export function ablationLines(b: BrandMatch, seeds: { id: string; name: string }[]): { name: string; drop: number }[] {
+  return Object.entries(b.ablation ?? {})
+    .map(([id, v]) => ({ name: displayName(seeds.find((s) => s.id === id)?.name ?? ""), drop: Math.round(v * 100) }))
+    .filter((x) => x.name && x.drop > 0)
+    .sort((x, y) => y.drop - x.drop);
+}
 const clampStat = (v: number) => Math.round(Math.max(5, Math.min(99, v)));
 
 /** "Neuromancer (Sprawl, #1)" → "Neuromancer". Strips trailing (…) / […] groups, keeps the rest intact. */
@@ -237,9 +278,12 @@ export const TWIN_HOST =
   process.env.NEXT_PUBLIC_SITE_HOST || process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL || "tastrology.app";
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32: no I, L, O, U
 
-/** Short, human-typeable verify code: the serial plus 4 check characters hashed from the card's own fields. */
-export function cardCode(card: Pick<CardData, "serial" | "rarity" | "mrz">): string {
-  let h = hash(`${card.serial}|${card.rarity}|${card.mrz?.join("|") ?? ""}`);
+type CodeFields = Pick<CardData, "serial" | "rarity" | "mrz" | "archetype" | "moves">;
+
+/** Short, human-typeable verify code: the serial plus 4 check characters hashed from the card's own fields (v2). */
+export function cardCode(card: CodeFields): string {
+  const moves = (card.moves ?? []).map((m) => `${m.name}:${m.value}`).join(",");
+  let h = hash(`v2|${card.serial}|${card.rarity}|${card.mrz?.[0] ?? ""}|${card.mrz?.[1] ?? ""}|${card.archetype}|${moves}`);
   let c = "";
   for (let i = 0; i < 4; i++) {
     c += B32[h & 31];
@@ -249,6 +293,6 @@ export function cardCode(card: Pick<CardData, "serial" | "rarity" | "mrz">): str
 }
 
 /** Path of the verifiable digital twin, e.g. /c/0427-H7K2. */
-export const twinPath = (card: Pick<CardData, "serial" | "rarity" | "mrz">) => `/c/${cardCode(card)}`;
+export const twinPath = (card: CodeFields) => `/c/${cardCode(card)}`;
 /** Absolute URL encoded in the printed QR. */
-export const twinUrl = (card: Pick<CardData, "serial" | "rarity" | "mrz">) => `https://${TWIN_HOST}${twinPath(card)}`;
+export const twinUrl = (card: CodeFields) => `https://${TWIN_HOST}${twinPath(card)}`;
