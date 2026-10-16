@@ -7,6 +7,8 @@ import { ResultsView, type Vote } from "@/components/results/ResultsView";
 import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
 import { BRAND } from "@/lib/brand";
+import { buildCard, cardCode } from "@/lib/card";
+import { TWIN_CODE } from "@/lib/twins";
 import type { AgentRequest, BrandMatch, QEntity, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 
@@ -62,6 +64,20 @@ export default function Home() {
   const [ready, setReady] = useState(false);
   /** A saved sign exists (shown as a "resume" option on the landing page). */
   const [saved, setSaved] = useState<Saved | null>(null);
+  /** ?vs=<code>: someone challenged you. Kept for the whole flow (sessionStorage), then offered as a Fight link on results. */
+  const [vs, setVs] = useState<{ code: string; name: string } | null>(null);
+  useEffect(() => {
+    let code = new URLSearchParams(location.search).get("vs")?.toUpperCase() ?? "";
+    try {
+      if (TWIN_CODE.test(code)) sessionStorage.setItem("tastrology:vs", code);
+      else code = sessionStorage.getItem("tastrology:vs") ?? "";
+    } catch {}
+    if (!TWIN_CODE.test(code)) return;
+    fetch(`/api/card?code=${code}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { card?: { archetype?: string } } | null) => j?.card && setVs({ code, name: j.card.archetype ?? "them" }))
+      .catch(() => {});
+  }, []);
 
   const restore = useCallback(
     (s: Saved) => {
@@ -248,6 +264,12 @@ export default function Home() {
   }, [result, pinned, votes]);
 
   // The share card never features a brand the user downvoted.
+  const fight = useMemo(() => {
+    if (!vs || !result || result.mode === "mock") return undefined;
+    const mine = cardCode(buildCard(result));
+    return mine === vs.code ? undefined : { href: `/vs/${vs.code}?vs=${mine}`, name: vs.name };
+  }, [vs, result]);
+
   const shareable = useMemo(() => (shown ? { ...shown, brands: shown.brands.filter((b) => votes[b.entity.id] !== "down") } : null), [shown, votes]);
 
   if (!ready) return <div className="min-h-screen" aria-hidden />;
@@ -300,7 +322,7 @@ export default function Home() {
       )}
       {error && !replanning && <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">{error}</p>}
 
-      {shown && <ResultsView result={shown} votes={votes} onVote={vote} onShare={() => setShare(true)} onReplan={replan} pending={pending} />}
+      {shown && <ResultsView result={shown} votes={votes} onVote={vote} onShare={() => setShare(true)} onReplan={replan} pending={pending} fight={fight} />}
 
       {replanning && (
         <div className="rise fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-xl p-3">
