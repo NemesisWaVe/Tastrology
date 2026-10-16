@@ -5,6 +5,8 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { BRAND } from "@/lib/brand";
 import { TWIN_HOST, ablationLines, cardCode, displayName, twinPath, type CardData } from "@/lib/card";
 import type { BrandMatch, StyleResult } from "@/lib/types";
+import { figureFor } from "@/components/reveal/skyFigures";
+import { skyState } from "@/components/reveal/traceModel";
 
 /*
  * The thermal receipt: one rendering shared by the share export (compact, static) and the results page
@@ -169,14 +171,15 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
       )}
       <Rule />
       <L>
-        <Row l={`sun ${sun.name}`} r="core" />
+        <Row l={`☉ sun ${sun.name}`} r="core" />
       </L>
       <L>
-        <Row l={`moon ${moon.name}`} r={moonIsContradiction ? "split" : "hidden"} />
+        <Row l={`☽ moon ${moon.name}`} r={moonIsContradiction ? "split" : "hidden"} />
       </L>
       <L>
-        <Row l={`rising ${rising.name}`} r="read" />
+        <Row l={`↑ rising ${rising.name}`} r="read" />
       </L>
+      {!compact && <SkyStrip result={result} />}
       {voids.length > 0 && (
         <>
           <Rule />
@@ -245,6 +248,66 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
         </div>
       )}
     </Live.Provider>
+  );
+}
+
+/**
+ * "Your sky", printed: each love's constellation (the same figure it draws in the live sky), in thermal ink.
+ * The love the sign is named after prints bold; the rest print light, like a fading register ribbon.
+ */
+function SkyStrip({ result }: { result: StyleResult }) {
+  const loves = result.seeds.slice(0, 8);
+  const lead = skyState(result.seeds, result.dna.name).critique?.strongest;
+  const leadName = displayName(loves.find((s) => s.id === lead)?.name ?? "");
+  const cell = 100;
+  return (
+    <>
+      <Rule />
+      <L className="mb-0.5 flex justify-between font-bold">
+        <span>your sky</span>
+        <span>{loves.length} loves</span>
+      </L>
+      <L>
+        <svg viewBox={`0 0 ${loves.length * cell} 78`} className="my-1 block h-auto w-full" aria-hidden>
+          {loves.map((s, i) => {
+            const fig = figureFor(displayName(s.name).toLowerCase(), 1);
+            const xs = fig.stars.map((p) => p.x);
+            const ys = fig.stars.map((p) => p.y);
+            const w = Math.max(...xs) - Math.min(...xs) || 1;
+            const h = Math.max(...ys) - Math.min(...ys) || 1;
+            const k = Math.min(70 / w, 60 / h);
+            const ox = i * cell + cell / 2 - ((Math.max(...xs) + Math.min(...xs)) / 2) * k;
+            const oy = 39 - ((Math.max(...ys) + Math.min(...ys)) / 2) * k;
+            const bold = s.id === lead;
+            return (
+              <g key={s.id} opacity={bold ? 1 : 0.5}>
+                {fig.edges.map(([a, b]) => (
+                  <line
+                    key={`${a}-${b}`}
+                    x1={ox + fig.stars[a].x * k}
+                    y1={oy + fig.stars[a].y * k}
+                    x2={ox + fig.stars[b].x * k}
+                    y2={oy + fig.stars[b].y * k}
+                    stroke="currentColor"
+                    strokeWidth={bold ? 1.6 : 1}
+                    strokeLinecap="round"
+                  />
+                ))}
+                {fig.stars.map((p, j) => (
+                  <circle key={j} cx={ox + p.x * k} cy={oy + p.y * k} r={1.4 + p.m * 2.2} fill="currentColor" />
+                ))}
+                {bold && <circle cx={ox + fig.stars[fig.alpha].x * k} cy={oy + fig.stars[fig.alpha].y * k} r={7} fill="none" stroke="currentColor" strokeWidth={1.2} />}
+              </g>
+            );
+          })}
+        </svg>
+      </L>
+      {leadName && (
+        <L>
+          <Row l="brightest" r={leadName} />
+        </L>
+      )}
+    </>
   );
 }
 
