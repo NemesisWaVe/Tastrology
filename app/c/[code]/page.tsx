@@ -1,8 +1,11 @@
 "use client";
 
+import { useReducedMotion } from "motion/react";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
+import { Sky } from "@/components/reveal/Sky";
+import { skyState } from "@/components/reveal/traceModel";
 import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
@@ -42,8 +45,14 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
     };
   }, [code]);
 
+  // The card hangs in its owner's sky: one constellation per love, the one it's named after lit.
+  const reduce = Boolean(useReducedMotion());
+  const cardRef = useRef<HTMLDivElement>(null);
+  const sky = useMemo(() => (card ? skyState(card.evolvesFrom, card.archetype) : null), [card]);
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-10 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:justify-center lg:gap-16">
+    <main className="relative mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-10 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:justify-center lg:gap-16">
+      {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {card === undefined && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Looking up No. {code}…</p>}
 
       {card === null && (
@@ -57,8 +66,10 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
 
       {card && (
         <>
-          <HoloCard card={card} width={340} idle />
-          <section className="max-w-md">
+          <div ref={cardRef} className="relative">
+            <HoloCard card={card} width={340} idle />
+          </div>
+          <section className="relative max-w-md">
             <p className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] ${source === "server" ? "border-good/40 text-good" : "border-warn/40 text-warn"}`}>
               {source === "server" ? "✓ Verified original" : "Saved on this device"}
             </p>
