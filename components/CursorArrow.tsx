@@ -19,10 +19,18 @@ export function CursorArrow({ className = "", rest = 0 }: { className?: string; 
     const host = el?.closest<HTMLElement>("button, a, [role='button']");
     if (!el || !host || reduce) return;
     let last = rest;
+    let active = false;
     const move = (e: PointerEvent) => {
       const r = el.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width / 2);
       const dy = e.clientY - (r.top + r.height / 2);
+      // Track while over the button OR near the arrow, so it can aim past the button's edge.
+      const near = Math.hypot(dx, dy) < 90 || host.contains(e.target as Node);
+      if (!near) {
+        if (active) leave();
+        return;
+      }
+      active = true;
       const target = (Math.atan2(dy, dx) * 180) / Math.PI;
       // shortest path from the last angle, so fast circles keep spinning one way
       last += ((((target - last) % 360) + 540) % 360) - 180;
@@ -32,18 +40,15 @@ export function CursorArrow({ className = "", rest = 0 }: { className?: string; 
       x.set((dx / d) * pull);
       y.set((dy / d) * pull);
     };
-    const leave = () => {
+    function leave() {
+      active = false;
       last = rest + Math.round((last - rest) / 360) * 360; // settle without unwinding every turn
       rot.set(last);
       x.set(0);
       y.set(0);
-    };
-    host.addEventListener("pointermove", move);
-    host.addEventListener("pointerleave", leave);
-    return () => {
-      host.removeEventListener("pointermove", move);
-      host.removeEventListener("pointerleave", leave);
-    };
+    }
+    window.addEventListener("pointermove", move, { passive: true });
+    return () => window.removeEventListener("pointermove", move);
   }, [reduce, rest, rot, x, y]);
 
   return (
