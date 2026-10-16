@@ -231,8 +231,8 @@ export const proxied = (url: string) => `/api/img?u=${encodeURIComponent(url)}`;
 
 /** Season the card was minted in. Bump per seasonal set. */
 export const SEASON = "01";
-/** Host printed under the QR on physical cards. Placeholder until the production domain is final. */
-export const TWIN_HOST = "tastrology.app";
+/** Host printed under the QR. Set NEXT_PUBLIC_SITE_HOST to the deployed domain (e.g. tastrology.vercel.app). */
+export const TWIN_HOST = process.env.NEXT_PUBLIC_SITE_HOST || "tastrology.app";
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32: no I, L, O, U
 
 /** Short, human-typeable verify code: the serial plus 4 check characters hashed from the card's own fields. */
