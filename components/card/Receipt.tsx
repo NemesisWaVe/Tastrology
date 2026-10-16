@@ -1,7 +1,7 @@
 "use client";
 
-import { motion, useAnimationControls, useInView, useReducedMotion, type Variants } from "motion/react";
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { motion, useInView, useReducedMotion, type Variants } from "motion/react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
 import { TWIN_HOST, cardCode, displayName, twinPath, type CardData } from "@/lib/card";
 import type { BrandMatch, StyleResult } from "@/lib/types";
@@ -42,20 +42,20 @@ const printLine: Variants = {
 };
 
 /** One printed line. On the live page it is fed out of the printer in sequence; static in exports. */
-function L({ children, className = "", style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+function L({ children, className = "", style, kind }: { children: ReactNode; className?: string; style?: CSSProperties; kind?: "rule" | "brand" | "void" | "total" }) {
   const live = useContext(Live);
   return live ? (
     <motion.div variants={printLine} className={className} style={style}>
       {children}
     </motion.div>
   ) : (
-    <div className={className} style={style}>
+    <div className={className} style={style} data-line="" data-kind={kind}>
       {children}
     </div>
   );
 }
 
-function Row({ l, r, strong }: { l: ReactNode; r: string; strong?: boolean }) {
+function Row({ l, r, strong }: { l: ReactNode; r: ReactNode; strong?: boolean }) {
   return (
     <span className={`flex items-baseline gap-1.5 ${strong ? "font-bold" : ""}`}>
       <span className="min-w-0 truncate">{l}</span>
@@ -64,7 +64,11 @@ function Row({ l, r, strong }: { l: ReactNode; r: string; strong?: boolean }) {
     </span>
   );
 }
-const Rule = () => <L className="my-2 border-t border-dashed border-black/40">{null}</L>;
+const Rule = () => (
+  <L kind="rule" className="my-2 border-t border-dashed border-black/40">
+    {null}
+  </L>
+);
 
 /* ------------------------------------------------------------------ paper */
 
@@ -146,14 +150,14 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
             {via(b) && <span className="block truncate pl-3 text-[0.85em] opacity-70">via {via(b)}</span>}
           </L>
         ) : (
-          <L key={b.entity.id}>
+          <L key={b.entity.id} kind="brand" className="rounded">
             <button
               type="button"
               aria-expanded={open === b.entity.id}
               onClick={() => setOpen(open === b.entity.id ? null : b.entity.id)}
               className="-mx-1.5 block w-[calc(100%+12px)] rounded px-1.5 py-[1px] text-left uppercase transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-1 focus-visible:outline-black/50"
             >
-              <Row l={`${open === b.entity.id ? "−" : "+"} ${displayName(b.entity.name)}`} r={aff(b.affinity)} />
+              <Row l={`${open === b.entity.id ? "−" : "+"} ${displayName(b.entity.name)}`} r={<span data-roll={Math.round(b.affinity * 100)}>{aff(b.affinity)}</span>} />
               {via(b) && <span className="block truncate pl-3.5 text-[0.85em] opacity-70">via {via(b)}</span>}
             </button>
             {open === b.entity.id && <Why b={b} seedName={seedName} />}
@@ -175,7 +179,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
           <Rule />
           <L className="mb-0.5 font-bold">voided by the critic</L>
           {voids.map((v) => (
-            <L key={v.entity.id}>
+            <L key={v.entity.id} kind="void" className="relative">
               <Row
                 l={
                   <>
@@ -185,12 +189,21 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
                 r={`-${aff(v.affinity)}`}
               />
               {!compact && <span className="block pl-3 text-[0.85em] normal-case opacity-70">{v.reason}</span>}
+              {!compact && (
+                <span
+                  data-stamp=""
+                  aria-hidden
+                  className="pointer-events-none absolute right-12 top-0 rotate-[-9deg] rounded-[3px] border-2 border-[#c4302b] px-1.5 text-[1.25em] font-black leading-tight tracking-[0.12em] text-[#c4302b] opacity-80 mix-blend-multiply"
+                >
+                  void
+                </span>
+              )}
             </L>
           ))}
         </>
       )}
       <Rule />
-      <L className={compact ? "text-[14px]" : "text-[16px]"}>
+      <L kind="total" className={compact ? "text-[14px]" : "mb-3 origin-top scale-y-[1.7] text-[17px] font-black"}>
         <Row l="total taste" r={String(card.power)} strong />
       </L>
       <L>
@@ -212,10 +225,11 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
         )}
       </L>
       <L className="mt-2 text-center text-[0.9em] tracking-[0.14em]">{BRAND.question}</L>
+      {!compact && <CertStamp />}
     </>
   );
 
-  const cls = `pt-3 uppercase ${compact ? "px-5 text-[9.5px] leading-[1.45]" : "px-5 text-[11px] leading-[1.5] sm:px-7 sm:text-[11.5px]"}`;
+  const cls = `relative pt-3 uppercase ${compact ? "px-5 text-[9.5px] leading-[1.45]" : "px-5 text-[11px] leading-[1.5] sm:px-7 sm:text-[11.5px]"}`;
   return (
     <Live.Provider value={live}>
       {live ? (
@@ -260,87 +274,333 @@ function Why({ b, seedName }: { b: BrandMatch; seedName: (id: string) => string 
 
 /* ------------------------------------------------------------------ the register */
 
+/** Round rubber stamp that thunks onto the paper once the total has printed. */
+function CertStamp() {
+  return (
+    <svg data-cert="" aria-hidden viewBox="-50 -50 100 100" className="pointer-events-none absolute bottom-[22px] left-[44%] h-[96px] w-[96px] rotate-[-12deg] text-[#5b3fd1] opacity-80 mix-blend-multiply">
+      <defs>
+        <path id="certRing" d="M0-36a36 36 0 1 1 0 72a36 36 0 1 1 0-72" />
+      </defs>
+      <circle r="47" fill="none" stroke="currentColor" strokeWidth="3" />
+      <circle r="27" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <text fill="currentColor" style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 800, letterSpacing: 1 }}>
+        <textPath href="#certRing" textLength="222" lengthAdjust="spacing">
+          CERTIFIED TASTE · SEASON 01 ·
+        </textPath>
+      </text>
+      <path d="M0-15 3.5-3.5 15 0 3.5 3.5 0 15-3.5 3.5-15 0-3.5-3.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Tiny synthesized register sounds (WebAudio, no files). Silent until the user turns sound on. */
+function useRegisterSound() {
+  const on = useRef(false);
+  const ac = useRef<AudioContext | null>(null);
+  const tone = (f: number, dur: number, type: OscillatorType, gain: number, to?: number) => {
+    const a = ac.current;
+    if (!on.current || !a) return;
+    const o = a.createOscillator();
+    const g = a.createGain();
+    const t = a.currentTime;
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  };
+  return {
+    enable(v: boolean) {
+      on.current = v;
+      if (v && !ac.current) ac.current = new AudioContext();
+    },
+    click: () => tone(2600, 0.012, "square", 0.02),
+    whirr: (ms: number) => tone(150, ms / 1000, "sawtooth", 0.01, 190),
+    beep: () => tone(1860, 0.08, "square", 0.022),
+    thunk: () => tone(120, 0.2, "sine", 0.16, 42),
+    cut: () => tone(900, 0.06, "sawtooth", 0.03, 300),
+  };
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
 /**
- * A small thermal register drawn in CSS: brand plate, status LED, paper slot. When it scrolls into view the
- * paper feeds out of the slot in short stepper-motor jerks (one text line per step, with a hitch every few),
- * then the cutter snaps the zigzag edge and the receipt settles into a soft hanging curl.
+ * A small thermal register that performs the receipt: a print head writes each line (speed by length, carriage
+ * snap back), brand lines ring up like a checkout (affinity rolls up, line flashes, LCD total ticks), voids get
+ * a red rubber stamp, the total prints double-height, a CERTIFIED stamp thunks down, the cutter slices. Then the
+ * receipt can be torn off along the perforation and drops flat. ~6-8s, "Skip" finishes instantly.
  * Reduced motion: the receipt is simply there, complete.
  */
-export function ReceiptPrinter({ children }: { children: ReactNode }) {
+export function ReceiptPrinter({ children, total }: { children: ReactNode; total: number }) {
   const reduce = useReducedMotion();
   const box = useRef<HTMLDivElement>(null);
+  const win = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
-  const inView = useInView(box, { once: true, amount: 0.25 });
-  const [h, setH] = useState<number | null>(0);
-  const [done, setDone] = useState(false);
-  const snap = useAnimationControls();
-  const body = useAnimationControls();
+  const head = useRef<HTMLDivElement>(null);
+  const slot = useRef<HTMLDivElement>(null);
+  const reg = useRef<HTMLDivElement>(null);
+  const lcd = useRef<HTMLSpanElement>(null);
+  const blade = useRef<HTMLDivElement>(null);
+  const inView = useInView(box, { once: true, amount: 0.2 });
+  const [phase, setPhase] = useState<"idle" | "printing" | "done" | "torn">("idle");
+  const [sound, setSound] = useState(false);
+  const sfx = useRegisterSound();
+  const skip = useRef(false);
+  const [pull, setPull] = useState(0);
+  const drag = useRef<{ x: number; y: number } | null>(null);
+
+  const finishAll = () => {
+    const p = paper.current;
+    if (!p) return;
+    p.querySelectorAll<HTMLElement>("[data-line],[data-stamp],[data-cert]").forEach((el) => {
+      el.getAnimations().forEach((a) => a.cancel());
+      el.style.clipPath = "";
+      el.style.opacity = "";
+    });
+    p.querySelectorAll<HTMLElement>("[data-roll]").forEach((r) => (r.textContent = `.${pad2(Number(r.dataset.roll))}`));
+    if (win.current) win.current.style.height = "";
+    if (lcd.current) lcd.current.textContent = String(total);
+    head.current?.getAnimations().forEach((a) => a.cancel());
+  };
+
+  // Hide every line before first paint; the show starts when the register scrolls into view.
+  useLayoutEffect(() => {
+    if (reduce) return;
+    const p = paper.current;
+    if (!p) return;
+    p.querySelectorAll<HTMLElement>("[data-line]").forEach((l) => (l.style.clipPath = "inset(0 100% 0 0)"));
+    p.querySelectorAll<HTMLElement>("[data-stamp],[data-cert]").forEach((el) => (el.style.opacity = "0"));
+    if (win.current) win.current.style.height = "0px";
+    if (lcd.current) lcd.current.textContent = "0";
+  }, [reduce]);
 
   useEffect(() => {
     if (reduce) {
-      setH(null);
-      setDone(true);
+      setPhase("done");
       return;
     }
     if (!inView) return;
-    let shown = 0;
-    let n = 0;
-    let t: ReturnType<typeof setTimeout>;
-    const step = () => {
-      const full = paper.current?.scrollHeight ?? 0;
-      shown = Math.min(full, shown + 17); // one line per motor step
-      setH(shown);
-      body.start({ y: [0, 0.8, 0], transition: { duration: 0.05 } });
-      n++;
-      if (shown >= full) {
-        // the cutter: a tiny snap, then hand the height back to the layout
-        setTimeout(() => {
-          setH(null);
-          setDone(true);
-          snap.start({ y: [0, 5, -1, 0], rotate: [0, 0.6, -0.9, -0.7], transition: { duration: 0.45, ease: "easeOut" } });
-          body.start({ x: [0, -1.5, 1, 0], transition: { duration: 0.18 } });
-        }, 220);
-        return;
-      }
-      t = setTimeout(step, n % 5 === 0 ? 150 : 46); // stepper rhythm: short jerks, a hitch every few lines
+    let cancelled = false;
+    let follow = true;
+    const stop = () => (follow = false);
+    window.addEventListener("wheel", stop, { passive: true });
+    window.addEventListener("touchmove", stop, { passive: true });
+    window.addEventListener("keydown", stop);
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, skip.current ? 0 : ms));
+    const shake = (px = 2) =>
+      reg.current?.animate([{ transform: "none" }, { transform: `translate(-${px}px, 1px)` }, { transform: `translate(${px}px, -1px)` }, { transform: "none" }], { duration: 170 });
+    const thunk = (el: HTMLElement, rot: number, from = 2.3) => {
+      el.style.opacity = "";
+      el.animate(
+        [
+          { opacity: 0, transform: `rotate(${rot}deg) scale(${from})` },
+          { opacity: 1, transform: `rotate(${rot}deg) scale(0.9)`, offset: 0.75 },
+          { opacity: 1, transform: `rotate(${rot}deg) scale(1)` },
+        ],
+        { duration: 210, easing: "ease-in" },
+      );
+      sfx.thunk();
+      shake();
     };
-    t = setTimeout(step, 350);
-    return () => clearTimeout(t);
-  }, [inView, reduce, snap, body]);
 
-  const printing = inView && !done;
+    (async () => {
+      const p = paper.current;
+      const w = win.current;
+      const hd = head.current;
+      const sl = slot.current;
+      if (!p || !w || !hd || !sl) return;
+      setPhase("printing");
+      const lines = [...p.querySelectorAll<HTMLElement>("[data-line]")];
+      const nBrands = Math.max(1, lines.filter((l) => l.dataset.kind === "brand").length);
+      let rung = 0;
+      await sleep(350);
+      for (const l of lines) {
+        if (cancelled) return;
+        if (skip.current) break;
+        const kind = l.dataset.kind;
+        // feed: the paper pushes out by one line, the body nudges, the view follows the slot
+        const nh = Math.ceil(l.getBoundingClientRect().bottom - p.getBoundingClientRect().top + 3);
+        const prev = w.offsetHeight;
+        if (nh > prev) {
+          w.style.height = `${nh}px`;
+          if (follow) window.scrollBy(0, nh - prev);
+        }
+        reg.current?.animate([{ transform: "translateY(1px)" }, { transform: "none" }], { duration: 70 });
+        sfx.click();
+        // write: the head sweeps, the text appears behind it, then darkens a beat later (thermal heat)
+        const chars = (l.textContent ?? "").trim().length;
+        const dur = kind === "rule" ? 45 : Math.max(55, Math.min(150, 30 + chars * 1.8));
+        const travel = sl.clientWidth - hd.offsetWidth;
+        hd.animate([{ transform: "translateX(0)" }, { transform: `translateX(${travel}px)` }], { duration: dur, easing: "linear", fill: "forwards" });
+        const ca = l.animate([{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)" }], { duration: dur, easing: "linear", fill: "forwards" });
+        l.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 340, delay: dur * 0.45, fill: "backwards", easing: "ease-out" });
+        sfx.whirr(dur);
+        const roll = kind === "brand" ? l.querySelector<HTMLElement>("[data-roll]") : null;
+        if (roll) {
+          const to = Number(roll.dataset.roll);
+          const t0 = performance.now();
+          const tick = (now: number) => {
+            const k = Math.min(1, (now - t0) / (dur + 160));
+            roll.textContent = `.${pad2(Math.round(to * (1 - (1 - k) ** 3)))}`;
+            if (k < 1 && !skip.current) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+        await sleep(dur);
+        l.style.clipPath = "";
+        ca.cancel();
+        // carriage snap back
+        hd.animate([{ transform: `translateX(${travel}px)` }, { transform: "translateX(0)" }], { duration: 70, easing: "cubic-bezier(.7,0,.2,1)", fill: "forwards" });
+        if (kind === "brand") {
+          rung++;
+          l.animate([{ backgroundColor: "rgb(255 210 40 / .65)" }, { backgroundColor: "rgb(255 210 40 / 0)" }], { duration: 520, easing: "ease-out" });
+          if (lcd.current) lcd.current.textContent = String(Math.round((total * rung) / nBrands));
+          sfx.beep();
+          await sleep(90);
+        } else if (kind === "void") {
+          const st = l.querySelector<HTMLElement>("[data-stamp]");
+          if (st) thunk(st, -9);
+          await sleep(140);
+        } else if (kind === "total") {
+          if (lcd.current) lcd.current.textContent = String(total);
+          await sleep(220);
+        } else await sleep(18);
+      }
+      if (cancelled) return;
+      if (!skip.current) {
+        const cert = p.querySelector<HTMLElement>("[data-cert]");
+        await sleep(160);
+        if (cert) thunk(cert, -12, 2.8);
+        shake(3);
+        await sleep(520);
+        // the cutter
+        blade.current?.animate([{ transform: "scaleX(0)", opacity: 1 }, { transform: "scaleX(1)", opacity: 1 }, { transform: "scaleX(1)", opacity: 0 }], { duration: 260, easing: "ease-in" });
+        sfx.cut();
+        w.style.height = `${p.offsetHeight}px`;
+        await sleep(240);
+      }
+      finishAll();
+      setPhase("done");
+    })();
+    return () => {
+      cancelled = true;
+      window.removeEventListener("wheel", stop);
+      window.removeEventListener("touchmove", stop);
+      window.removeEventListener("keydown", stop);
+    };
+  }, [inView, reduce]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const torn = phase === "torn";
+  const printing = phase === "printing";
+  const tearDown = (e: React.PointerEvent) => {
+    if (phase !== "done") return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY };
+  };
+  const tearMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+    setPull(Math.min(1, dist / 80));
+    if (dist > 80) {
+      drag.current = null;
+      setPull(0);
+      sfx.cut();
+      setPhase("torn");
+    }
+  };
+  const tearUp = () => {
+    drag.current = null;
+    setPull(0);
+  };
+
   return (
     <div ref={box} className="relative mx-auto w-full max-w-[420px]">
-      {/* register */}
-      <motion.div animate={body} className="relative z-10 mx-[-10px] rounded-[18px] px-4 pb-3 pt-3 sm:mx-[-16px]" style={{ background: "linear-gradient(180deg, #34343c, #1d1d23 55%, #141418)", boxShadow: "0 18px 40px -16px rgb(0 0 0 / .9), inset 0 1px 0 rgb(255 255 255 / .12), inset 0 -2px 0 rgb(0 0 0 / .5)" }}>
-        <div className="flex items-center justify-between">
-          <span className="rounded-[5px] px-2 py-[3px] font-mono text-[10px] font-bold tracking-[0.28em] text-[#d9d4c7]" style={{ background: "linear-gradient(180deg, #4a4a52, #2b2b31)", boxShadow: "inset 0 1px 0 rgb(255 255 255 / .18), 0 1px 2px rgb(0 0 0 / .6)" }}>
-            TASTROLOGY
-          </span>
-          <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/45">
-            {printing ? "printing" : done ? "ready" : "standby"}
-            <motion.i
-              className="block h-2 w-2 rounded-full"
-              style={{ background: printing ? "#fbbf24" : "#a3e635", boxShadow: `0 0 8px ${printing ? "#fbbf24" : "#a3e635"}` }}
-              animate={printing ? { opacity: [1, 0.25, 1] } : { opacity: 1 }}
-              transition={printing ? { duration: 0.5, repeat: Infinity } : undefined}
-            />
-          </span>
-        </div>
-        {/* paper slot */}
-        <div className="mt-3 h-[9px] rounded-full" style={{ background: "#050507", boxShadow: "inset 0 2px 3px rgb(0 0 0 / .9), 0 1px 0 rgb(255 255 255 / .08)" }} />
-      </motion.div>
-      {/* paper, fed out under the slot */}
-      <motion.div animate={snap} className="relative z-0 -mt-[10px] mx-auto w-[94%]" style={{ transformOrigin: "50% 0" }}>
-        <div style={{ height: h ?? "auto", overflow: h === null ? "visible" : "hidden" }}>
+      {/* the paper: grows out of the slot below it, newest line at the slot */}
+      <motion.div
+        className="relative mx-auto w-[94%]"
+        animate={torn ? { y: [0, -14, 0], rotate: 0 } : { y: pull * -6, rotate: phase === "done" ? -0.6 - pull * 1.2 : 0 }}
+        transition={torn ? { duration: 0.5, ease: "easeOut" } : { type: "spring", stiffness: 400, damping: 30 }}
+        style={{ transformOrigin: "50% 100%" }}
+      >
+        <div ref={win} className="relative" style={{ overflow: phase === "done" || torn ? "visible" : "hidden" }}>
           <div ref={paper}>
-            <ReceiptPaper curl={done} style={done ? undefined : { filter: "drop-shadow(0 10px 14px rgba(0,0,0,0.6))" }}>
+            <ReceiptPaper curl={phase === "done" || torn} style={torn ? { transform: "none", filter: "drop-shadow(0 10px 16px rgba(0,0,0,0.45))" } : undefined}>
               {children}
             </ReceiptPaper>
           </div>
+          {/* curl over the lip while it feeds */}
+          {!torn && phase !== "done" && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4" style={{ background: "linear-gradient(transparent, rgb(0 0 0 / .35))" }} />}
         </div>
-        {/* shadow under the slot lip */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-5" style={{ background: "linear-gradient(rgb(0 0 0 / .45), transparent)" }} />
+      </motion.div>
+
+      {/* the register */}
+      <motion.div
+        animate={torn ? { opacity: 0, y: 30, height: 0, marginTop: 0 } : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+        className="relative z-10 -mt-[6px] overflow-hidden"
+        aria-hidden={torn}
+      >
+        <div ref={reg} className="mx-[-8px] rounded-[16px] px-3.5 pb-3 pt-2.5 sm:mx-[-16px]" style={{ background: "linear-gradient(180deg, #3a3a42, #1e1e24 50%, #141418)", boxShadow: "0 18px 40px -16px rgb(0 0 0 / .9), inset 0 1px 0 rgb(255 255 255 / .14), inset 0 -2px 0 rgb(0 0 0 / .5)" }}>
+          {/* slot + print head + cutter */}
+          <div ref={slot} className="relative h-[10px] rounded-full" style={{ background: "#050507", boxShadow: "inset 0 2px 3px rgb(0 0 0 / .95), 0 1px 0 rgb(255 255 255 / .08)" }}>
+            <div ref={head} className="absolute -top-[3px] left-0 h-[16px] w-[22px] rounded-[3px]" style={{ background: "linear-gradient(180deg, #d8d8de, #8b8b94)", boxShadow: printing ? "0 0 10px 2px rgb(255 140 60 / .55), inset 0 -2px 0 rgb(0 0 0 / .35)" : "inset 0 -2px 0 rgb(0 0 0 / .35)" }} />
+            <div ref={blade} className="absolute inset-x-0 top-1/2 h-[2px] origin-left bg-white opacity-0" style={{ boxShadow: "0 0 8px 2px #fff" }} />
+          </div>
+          {/* perforation: drag to tear off */}
+          {phase === "done" && (
+            <div
+              onPointerDown={tearDown}
+              onPointerMove={tearMove}
+              onPointerUp={tearUp}
+              onPointerCancel={tearUp}
+              className="mt-1.5 flex cursor-grab touch-none select-none items-center justify-center gap-2 rounded-md py-1 font-mono text-[9.5px] uppercase tracking-[0.2em] text-white/55 hover:text-white/80"
+              style={{ backgroundImage: "linear-gradient(90deg, rgb(255 255 255 / .25) 50%, transparent 50%)", backgroundSize: "8px 1px", backgroundRepeat: "repeat-x", backgroundPosition: "0 0" }}
+            >
+              ✂ drag to tear off
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="rounded-[5px] px-2 py-[3px] font-mono text-[10px] font-bold tracking-[0.28em] text-[#d9d4c7]" style={{ background: "linear-gradient(180deg, #4a4a52, #2b2b31)", boxShadow: "inset 0 1px 0 rgb(255 255 255 / .18), 0 1px 2px rgb(0 0 0 / .6)" }}>
+              TASTROLOGY
+            </span>
+            {/* LCD running total */}
+            <span className="flex items-baseline gap-1.5 rounded-[4px] px-2 py-[2px] font-mono text-[#1c2a12]" style={{ background: "linear-gradient(180deg, #b7c79a, #9db07c)", boxShadow: "inset 0 1px 3px rgb(0 0 0 / .45)" }}>
+              <span className="text-[8px] tracking-[0.16em]">TOTAL</span>
+              <span ref={lcd} className="min-w-[2ch] text-right text-[15px] font-bold leading-none tabular-nums" style={{ fontFamily: '"Doto", var(--nf-mono), monospace' }}>
+                {total}
+              </span>
+            </span>
+            <span className="flex items-center gap-2">
+              {printing && (
+                <button type="button" onClick={() => (skip.current = true)} className="rounded-full border border-white/20 px-2 py-[2px] font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/70 hover:text-white">
+                  skip
+                </button>
+              )}
+              <button
+                type="button"
+                aria-pressed={sound}
+                aria-label={sound ? "Mute printer sounds" : "Play printer sounds"}
+                onClick={() => {
+                  sfx.enable(!sound);
+                  setSound(!sound);
+                }}
+                className="grid h-6 w-6 place-items-center rounded-full text-[12px] text-white/70 hover:bg-white/10"
+              >
+                {sound ? "🔊" : "🔇"}
+              </button>
+              <motion.i
+                className="block h-2 w-2 rounded-full"
+                style={{ background: printing ? "#fbbf24" : "#a3e635", boxShadow: `0 0 8px ${printing ? "#fbbf24" : "#a3e635"}` }}
+                animate={printing ? { opacity: [1, 0.25, 1] } : { opacity: 1 }}
+                transition={printing ? { duration: 0.5, repeat: Infinity } : undefined}
+              />
+            </span>
+          </div>
+        </div>
       </motion.div>
     </div>
   );

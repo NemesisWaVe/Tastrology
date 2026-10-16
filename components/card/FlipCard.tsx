@@ -91,7 +91,7 @@ export function FlipCard({
           if (!s.turning) {
             if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return;
             s.turning = true;
-            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {} // pointer may already be gone
           }
           rot.set(s.r0 + dx * degPerPx);
           s.hist.push({ x: e.clientX, t: e.timeStamp });

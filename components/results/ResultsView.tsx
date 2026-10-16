@@ -181,7 +181,7 @@ export function ResultsView({
           }
           note={<>Your loves in, brands out, the critic&apos;s voids crossed off. Tap any brand line for the agent&apos;s reason and which loves drove it.</>}
         />
-        <ReceiptPrinter>
+        <ReceiptPrinter total={card.power}>
           <ReceiptBody card={card} result={result} stagger={false} faded />
         </ReceiptPrinter>
         <div className="mt-8 flex justify-center">
