@@ -1,3 +1,4 @@
+import { CursorArrow } from "@/components/CursorArrow";
 import Link from "next/link";
 
 /**
@@ -14,7 +15,7 @@ export function BattleLink({ a = "me", className = "", label = "Battle someone's
         VS
       </span>
       {label}
-      <span aria-hidden>→</span>
+      <CursorArrow className="h-6 w-6" />
     </Link>
   );
 }

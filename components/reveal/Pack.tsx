@@ -1,5 +1,6 @@
 "use client";
 
+import { CursorArrow } from "@/components/CursorArrow";
 import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardBack, HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
@@ -579,7 +580,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   className="group flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3.5 font-display text-[16px] font-semibold text-paper shadow-[0_10px_40px_-10px_var(--accent)] transition-transform active:scale-[0.98]"
                 >
                   See your receipts
-                  <span className="transition-transform group-hover:translate-x-1">→</span>
+                  <CursorArrow className="h-7 w-7" />
                 </button>
               </motion.div>
             )}
