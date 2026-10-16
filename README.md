@@ -51,6 +51,8 @@ npm test                     # grounding + feedback tests (mock graph)
 
 Set `QLOO_MODE=live` and `QLOO_API_KEY` to use the real API (`https://hackathon.api.qloo.com`, header `X-Api-Key`).
 
+Optional env (see `.env.example`): `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` store card twins in a private bucket; `LLM_MAX_TOKENS` and `LLM_DAILY_MAX` cap LLM cost (past the daily cap, runs use the deterministic planner); `RL_SALT` salts the hashed IPs used for rate limits.
+
 **Mock mode** uses a small hand-made synthetic graph (`lib/mock/`) with the same response shape. Per Qloo's hackathon terms, **no Qloo response data is committed to this repo**. Live responses are cached in memory only.
 
 ## Stack

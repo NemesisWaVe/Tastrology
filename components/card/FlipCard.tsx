@@ -148,7 +148,7 @@ export function FlipCard({
           onClick={flip}
           aria-pressed={isBack}
           aria-label={isBack ? "Show the front of the card" : "Show the back of the card"}
-          className="absolute -right-2 -top-3 z-20 rounded-full border border-white/25 bg-black/70 px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-white shadow-[0_6px_20px_-6px_rgb(0_0_0/0.8)] backdrop-blur transition hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          className="absolute -right-2 -top-3 z-20 rounded-full border border-white/25 bg-black/70 px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-white shadow-[0_6px_20px_-6px_rgb(0_0_0/0.8)] backdrop-blur transition hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
         >
           Flip ⟲
         </button>

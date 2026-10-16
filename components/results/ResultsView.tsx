@@ -77,7 +77,7 @@ export function ResultsView({
             <div ref={colRef} className="w-full">
               {colW > 0 ? <FlipCard card={card} width={Math.min(380, Math.round(colW))} flipped={showBack} onFlippedChange={setShowBack} /> : <div className="aspect-[63/88] w-full rounded-[18px] shimmer" />}
             </div>
-            <p className="mt-4 text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
+            <p className="mt-4 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
               <span className="hidden sm:inline">hover</span>
               <span className="sm:hidden">tilt your phone</span> to catch the foil
             </p>
@@ -88,12 +88,17 @@ export function ResultsView({
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-2">Your taste sign</span>
               <span
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-black"
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-black"
                 style={{ background: RARITY_TONE[card.rarity] }}
               >
                 <Sparkle className="h-2.5 w-2.5" />
                 {card.rarityLabel}
               </span>
+              {card.deepCut && (
+                <span title={`Your loves average ${card.avgPop}% popularity on Qloo`} className="inline-flex -rotate-3 items-center rounded-[5px] border-2 border-accent px-2 py-0.5 font-mono text-[11px] font-extrabold uppercase tracking-[0.18em] text-accent">
+                  Deep Cut
+                </span>
+              )}
               <span className="font-mono text-[11px] text-ink-3">
                 № {card.serial} · {BRAND.cardSet}
               </span>
@@ -102,17 +107,29 @@ export function ResultsView({
             <h1 className="mt-4 font-serif text-[48px] leading-[0.9] tracking-[-0.02em] text-balance sm:text-[68px] lg:text-[76px]">{result.dna.name}</h1>
             <p className="mt-4 max-w-xl font-serif text-[21px] italic leading-snug text-ink-2 sm:text-[24px]">{result.dna.tagline}</p>
 
-            <p className="mt-4 text-[12.5px] text-ink-3">
-              {card.rarityLabel} because: {card.rarityWhy?.join(" · ")}.
-            </p>
+            <div className="mt-5 max-w-xl">
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2">
+                {card.rarityLabel} · {card.rarityScore}/100
+              </p>
+              <ul className="mt-1.5 space-y-1 text-[13.5px] leading-snug text-ink-3">
+                {card.rarityWhy.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+              {card.weak && (
+                <p className="mt-3 text-[14px] leading-snug text-ink-2">
+                  <b className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Weak to:</b> {card.weak.name}. Moved {card.weak.pct}% of your picks.
+                </p>
+              )}
+            </div>
 
             <div className="mt-7">
-              <p className="mb-3 font-mono text-[10.5px] uppercase tracking-[0.22em] text-ink-3">The Big Three, with receipts</p>
+              <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">The Big Three, with receipts</p>
               <BigThree result={result} card={card} />
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-2">
-              <span className="mr-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Read from</span>
+              <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">Read from</span>
               {result.seeds.map((s) => (
                 <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper/50 py-0.5 pl-0.5 pr-3 text-[12.5px] text-ink-2">
                   <Thumb src={s.image} name={s.name} size={22} />

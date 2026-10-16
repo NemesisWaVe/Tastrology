@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { RARITY_CUTS, ablationLines, buildCard } from "@/lib/card";
+import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
+
+const seed = (i: number, kind: QEntity["kind"], popularity?: number): QEntity => ({ id: `s${i}`, name: `Seed ${i}`, kind, tags: [], popularity });
+const brand = (i: number, ablation: Record<string, number> = {}): BrandMatch => ({
+  entity: { id: `b${i}`, name: `Brand ${i}`, kind: "brand", tags: [], popularity: 0.5 },
+  affinity: 0.7,
+  category: "fashion",
+  explain: { s1: 0.5, s2: 0.5 },
+  ablation,
+  because: ["s1", "s2"],
+});
+const kinds: QEntity["kind"][] = ["artist", "movie", "book", "tv_show", "place"];
+const base = (over: Partial<StyleResult> = {}, pop = 0.5): StyleResult => ({
+  runId: "t",
+  mode: "mock",
+  planner: "autopilot",
+  createdAt: 0,
+  seeds: kinds.map((k, i) => seed(i + 1, k, pop)),
+  dna: { name: "The Seed 1 Who Bakes", tagline: "Seed 1 did this.", keywords: [{ id: "k1", name: "Retro" }, { id: "k2", name: "Soft" }], lobes: [] },
+  brands: [brand(1, { s1: 0.38, s2: 0.1 }), brand(2), brand(3)],
+  rejected: [],
+  contradictions: [],
+  bridges: [],
+  capsule: [],
+  critique: [],
+  stats: { qlooCalls: 0, ms: 0, llmSteps: 0 },
+  ...over,
+});
+
+describe("taste-based rarity", () => {
+  it("scores obscurity 40 + pairing 25 + spread 20 + tension 15, each listed in rarityWhy", () => {
+    const c = buildCard(base({ overlap: 0.2, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.2));
+    // 40*0.8 + 25*0.8 + 20*5/5 + 15*1
+    expect(c.rarityScore).toBe(32 + 20 + 20 + 15);
+    expect(c.rarityWhy[0]).toBe("+32 obscurity: your picks average 20% popularity");
+    expect(c.rarityWhy).toHaveLength(4);
+    expect(c.rarity).toBe("secret");
+  });
+  it("a mainstream, overlapping, narrow taste is Common", () => {
+    const r = base({ overlap: 0.6, seeds: [seed(1, "artist", 0.99), seed(2, "artist", 0.99), seed(3, "artist", 0.98)] });
+    const c = buildCard(r);
+    expect(c.rarityScore).toBeLessThan(RARITY_CUTS.rare);
+    expect(c.rarity).toBe("common");
+  });
+  it("never invents inputs: no popularity or overlap means those lines are absent", () => {
+    const r = base({ seeds: kinds.map((k, i) => seed(i + 1, k)) });
+    const c = buildCard(r);
+    expect(c.rarityWhy.some((w) => /obscurity|odd pairing/.test(w))).toBe(false);
+    expect(c.rarityScore).toBe(20);
+  });
+});
+
+describe("weakness, Deep Cut, moves", () => {
+  it("Weakness comes from the inert seed and is absent without one", () => {
+    expect(buildCard(base()).weakness).toBeUndefined();
+    const c = buildCard(base({ inert: [{ id: "s3", influence: 0.02 }] }));
+    expect(c.weakness).toBe("Weak to: Seed 3. Moved 2% of your picks.");
+  });
+  it("Deep Cut only under 30% average popularity", () => {
+    expect(buildCard(base({}, 0.29)).deepCut).toBe(true);
+    expect(buildCard(base({}, 0.3)).deepCut).toBe(false);
+    expect(buildCard(base({ seeds: kinds.map((k, i) => seed(i + 1, k)) })).deepCut).toBe(false);
+  });
+  it("each move carries its biggest measured ablation drop", () => {
+    const r = base();
+    expect(buildCard(r).moves[0].cut).toEqual({ name: "Seed 1", drop: 38 });
+    expect(buildCard(r).moves[1].cut).toBeUndefined();
+    expect(ablationLines(r.brands[0], r.seeds).map((x) => x.drop)).toEqual([38, 10]);
+  });
+  it("Signal is the avg affinity of the top brands (the same thing battle.ts measures)", () => {
+    const c = buildCard(base());
+    expect(c.stats[3].value).toBe(70);
+    expect(c.stats[3].hint).toMatch(/how strongly Qloo backs your top 3 brands/);
+  });
+});

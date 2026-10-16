@@ -187,6 +187,12 @@ function CardFace({ card }: { card: CardData }) {
           <b>{card.power}</b>
           <span>taste</span>
         </div>
+        {card.deepCut && (
+          <div className={s.stamp} aria-label={`Deep Cut: your loves average ${card.avgPop}% popularity`}>
+            <b>Deep Cut</b>
+            <small>{card.avgPop}% avg pop</small>
+          </div>
+        )}
         <div className={s.artTag}>
           {card.types.map((t, i) => (
             <span key={t.name}>
@@ -232,9 +238,14 @@ function CardFace({ card }: { card: CardData }) {
         ))}
       </div>
 
-      <p className={`${s.flavor} ${s.pr}`} style={pd(7 + card.moves.length)}>
-        {card.flavor}
-      </p>
+      <div className={`${s.foot} ${s.pr}`} style={pd(7 + card.moves.length)}>
+        <p className={s.flavor}>{card.flavor}</p>
+        {card.weak && (
+          <p className={s.weak}>
+            <b>Weak to:</b> {card.weak.name}. Moved {card.weak.pct}% of your picks.
+          </p>
+        )}
+      </div>
 
       <footer className={`${s.mrz} ${s.pr}`} style={pd(8 + card.moves.length)}>
         <span>{card.mrz?.[0]}</span>

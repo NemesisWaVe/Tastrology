@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { sharedCache, upstash, upstashConfigured } from "./cache";
 
 const hits = sharedCache<number[]>("ratelimit", 5000);
@@ -25,8 +26,59 @@ export async function allow(key: string, limit = 30, windowMs = 10 * 60 * 1000):
   return true;
 }
 
-/** Client IP from the platform headers (Vercel sets x-real-ip / x-vercel-forwarded-for). */
+/** First 4 groups of an IPv6 address (its /64), lowercase, zero-padded. Null when `ip` isn't IPv6. */
+function v6Prefix(ip: string): string | null {
+  if (!ip.includes(":")) return null;
+  const [head, tail] = ip.split("::");
+  const a = head ? head.split(":") : [];
+  const b = tail === undefined ? [] : tail ? tail.split(":") : [];
+  const groups = tail === undefined ? a : [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill("0"), ...b];
+  return groups.slice(0, 4).map((x) => x.toLowerCase().padStart(4, "0")).join(":");
+}
+
+/** Client IP. On Vercel only x-real-ip is trusted (the rest can be spoofed); elsewhere the usual proxy headers. IPv6 collapses to its /64. */
 export function clientIp(headers: Headers): string {
   const first = (h: string) => headers.get(h)?.split(",")[0]?.trim();
-  return first("x-real-ip") || first("x-vercel-forwarded-for") || first("x-forwarded-for") || "local";
+  let ip = process.env.VERCEL
+    ? first("x-real-ip") || "local"
+    : first("x-real-ip") || first("x-vercel-forwarded-for") || first("x-forwarded-for") || "local";
+  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) ip = mapped[1];
+  const p = v6Prefix(ip);
+  return p ? `${p}::/64` : ip;
+}
+
+/** Rate-limit identity: salted hash of the client IP, so raw addresses never reach Redis keys. */
+export function clientId(headers: Headers): string {
+  return createHash("sha256").update((process.env.RL_SALT || "") + clientIp(headers)).digest("hex").slice(0, 16);
+}
+
+/* ------------------------------------------------------------ daily counters */
+
+const day = () => new Date().toISOString().slice(0, 10);
+const counts = sharedCache<number>("daycount", 50);
+const DAY_MS = 26 * 60 * 60 * 1000;
+
+/** Counts one event for today (UTC) under `tm:<name>:<YYYY-MM-DD>`: Upstash INCR+EXPIRE, memory fallback. Returns the new count. */
+export async function bumpDaily(name: string): Promise<number> {
+  const k = `${name}:${day()}`;
+  let n = (counts.get(k) ?? 0) + 1;
+  const out = await upstash([["INCR", `tm:${k}`], ["EXPIRE", `tm:${k}`, 2 * 24 * 3600]]);
+  if (out && typeof out[0] === "number") n = Math.max(n, out[0]);
+  counts.set(k, n, DAY_MS);
+  return n;
+}
+
+/** Today's count as this instance knows it (sync). The first look on a cold instance pulls the shared value in the background. */
+export function peekDaily(name: string): number {
+  const k = `${name}:${day()}`;
+  const n = counts.get(k);
+  if (n === undefined) {
+    counts.set(k, 0, DAY_MS);
+    void upstash([["GET", `tm:${k}`]]).then((o) => {
+      const v = Number(o?.[0]);
+      if (v > (counts.get(k) ?? 0)) counts.set(k, v, DAY_MS);
+    });
+  }
+  return n ?? 0;
 }

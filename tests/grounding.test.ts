@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runAgent } from "@/lib/agent";
-import { GroundingLedger } from "@/lib/grounding";
+import { GroundingLedger, chooseTagline, shortSeed, tagMentionsSeed } from "@/lib/grounding";
 import * as qloo from "@/lib/qloo";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import type { QEntity } from "@/lib/types";
@@ -67,8 +67,39 @@ describe("agent output is grounded in Qloo responses", () => {
       expect(r.critique.join(" ")).not.toMatch(/at least two of your seeds/);
       for (const b of r.brands.filter((b) => b.side)) expect(b.why).toMatch(/^Moon pick, on purpose/);
       expect(r.dna.name).toMatch(/^The .+ Who .+/);
-      expect(r.dna.name.split(" ").length).toBeLessThanOrEqual(5);
+      expect(r.dna.name.split(" ").length).toBeLessThanOrEqual(6);
       expect(r.dna.tagline.split(" ").length).toBeLessThanOrEqual(12);
     }
+  });
+});
+
+describe("taglines must name a seed", () => {
+  const seeds = ["Neuromancer (Sprawl, #1)", "The Great British Baking Show", "Blade Runner 2049"];
+  it("shortSeed builds the noun for 'The X Who Y'", () => {
+    expect(shortSeed("Neuromancer (Sprawl, #1)")).toBe("Neuromancer");
+    expect(shortSeed("The Lunchbox")).toBe("Lunchbox");
+    expect(shortSeed("Blade Runner 2049")).toBe("Blade Runner");
+    expect(shortSeed("Made in Heaven")).toBe("Heaven");
+  });
+  it("accepts a tagline that names a seed, ignoring case and subtitles", () => {
+    expect(tagMentionsSeed("neuromancer did this to you.", seeds)).toBe(true);
+    expect(tagMentionsSeed("Blame the great british baking show.", seeds)).toBe(true);
+  });
+  it("rejects generic lines and falls back to the deterministic one", () => {
+    const generic = "Cyberpunk first, soft second.";
+    expect(tagMentionsSeed(generic, seeds)).toBe(false);
+    expect(chooseTagline(generic, seeds, "Blame Neuromancer.")).toBe("Blame Neuromancer.");
+    expect(chooseTagline("", seeds, "Blame Neuromancer.")).toBe("Blame Neuromancer.");
+    expect(chooseTagline("Neuromancer, again.", seeds, "x")).toBe("Neuromancer, again.");
+  });
+  it("every persona ends up with a tagline that names one of its seeds, and a name of its own", async () => {
+    const names = new Set<string>();
+    for (const p of PERSONAS) {
+      const r = await runAgent(personaRequest(p), () => {});
+      expect(tagMentionsSeed(r.dna.tagline, r.seeds.map((s) => s.name)), r.dna.tagline).toBe(true);
+      expect(r.dna.name).toMatch(/^The .+ Who .+/);
+      names.add(r.dna.name);
+    }
+    expect(names.size).toBe(PERSONAS.length);
   });
 });

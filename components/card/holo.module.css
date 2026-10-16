@@ -656,6 +656,58 @@
 
 /* ---------------------------------------------------------------- flavor + mrz */
 
+.foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9cqw;
+}
+.weak {
+  margin: 0;
+  font-family: var(--f-mono);
+  font-size: 1.9cqw;
+  letter-spacing: 0.03em;
+  color: rgb(245 243 238 / 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weak b {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #c6ff3d;
+}
+
+/* Earned stamp: avg seed popularity under 30%. Same rubber-stamp language as the receipt's VOID. */
+.stamp {
+  position: absolute;
+  z-index: 4;
+  top: 2.4cqw;
+  left: 2cqw;
+  display: grid;
+  justify-items: center;
+  padding: 0.5cqw 1.8cqw;
+  rotate: -8deg;
+  border: 0.45cqw solid #c6ff3d;
+  border-radius: 1cqw;
+  background: rgb(8 8 12 / 0.55);
+  color: #c6ff3d;
+  font-family: var(--f-mono);
+  text-transform: uppercase;
+  line-height: 1.15;
+  box-shadow: 0 0 0 0.25cqw rgb(8 8 12 / 0.5);
+}
+.stamp b {
+  font-size: 2.9cqw;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+.stamp small {
+  font-size: 1.6cqw;
+  letter-spacing: 0.14em;
+  opacity: 0.8;
+}
+
 .flavor {
   margin: 0;
   font-family: var(--f-serif);

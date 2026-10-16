@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ablationLines } from "@/lib/card";
 import type { BrandMatch, QEntity } from "@/lib/types";
 import { Thumb, cleanStyle, type Vote } from "./ui";
 
@@ -19,6 +21,8 @@ export function BrandCard({
   const style = cleanStyle(b.entity.style).slice(0, 3);
   const seed = (id: string) => seeds.find((s) => s.id === id);
   const aff = Math.round(b.affinity * 100);
+  const cuts = ablationLines(b, seeds).slice(0, 3);
+  const [open, setOpen] = useState(false);
   return (
     <article
       className={`rise group relative flex flex-col overflow-hidden rounded-[22px] border p-4 transition duration-300 sm:p-5 ${
@@ -40,7 +44,7 @@ export function BrandCard({
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">
             <span>{b.category}</span>
             {b.entity.tier ? (
               <span className="tracking-normal text-ink-2">
@@ -63,7 +67,7 @@ export function BrandCard({
           .{String(aff).padStart(2, "0")}
         </p>
         <div className="min-w-0 flex-1 pb-1">
-          <p className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">Qloo affinity · {b.affinity.toFixed(3)}</p>
+          <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">Qloo affinity · {b.affinity.toFixed(3)}</p>
           <span className="block h-[5px] overflow-hidden rounded-full bg-paper-2">
             <span className="block h-full rounded-full bg-[linear-gradient(90deg,#7c9a2b,var(--accent))]" style={{ width: `${aff}%` }} />
           </span>
@@ -74,7 +78,7 @@ export function BrandCard({
 
       {style.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">Qloo style</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">Qloo style</span>
           {style.map((st) => (
             <span key={st} className="rounded-full border border-line px-2 py-0.5 text-[11.5px] text-ink-2">
               {st}
@@ -83,6 +87,32 @@ export function BrandCard({
         </div>
       )}
 
+      {cuts.length > 0 && (
+        <div className="mt-3">
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+            className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3 underline decoration-dotted underline-offset-4 transition hover:text-ink"
+          >
+            {open ? "Hide receipt −" : "Receipt +"}
+          </button>
+          {open && (
+            <ul className="mt-2 space-y-1 font-mono text-[12px] leading-snug text-ink-2">
+              {cuts.map((c, i) => (
+                <li key={c.name}>
+                  {i === 0 && (
+                    <>
+                      <b className="text-ink">{aff}</b> ·{" "}
+                    </>
+                  )}
+                  <span className="text-bad">−{c.drop}</span> without {c.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <div className="min-h-4 flex-1" />
       <div className="flex flex-wrap gap-1.5 border-t border-line/70 pt-3.5">
         {b.because.map((id) => {
@@ -91,7 +121,7 @@ export function BrandCard({
             <span key={id} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-paper-2 py-0.5 pl-0.5 pr-2.5 text-[11.5px]">
               <Thumb src={s?.image} name={s?.name ?? "?"} size={20} />
               <span className="truncate">{s?.name}</span>
-              <span className="font-mono text-[10.5px] text-accent">{Math.round((b.explain[id] ?? 0) * 100)}%</span>
+              <span className="font-mono text-[11px] text-accent">{Math.round((b.explain[id] ?? 0) * 100)}%</span>
             </span>
           );
         })}

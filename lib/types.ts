@@ -128,6 +128,10 @@ export interface StyleResult {
   capsule: CapsuleSlot[];
   critique: string[];
   stats: { qlooCalls: number; ms: number; llmSteps: number };
+  /** Average pairwise Jaccard of the seeds' aesthetic tag sets (0-1). Feeds the rarity score. */
+  overlap?: number;
+  /** Seeds that barely move any brand pick; `influence` is their avg share (0-1). Never invented: absent when none. */
+  inert?: { id: string; influence: number }[];
   feedback?: { liked: string[]; disliked: string[] };
   changes?: { added: QTag[]; removed: QTag[]; why: string[] };
 }

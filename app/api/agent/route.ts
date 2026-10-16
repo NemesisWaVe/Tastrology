@@ -1,10 +1,12 @@
 import { runAgent } from "@/lib/agent";
 import { kvCache } from "@/lib/cache";
+import { buildCard } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
 import { PERSONAS } from "@/lib/personas";
-import { allow, clientIp } from "@/lib/ratelimit";
+import { allow, bumpDaily, clientId } from "@/lib/ratelimit";
+import { registerTwin } from "@/lib/twins";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
-import { cacheKey, normalizeRequest } from "./key";
+import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,6 +30,10 @@ const flights = (g.__tmFlights ??= new Map<string, Flight>());
 
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
+const FRESH_LIMIT = 10;
+const DAILY_RUNS_MAX = 400;
+const MAX_FLIGHTS = 16;
+const BUSY = { error: "busy", hint: "Try one of the demo personas" };
 const RATE_MSG = `You've started a lot of readings in the last few minutes. Wait a bit, or try a demo persona like ${PERSONAS[1]?.name ?? "the ones on the home page"}; those load instantly.`;
 
 function logRun(x: { runId: string | null; planner: string | null; qlooCalls: number | null; ms: number; cached: boolean; error: string | null }) {
@@ -48,6 +54,8 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest): Fligh
   ).then(
     async (result) => {
       const rec = { events: f.events, result };
+      // Register the card's twin server-side, before the result is returned or cached. (Stage C: also write the fighter sheet here.)
+      if (result.mode !== "mock") await registerTwin(buildCard(result));
       // Don't pin a fallback run: next time the LLM may be back (Qloo calls are cached either way).
       if (!llmConfigured() || result.planner === "llm") await results.set(key, rec);
       await lastGood.set(fallbackKey, rec);
@@ -70,7 +78,9 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest): Fligh
 export async function POST(request: Request) {
   let raw: unknown;
   try {
-    raw = await request.json();
+    const text = await request.text();
+    if (Buffer.byteLength(text) > BODY_MAX_BYTES) return Response.json({ error: "Request too large." }, { status: 413 });
+    raw = JSON.parse(text);
   } catch {
     return Response.json({ error: "bad json" }, { status: 400 });
   }
@@ -83,7 +93,12 @@ export async function POST(request: Request) {
   let flight = cached ? undefined : flights.get(key);
   if (flight?.ac.signal.aborted) flight = undefined; // its last listener left; start fresh
   if (!cached && !flight) {
-    if (!(await allow(`agent:${clientIp(request.headers)}`, RATE_LIMIT, RATE_WINDOW_MS))) return Response.json({ error: RATE_MSG }, { status: 429 });
+    const who = clientId(request.headers);
+    if (!(await allow(`agent:${who}`, RATE_LIMIT, RATE_WINDOW_MS))) return Response.json({ error: RATE_MSG }, { status: 429 });
+    // Fresh runs only (not replays, not joins): they cost Qloo and LLM calls.
+    if (flights.size >= MAX_FLIGHTS) return Response.json(BUSY, { status: 503, headers: { "retry-after": "30" } });
+    if (!(await allow(`fresh:${who}`, FRESH_LIMIT, RATE_WINDOW_MS))) return Response.json({ error: RATE_MSG }, { status: 429 });
+    if ((await bumpDaily("runs")) > DAILY_RUNS_MAX) return Response.json(BUSY, { status: 503, headers: { "retry-after": "600" } });
     flight = startFlight(key, fallbackKey, body);
   }
 

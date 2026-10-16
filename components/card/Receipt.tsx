@@ -3,7 +3,7 @@
 import { motion, useInView, useReducedMotion, type Variants } from "motion/react";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
-import { TWIN_HOST, cardCode, displayName, twinPath, type CardData } from "@/lib/card";
+import { TWIN_HOST, ablationLines, cardCode, displayName, twinPath, type CardData } from "@/lib/card";
 import type { BrandMatch, StyleResult } from "@/lib/types";
 
 /*
@@ -121,12 +121,15 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
   const d = new Date(result.createdAt || Date.now());
   const date = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
   const { sun, moon, rising, moonIsContradiction } = card.bigThree;
+  // Below 11px is unreadable on a phone: only the fixed-size share image (compact) keeps the small print.
+  const sm = compact ? "text-[0.9em]" : "text-[1em]";
+  const xs = compact ? "text-[0.85em]" : "text-[1em]";
 
   const body = (
     <>
       <L className={`text-center font-bold tracking-[0.18em] ${compact ? "text-[19px]" : "text-[22px]"}`}>{BRAND.name}</L>
-      <L className="text-center text-[0.9em] tracking-[0.1em]">· {BRAND.poweredBy} ·</L>
-      <L className="mt-1.5 flex justify-between text-[0.9em]">
+      <L className={`text-center ${sm} tracking-[0.1em]`}>· {BRAND.poweredBy} ·</L>
+      <L className={`mt-1.5 flex justify-between ${sm}`}>
         <span>order #{card.serial}</span>
         <span>{BRAND.cardSet}</span>
         <span>{date}</span>
@@ -147,7 +150,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
         compact ? (
           <L key={b.entity.id}>
             <Row l={displayName(b.entity.name)} r={aff(b.affinity)} />
-            {via(b) && <span className="block truncate pl-3 text-[0.85em] opacity-70">via {via(b)}</span>}
+            {via(b) && <span className={`block truncate pl-3 ${xs} opacity-70`}>via {via(b)}</span>}
           </L>
         ) : (
           <L key={b.entity.id} kind="brand" className="rounded">
@@ -158,9 +161,9 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
               className="-mx-1.5 block w-[calc(100%+12px)] rounded px-1.5 py-[1px] text-left uppercase transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-1 focus-visible:outline-black/50"
             >
               <Row l={`${open === b.entity.id ? "−" : "+"} ${displayName(b.entity.name)}`} r={<span data-roll={Math.round(b.affinity * 100)}>{aff(b.affinity)}</span>} />
-              {via(b) && <span className="block truncate pl-3.5 text-[0.85em] opacity-70">via {via(b)}</span>}
+              {via(b) && <span className={`block truncate pl-3.5 ${xs} opacity-70`}>via {via(b)}</span>}
             </button>
-            {open === b.entity.id && <Why b={b} seedName={seedName} />}
+            {open === b.entity.id && <Why b={b} seeds={result.seeds} seedName={seedName} />}
           </L>
         ),
       )}
@@ -188,7 +191,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
                 }
                 r={`-${aff(v.affinity)}`}
               />
-              {!compact && <span className="block pl-3 text-[0.85em] normal-case opacity-70">{v.reason}</span>}
+              {!compact && <span className={`block pl-3 ${xs} normal-case opacity-70`}>{v.reason}</span>}
               {!compact && (
                 <span
                   data-stamp=""
@@ -212,7 +215,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
       <L className="mt-3 h-[34px]" style={{ background: barcode(card.mrz.join("")) }}>
         {null}
       </L>
-      <L className="mt-1.5 flex items-baseline justify-between gap-2 text-[0.9em]">
+      <L className={`mt-1.5 flex items-baseline justify-between gap-2 ${sm}`}>
         <span>verify</span>
         {compact ? (
           <span className="truncate font-bold">
@@ -224,7 +227,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
           </a>
         )}
       </L>
-      <L className="mt-2 text-center text-[0.9em] tracking-[0.14em]">{BRAND.question}</L>
+      <L className={`mt-2 text-center ${sm} tracking-[0.14em]`}>{BRAND.question}</L>
       {!compact && <CertStamp />}
     </>
   );
@@ -246,14 +249,20 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
 }
 
 /** The expanded "why" for a brand line: the agent's reason, the seed drivers (Qloo explainability) and the source. */
-function Why({ b, seedName }: { b: BrandMatch; seedName: (id: string) => string }) {
+function Why({ b, seeds, seedName }: { b: BrandMatch; seeds: StyleResult["seeds"]; seedName: (id: string) => string }) {
+  const cuts = ablationLines(b, seeds).slice(0, 2);
   const drivers = Object.entries(b.explain)
     .sort((x, y) => y[1] - x[1])
     .slice(0, 4)
     .filter(([, v]) => v > 0);
   return (
-    <div className="mb-1.5 mt-1 border-l-2 border-black/25 pl-2.5 text-[0.92em] normal-case leading-snug">
+    <div className="mb-1.5 mt-1 border-l-2 border-black/25 pl-2.5 normal-case leading-snug">
       {b.why && <p className="mb-1">{b.why}</p>}
+      {cuts.length > 0 && (
+        <p className="mb-1 font-bold">
+          {Math.round(b.affinity * 100)} · {cuts.map((c) => `−${c.drop} without ${c.name}`).join(" · ")}
+        </p>
+      )}
       {drivers.length > 0 && (
         <p className="opacity-80">
           drivers:{" "}
@@ -557,26 +566,26 @@ export function ReceiptPrinter({ children, total }: { children: ReactNode; total
               onPointerMove={tearMove}
               onPointerUp={tearUp}
               onPointerCancel={tearUp}
-              className="mt-1.5 flex cursor-grab touch-none select-none items-center justify-center gap-2 rounded-md py-1 font-mono text-[9.5px] uppercase tracking-[0.2em] text-white/55 hover:text-white/80"
+              className="mt-1.5 flex cursor-grab touch-none select-none items-center justify-center gap-2 rounded-md py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-white/55 hover:text-white/80"
               style={{ backgroundImage: "linear-gradient(90deg, rgb(255 255 255 / .25) 50%, transparent 50%)", backgroundSize: "8px 1px", backgroundRepeat: "repeat-x", backgroundPosition: "0 0" }}
             >
               ✂ drag to tear off
             </div>
           )}
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="rounded-[5px] px-2 py-[3px] font-mono text-[10px] font-bold tracking-[0.28em] text-[#d9d4c7]" style={{ background: "linear-gradient(180deg, #4a4a52, #2b2b31)", boxShadow: "inset 0 1px 0 rgb(255 255 255 / .18), 0 1px 2px rgb(0 0 0 / .6)" }}>
+            <span className="rounded-[5px] px-2 py-[3px] font-mono text-[11px] font-bold tracking-[0.28em] text-[#d9d4c7]" style={{ background: "linear-gradient(180deg, #4a4a52, #2b2b31)", boxShadow: "inset 0 1px 0 rgb(255 255 255 / .18), 0 1px 2px rgb(0 0 0 / .6)" }}>
               TASTROLOGY
             </span>
             {/* LCD running total */}
             <span className="flex items-baseline gap-1.5 rounded-[4px] px-2 py-[2px] font-mono text-[#1c2a12]" style={{ background: "linear-gradient(180deg, #b7c79a, #9db07c)", boxShadow: "inset 0 1px 3px rgb(0 0 0 / .45)" }}>
-              <span className="text-[8px] tracking-[0.16em]">TOTAL</span>
+              <span className="text-[11px] tracking-[0.16em]">TOTAL</span>
               <span ref={lcd} className="min-w-[2ch] text-right text-[15px] font-bold leading-none tabular-nums" style={{ fontFamily: '"Doto", var(--nf-mono), monospace' }}>
                 {total}
               </span>
             </span>
             <span className="flex items-center gap-2">
               {printing && (
-                <button type="button" onClick={() => (skip.current = true)} className="rounded-full border border-white/20 px-2 py-[2px] font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/70 hover:text-white">
+                <button type="button" onClick={() => (skip.current = true)} className="rounded-full border border-white/20 px-2 py-[2px] font-mono text-[11px] uppercase tracking-[0.14em] text-white/70 hover:text-white">
                   skip
                 </button>
               )}

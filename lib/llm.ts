@@ -1,5 +1,6 @@
 import "server-only";
 import { BRAND } from "./brand";
+import { bumpDaily, peekDaily } from "./ratelimit";
 
 /** Minimal OpenAI-compatible chat client (works with Gemini's OpenAI endpoint, OpenAI, Groq, OpenRouter, Bedrock's OpenAI endpoint…). */
 export interface ChatMessage {
@@ -42,10 +43,12 @@ const breaker = globalThis as unknown as { __tmLlmPaused?: Record<string, number
 const pausedUntil = (id: string) => breaker.__tmLlmPaused?.[id] ?? 0;
 const isPaused = (p: Provider) => pausedUntil(p.id) > Date.now();
 
-/** True when every configured provider is cooling down after a rate limit. */
+const dailyMax = () => Number(process.env.LLM_DAILY_MAX) || 2500;
+
+/** True when every configured provider is cooling down after a rate limit, or today's LLM call budget is spent (runs then use autopilot). */
 export const llmPaused = () => {
   const ps = providers();
-  return ps.length > 0 && ps.every(isPaused);
+  return ps.length > 0 && (peekDaily("llm") >= dailyMax() || ps.every(isPaused));
 };
 
 function pause(p: Provider, res: Response) {
@@ -65,6 +68,7 @@ export interface ChatOptions {
 export async function chat(messages: ChatMessage[], tools?: ToolDef[], opts: ChatOptions | boolean = {}): Promise<ChatMessage> {
   const o: ChatOptions = typeof opts === "boolean" ? { json: opts } : opts;
   let lastErr: Error = new Error("LLM unavailable");
+  if (peekDaily("llm") >= dailyMax()) throw new Error("LLM daily budget used up");
   for (const p of providers()) {
     if (isPaused(p)) continue;
     // Our own fallback chain. (OpenRouter's `models` routing picked arbitrary free models and added latency.)
@@ -83,6 +87,7 @@ export async function chat(messages: ChatMessage[], tools?: ToolDef[], opts: Cha
 
 async function chatOnce(p: Provider, model: string, messages: ChatMessage[], tools: ToolDef[] | undefined, o: ChatOptions): Promise<ChatMessage> {
   // Free models usually answer in ~1.5s but occasionally queue; better to move down the chain than wait.
+  void bumpDaily("llm");
   const timeout = Math.max(500, Math.min(Number(process.env.LLM_TIMEOUT_MS) || 8000, o.deadline ? o.deadline - Date.now() : Infinity));
   const res = await fetch(`${p.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -95,6 +100,7 @@ async function chatOnce(p: Provider, model: string, messages: ChatMessage[], too
       model,
       messages,
       temperature: 0.4,
+      max_tokens: Number(process.env.LLM_MAX_TOKENS) || 1536,
       ...(tools ? { tools, tool_choice: "auto" } : {}),
       ...(o.json ? { response_format: { type: "json_object" } } : {}),
     }),
