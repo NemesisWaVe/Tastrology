@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { StyleResult } from "@/lib/types";
 import { buildCard } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
-import { HoloCard } from "@/components/card/HoloCard";
+import { FlipCard } from "@/components/card/FlipCard";
 import { Sparkle } from "@/components/card/Sigils";
 import { BigThree } from "./BigThree";
 import { BrandCard } from "./Brands";
@@ -40,6 +40,7 @@ export function ResultsView({
   const [colRef, colW] = useWidth<HTMLDivElement>();
   const heroRef = useRef<HTMLElement>(null);
   const [navOn, setNavOn] = useState(false);
+  const [showBack, setShowBack] = useState(false);
   useEffect(() => {
     const el = heroRef.current;
     if (!el) return;
@@ -72,7 +73,7 @@ export function ResultsView({
           {/* card column */}
           <div className="mx-auto w-full max-w-[380px] lg:sticky lg:top-6 lg:self-start">
             <div ref={colRef} className="w-full">
-              {colW > 0 ? <HoloCard card={card} width={Math.min(380, Math.round(colW))} /> : <div className="aspect-[63/88] w-full rounded-[18px] shimmer" />}
+              {colW > 0 ? <FlipCard card={card} width={Math.min(380, Math.round(colW))} flipped={showBack} onFlippedChange={setShowBack} /> : <div className="aspect-[63/88] w-full rounded-[18px] shimmer" />}
             </div>
             <p className="mt-4 text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
               <span className="hidden sm:inline">hover</span>
@@ -126,6 +127,14 @@ export function ResultsView({
                 <span aria-hidden className="absolute inset-0 -translate-x-full bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.6),transparent)] transition duration-700 group-hover:translate-x-full" />
                 <Sparkle className="h-3.5 w-3.5" />
                 Share my sign
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBack((b) => !b)}
+                aria-pressed={showBack}
+                className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink"
+              >
+                {showBack ? "Front ⟲" : "Back ⟲"}
               </button>
               <a href="#matches" className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink">
                 See the receipts ↓

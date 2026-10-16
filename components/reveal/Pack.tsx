@@ -3,7 +3,8 @@
 import { CursorArrow } from "@/components/CursorArrow";
 import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CardBack, HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
+import { CardBack, RARITY_GLOW } from "@/components/card/HoloCard";
+import { FlipCard } from "@/components/card/FlipCard";
 import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
@@ -11,7 +12,7 @@ import s from "./reveal.module.css";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
 
-type Stage = "sealed" | "opening" | "facedown" | "charging" | "revealed";
+type Stage = "sealed" | "opening" | "inpack" | "facedown" | "charging" | "revealed";
 
 const RARITY = {
   common: { sparks: 0, ray: "rgb(255 255 255 / .5)", rays: 0.3, stamp: "●" },
@@ -74,7 +75,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
       pt.set(1);
       setStage("opening");
       setTimeout(() => {
-        setStage("facedown");
+        setStage("inpack");
         busy.current = false;
       }, 350);
       return;
@@ -87,7 +88,8 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     shake.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 380, damping: 9, mass: 1.2 } });
     setStage("opening");
     setTimeout(() => {
-      setStage("facedown");
+      setStage("inpack"); // the card now waits in the open pack until the user pulls it out
+      animate(fl, 0, { duration: 0.8 });
       busy.current = false;
     }, 1150);
   }, [pt, fl, shake, reduce]);
@@ -140,6 +142,73 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
       setTearing(false);
       open();
     }
+  };
+
+  /* ---------------------------------------------------------------- pull the card out of the open pack */
+
+  const cardH = Math.round((cardW * 88) / 63);
+  // centred in the stage, but shifted down so only its top ~15% peeks over the torn lip
+  const peekY = Math.round(-packH / 2 + tearY - 0.15 * cardH + cardH / 2);
+  // ~60% of the way out, then it springs free; capped so short screens still have room to pull
+  const PULL = Math.min(0.85 * cardH * 0.6, typeof window === "undefined" ? Infinity : window.innerHeight * 0.24);
+  const cardY = useMotionValue(0);
+  const pull = useRef<{ y: number; tick: number; ly: number; lt: number; v: number; r: number } | null>(null);
+  const [pulling, setPulling] = useState(false);
+  const viaKeys = useRef(false);
+  const hintO = useTransform(cardY, (v) => 1 - Math.max(0, Math.min(1, (peekY - v) / (PULL * 0.15))));
+  // resistance: snug against the lip at first, then 1:1 with the finger; pushing down barely gives
+  const resist = (d: number) => (d < 0 ? Math.max(-14, d * 0.2) : d < 56 ? d * 0.55 : 30.8 + (d - 56));
+
+  const takeCard = useCallback(() => {
+    if (stage !== "inpack") return;
+    pull.current = null;
+    setPulling(false);
+    navigator.vibrate?.([10, 30, 18]);
+    setStage("facedown");
+    if (reduce) cardY.set(0);
+    else animate(cardY, 0, { type: "spring", stiffness: 170, damping: 16, velocity: -900 });
+  }, [stage, reduce, cardY]);
+
+  useEffect(() => {
+    if (stage !== "inpack") return;
+    if (reduce) return cardY.set(peekY);
+    cardY.set(peekY + 70);
+    const c = animate(cardY, peekY, { type: "spring", stiffness: 200, damping: 20 });
+    return () => c.stop();
+  }, [stage, peekY, reduce, cardY]);
+
+  const onPullDown = (e: React.PointerEvent) => {
+    if (stage !== "inpack" || reduce || e.button > 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    cardY.stop();
+    pull.current = { y: e.clientY, tick: 0, ly: e.clientY, lt: performance.now(), v: 0, r: 0 };
+    setPulling(true);
+  };
+  const onPullMove = (e: React.PointerEvent) => {
+    const pl = pull.current;
+    if (!pl) return;
+    const r = resist(pl.y - e.clientY);
+    const now = performance.now();
+    pl.v = (pl.ly - e.clientY) / Math.max(1, now - pl.lt); // upward px/ms
+    pl.ly = e.clientY;
+    pl.lt = now;
+    pl.r = r;
+    cardY.set(peekY - r);
+    const b = Math.floor((r / PULL) * 4);
+    if (b > pl.tick) {
+      pl.tick = b;
+      navigator.vibrate?.(6);
+    }
+    if (r >= PULL) takeCard();
+  };
+  const onPullUp = () => {
+    const pl = pull.current;
+    if (!pl) return;
+    // a real flick (fast, already a third of the way out) carries the card free
+    if (pl.v > 0.7 && pl.r > PULL * 0.33) return takeCard();
+    pull.current = null;
+    setPulling(false);
+    animate(cardY, peekY, { type: "spring", stiffness: 260, damping: 20 }); // not far enough: slides back in
   };
 
   /* ---------------------------------------------------------------- hold to mint + flip */
@@ -257,7 +326,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" && e.key !== " ") return;
-      if (stage === "sealed") return; // only the explicit "Open pack" button (or the drag) opens it
+      if (stage === "sealed" || stage === "inpack") return; // only the explicit "Open pack" button (or the drag) opens it
       if ((e.target as HTMLElement)?.tagName === "BUTTON" && stage !== "facedown" && stage !== "charging") return;
       e.preventDefault();
       if (e.repeat) return;
@@ -282,7 +351,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   const tiltX = useTransform(ty, [-1, 1], [10, -10]);
   const tiltY = useTransform(tx, [-1, 1], [-14, 14]);
   const onHover = (e: React.PointerEvent) => {
-    if (reduce || drag.current) return;
+    if (reduce || drag.current || stage !== "sealed") return;
     const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
     tx.set(((e.clientX - b.left) / b.width) * 2 - 1);
     ty.set(((e.clientY - b.top) / b.height) * 2 - 1);
@@ -314,7 +383,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     [r.sparks, sun.a, moon.a, rising.a],
   );
 
-  const showRays = stage === "opening" || stage === "facedown" || stage === "charging" || stage === "revealed";
+  const showRays = stage === "opening" || stage === "inpack" || stage === "facedown" || stage === "charging" || stage === "revealed";
 
   return (
     <motion.div className="absolute inset-0 flex flex-col" style={vars} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
@@ -339,11 +408,11 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   <h2 className="mt-1.5 font-serif text-[clamp(30px,8vw,42px)] italic leading-none">Tear it open.</h2>
                 </>
               )}
-              {(stage === "opening" || stage === "facedown" || stage === "charging") && (
+              {(stage === "opening" || stage === "inpack" || stage === "facedown" || stage === "charging") && (
                 <>
                   <p className="font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3">1 card inside</p>
                   <h2 className="mt-1.5 font-serif text-[clamp(30px,8vw,42px)] italic leading-none">
-                    {reduce ? "Tap to flip." : stage === "charging" ? (hot && big ? "Oh. Oh, this one’s rare." : "Minting…") : "Hold to mint."}
+                    {stage === "opening" || stage === "inpack" ? (reduce ? "Take your card." : "Pull it out.") : reduce ? "Tap to flip." : stage === "charging" ? (hot && big ? "Oh. Oh, this one’s rare." : "Minting…") : "Hold to mint."}
                   </h2>
                 </>
               )}
@@ -399,11 +468,15 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
 
           {/* sealed pack */}
           <AnimatePresence>
-            {(stage === "sealed" || stage === "opening") && (
+            {(stage === "sealed" || stage === "opening" || stage === "inpack") && (
               <motion.div
                 key="pack"
-                className="absolute"
-                style={{ perspective: 1000 }}
+                className="absolute z-20"
+                style={{ perspective: 1000, touchAction: stage === "inpack" ? "none" : undefined }}
+                onPointerDown={onPullDown}
+                onPointerMove={onPullMove}
+                onPointerUp={onPullUp}
+                onPointerCancel={onPullUp}
                 initial={reduce ? { opacity: 0 } : { opacity: 0, y: 80, scale: 0.85, rotate: -4 }}
                 animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
                 exit={reduce ? { opacity: 0 } : { y: packH * 0.95, opacity: 0, rotate: 6, transition: { duration: 0.75, ease: [0.5, 0, 0.75, 0] } }}
@@ -436,7 +509,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   <motion.div
                     className="absolute inset-0"
                     style={{ transformOrigin: `${packW}px ${tearY}px` }}
-                    animate={stage === "opening" ? (reduce ? { opacity: 0 } : { x: packW * 1.3, y: -packH * 0.85, rotate: 300, opacity: 0 }) : undefined}
+                    animate={stage === "opening" || stage === "inpack" ? (reduce ? { opacity: 0 } : { x: packW * 1.3, y: -packH * 0.85, rotate: 300, opacity: 0 }) : undefined}
                     transition={
                       reduce
                         ? { duration: 0.3 }
@@ -465,7 +538,8 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       </svg>
                     </motion.div>
                   )}
-                  {/* the grip: the top seam band, tall enough to include the "drag to tear" notch */}
+                </motion.div>
+                  {/* the grip: the top seam band, tall enough to include the "drag to tear" notch (Outside the preserve-3d pack, so the tilted strip can never steal the hit test.) */}
                   {stage === "sealed" && !reduce && (
                     <div
                       className={s.grip}
@@ -477,22 +551,36 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       onLostPointerCapture={() => drag.current && release()}
                     />
                   )}
-                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* the card */}
           <AnimatePresence>
-            {(stage === "facedown" || stage === "charging" || stage === "revealed") && (
+            {(stage === "inpack" || stage === "facedown" || stage === "charging" || stage === "revealed") && (
               <motion.div
                 key="card"
                 className="relative z-10"
-                style={{ perspective: 1400, width: cardW }}
-                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 140, scale: 0.6 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 140, damping: 16 }}
+                style={{ perspective: 1400, width: cardW, y: cardY, touchAction: "none", ["--charge" as string]: stage === "inpack" ? 0.35 : undefined }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                onPointerDown={onPullDown}
+                onPointerMove={onPullMove}
+                onPointerUp={onPullUp}
+                onPointerCancel={onPullUp}
               >
+                {/* "pull up" cue above the peeking card; nudges while idle, fades as soon as you pull */}
+                {stage === "inpack" && !reduce && (
+                  <motion.div className={s.pullCue} style={{ opacity: hintO }} data-pulling={pulling ? "1" : undefined} aria-hidden>
+                    <svg className={s.pullArrow} viewBox="0 0 12 28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 27V3M1 8l5-5 5 5" />
+                    </svg>
+                    <span className="rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.25)] backdrop-blur">
+                      pull up
+                    </span>
+                  </motion.div>
+                )}
                 {/* charge-up glow, in the rarity colour */}
                 <div
                   ref={glowEl}
@@ -541,7 +629,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                     </div>
                   ) : (
                     <motion.div initial={reduce ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
-                      <HoloCard card={card} width={cardW} idle print={!reduce} />
+                      <FlipCard card={card} width={cardW} idle print={!reduce} />
                     </motion.div>
                   )}
                 </motion.div>
@@ -583,10 +671,26 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 {!reduce && <p className="font-mono text-[11px] text-ink-3">pull the notch all the way across the top seam</p>}
                 <button
                   type="button"
-                  onClick={open}
+                  onClick={(e) => {
+                    viaKeys.current = e.detail === 0; // keyboard-activated: move focus on to "Take card"
+                    open();
+                  }}
                   className={`${reduce ? "" : "sr-only focus-visible:not-sr-only"} rounded-full border border-white/25 bg-white/5 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 outline-none focus-visible:ring-2 focus-visible:ring-white/60`}
                 >
                   Open pack
+                </button>
+              </motion.div>
+            )}
+            {stage === "inpack" && (
+              <motion.div key="hp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-2">
+                {!reduce && <p className="font-mono text-[11px] text-ink-3">swipe the card up and out of the pack</p>}
+                <button
+                  type="button"
+                  onClick={takeCard}
+                  autoFocus={viaKeys.current}
+                  className={`${reduce ? "" : "sr-only focus-visible:not-sr-only"} rounded-full border border-white/25 bg-white/5 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 outline-none focus-visible:ring-2 focus-visible:ring-white/60`}
+                >
+                  Take card
                 </button>
               </motion.div>
             )}
