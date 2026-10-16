@@ -182,7 +182,6 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
                 }
               }
               if (e.key === "Escape") setOpen(false);
-              if (e.key === "Backspace" && !q && seeds.length) onChange(seeds.slice(0, -1));
             }}
             placeholder={full ? "That's plenty: 8 max" : "Search anything you love…"}
             disabled={full}

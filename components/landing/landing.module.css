@@ -35,6 +35,16 @@
   background-clip: text;
   color: transparent;
   animation: holoPan 7s linear infinite;
+  /* background-clip:text only paints inside the box: give italic descenders room */
+  display: inline-block;
+  padding: 0 0.12em 0.22em 0.04em;
+  margin: 0 -0.12em -0.22em -0.04em;
+}
+/* Clipped text has no fill, so the default selection paints a solid block over it */
+.holoText::selection {
+  background: rgb(198 255 61 / 0.28);
+  -webkit-text-fill-color: #f3f1ec;
+  color: #f3f1ec;
 }
 @keyframes holoPan {
   to { background-position: 220% 0; }
@@ -45,8 +55,8 @@
   overflow: hidden;
   vertical-align: top;
   /* room for descenders and italic overhang, given back with negative margin */
-  padding: 0.04em 0.12em 0.16em 0.02em;
-  margin: -0.04em -0.12em -0.16em -0.02em;
+  padding: 0.04em 0.14em 0.3em 0.02em;
+  margin: -0.04em -0.14em -0.3em -0.02em;
 }
 
 /* ---------- hero ---------- */
