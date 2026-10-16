@@ -59,4 +59,4 @@ Next.js 15 (App Router, TypeScript), Tailwind v4, a hand-written tool-calling ag
 
 ## License
 
-MIT
+Apache License 2.0. See LICENSE.
