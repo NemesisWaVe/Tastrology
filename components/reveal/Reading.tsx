@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { shortSeed } from "@/lib/grounding";
 import type { SceneData, TraceEvent } from "@/lib/types";
 import { Orrery } from "./Orrery";
+import { Sky } from "./Sky";
 import { buildScene, foldBeats, KIND_LABEL, pullShares, type FeedRow, type Folded, type SceneModel, type SeedHint, type SeedNode, type ToolEvent } from "./traceModel";
 import s from "./reveal.module.css";
 
@@ -102,6 +103,7 @@ export function Reading({
     () => (f.seeds.length ? f : { ...f, seeds: m.seeds.filter((x) => x.name).map((x, i) => ({ id: `pending-${i}`, name: x.name, kind: x.kind ?? "" })) }),
     [f, m.seeds],
   );
+  const wellRef = useRef<HTMLDivElement>(null);
 
   return (
     <motion.div
@@ -111,6 +113,7 @@ export function Reading({
       exit={{ opacity: 0, scale: reduce ? 1 : 1.04, filter: reduce ? "none" : "blur(8px)" }}
       transition={{ duration: 0.6, ease: EASE }}
     >
+      {well && <Sky f={shownF} anchor={wellRef} reduce={reduce} />}
       <header className="relative z-10 flex items-center justify-between px-5 pt-4 sm:px-8 sm:pt-6">
         <span className="font-display text-[15px] font-semibold tracking-tight">
           Tastrology<span className="text-accent">.</span>
@@ -141,15 +144,17 @@ export function Reading({
           <p className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.28em] text-ink-3">reading your taste</p>
           {well ? (
             <>
-              <Orrery
-                f={shownF}
-                collapsing={collapsing}
-                reduce={reduce}
-                bet={bet}
-                pickable={pickable}
-                onPick={setBet}
-                center={<Core calls={m.calls} done={done} reduce={reduce} />}
-              />
+              <div ref={wellRef}>
+                <Orrery
+                  f={shownF}
+                  collapsing={collapsing}
+                  reduce={reduce}
+                  bet={bet}
+                  pickable={pickable}
+                  onPick={setBet}
+                  center={<Core calls={m.calls} done={done} reduce={reduce} />}
+                />
+              </div>
               <BetLine f={f} bet={bet} pickable={pickable} />
               <SignSlots f={f} finalName={done ? finalName : undefined} reduce={reduce} />
               <Headline m={m} done={done} error={error} small />
