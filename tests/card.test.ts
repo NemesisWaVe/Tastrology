@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { RARITY_CUTS, ablationLines, buildCard } from "@/lib/card";
+import { RARITY_CUTS, ablationLines, buildCard, cardCode } from "@/lib/card";
+import { trimResult } from "@/lib/saved";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
 const seed = (i: number, kind: QEntity["kind"], popularity?: number): QEntity => ({ id: `s${i}`, name: `Seed ${i}`, kind, tags: [], popularity });
@@ -27,6 +28,17 @@ const base = (over: Partial<StyleResult> = {}, pop = 0.5): StyleResult => ({
   critique: [],
   stats: { qlooCalls: 0, ms: 0, llmSteps: 0 },
   ...over,
+});
+
+describe("saved result", () => {
+  it("a card rebuilt from localStorage keeps its rarity, stats and verify code", () => {
+    const r = base({ overlap: 0.2, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.91);
+    const fresh = buildCard(r);
+    const reloaded = buildCard(JSON.parse(JSON.stringify(trimResult(r))));
+    expect(reloaded.rarity).toBe(fresh.rarity);
+    expect(reloaded.stats).toEqual(fresh.stats);
+    expect(cardCode(reloaded)).toBe(cardCode(fresh));
+  });
 });
 
 describe("taste-based rarity", () => {
