@@ -46,6 +46,7 @@ export function Reveal({ events, result, running, error, onDone, onRetry, onBack
   useEffect(() => {
     if (shown > events.length) {
       setShown(0);
+      setSettled(false);
       setPhase("reading");
       return;
     }
@@ -56,13 +57,15 @@ export function Reveal({ events, result, running, error, onDone, onRetry, onBack
   }, [shown, events.length]);
 
   const done = Boolean(result) && !running && shown >= events.length;
+  // Move on once the Gravity Well has played out and collapsed (with a ceiling, so a stuck animation never traps anyone).
+  const [settled, setSettled] = useState(false);
   useEffect(() => {
     if (phase !== "reading") return;
     if (startAt && result && !running) return setPhase(startAt);
     if (!done) return;
-    const t = setTimeout(() => setPhase("story"), reduce ? 900 : 2000);
+    const t = setTimeout(() => setPhase("story"), settled ? (reduce ? 500 : 250) : 12000);
     return () => clearTimeout(t);
-  }, [done, phase, reduce, startAt, result, running]);
+  }, [done, phase, reduce, startAt, result, running, settled]);
 
   // Wall clock while reading.
   const t0 = useRef(0);
@@ -115,6 +118,8 @@ export function Reveal({ events, result, running, error, onDone, onRetry, onBack
             reduce={reduce}
             onRetry={onRetry}
             onSkip={result && !running ? () => setPhase("story") : undefined}
+            finalName={result?.dna.name}
+            onSettled={() => setSettled(true)}
           />
         )}
         {phase === "story" && result && card && <Story key="story" result={result} card={card} reduce={reduce} onFinish={() => setPhase("pack")} />}
