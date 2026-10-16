@@ -8,6 +8,7 @@ function friendly(status: number | null, raw: string | undefined, retryAfterS: n
   const wait = retryAfterS ? ` Give it about ${retryAfterS} second${retryAfterS === 1 ? "" : "s"}, then try again.` : " Give it a minute, then try again.";
   if (status === 429 || /rate.?limit|too many|429|quota/i.test(raw ?? "")) return `The stars are crowded right now.${wait} A demo persona opens instantly.`;
   if (status === 400 && raw) return raw;
+  if (raw && /at least 2 seeds/i.test(raw)) return "Qloo couldn't find enough of those picks. Try the full name, or pick a suggestion from the list.";
   if (status !== null && status >= 500) return "Our readers tripped mid-run. Nothing was lost, so you can try again.";
   if (status === null && /fetch|network|load failed|abort/i.test(raw ?? "")) return "Couldn't reach the server. Check your connection and try again.";
   if (raw && /stopped without an answer/i.test(raw)) return "The reading ended before it found an answer. Try again.";
