@@ -26,7 +26,17 @@ const RARITY = {
 function useViewport() {
   const [v, setV] = useState({ w: 390, h: 800 });
   useEffect(() => {
-    const on = () => setV({ w: window.innerWidth, h: window.innerHeight });
+    // Mobile address bars collapse while you drag up, firing resize with a ~60–120px height change. Re-sizing the
+    // pack mid-pull dropped the card back in, so small height-only changes are ignored.
+    let first = true;
+    const on = () =>
+      setV((p) => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const keep = !first && w === p.w && Math.abs(h - p.h) < 140;
+        first = false;
+        return keep ? p : { w, h };
+      });
     on();
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
@@ -172,8 +182,18 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     else animate(cardY, 0, { type: "spring", stiffness: 170, damping: 16, velocity: -900 });
   }, [stage, reduce, cardY]);
 
+  // The card drops into the open pack once. If the layout changes after that, keep it where the finger has it.
+  const settledIn = useRef(false);
   useEffect(() => {
-    if (stage !== "inpack") return;
+    if (stage !== "inpack") {
+      settledIn.current = false;
+      return;
+    }
+    if (settledIn.current) {
+      cardY.set(peekY - (pull.current?.r ?? 0));
+      return;
+    }
+    settledIn.current = true;
     if (reduce) return cardY.set(peekY);
     cardY.set(peekY + 70);
     const c = animate(cardY, peekY, { type: "spring", stiffness: 200, damping: 20 });

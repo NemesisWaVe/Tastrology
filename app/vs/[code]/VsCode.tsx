@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BattleStage } from "@/components/battle/BattleArena";
-import { HoloCard } from "@/components/card/HoloCard";
+import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import type { BattleResult } from "@/lib/battle";
@@ -61,7 +61,7 @@ export function VsCode({ code }: { code: string }) {
         <>
           <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{st.card.archetype} wants a fight</p>
           <div ref={cardRef} className="relative">
-            <HoloCard card={st.card} width={300} idle />
+            <FlipCard card={st.card} width={300} idle flipButton />
           </div>
           <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
           <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
