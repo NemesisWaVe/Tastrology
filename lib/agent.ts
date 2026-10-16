@@ -1,7 +1,7 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BRAND } from "./brand";
-import { GroundingLedger, chooseTagline, shortSeed } from "./grounding";
+import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
 import { displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
 import { findTags, insights, qlooMode, searchEntities } from "./qloo";
@@ -496,7 +496,9 @@ async function tasteBridges(st: RunState) {
 function finalize(st: RunState, args: Record<string, unknown>) {
   if (!st.done.has("critique") || !st.done.has("tags_dna")) return { error: "need critique_matches and get_style_tags before finalize" };
   const name = typeof args.name === "string" ? args.name.trim().replace(/[."]+$/g, "") : "";
-  if (isSignName(name)) st.name = name;
+  // The noun must be a real seed: "The Daft Who…" becomes "The Daft Punk Who…".
+  const grounded = groundSignName(name, st.seeds.map((s) => s.name), strongestSeed(st)?.name);
+  if (grounded && isSignName(grounded)) st.name = grounded;
   const tagline = typeof args.tagline === "string" ? args.tagline.trim() : "";
   if (tagline && words(tagline) <= 12) st.tagline = tagline.slice(0, 120);
   // Brand lines stay measured ("x% of this match traces to…"); the LLM only phrases bridges.
@@ -521,7 +523,7 @@ const TOOLS: ToolDef[] = [
   fn("critique_matches", "Find inert seeds, contradicting seeds (splits the DNA into two sides) and brands carried by a single seed; returns kept and rejected brands.", {}),
   fn("find_taste_bridges", "Ask Qloo for a place, film, artist and book that complete the aesthetic.", {}),
   fn("finalize", "Publish the result. Only reference brand/bridge ids returned by earlier tools.", {
-    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 6 words, built around strongest_seed from critique_matches, e.g. 'The Neuromancer Who Bakes'. The noun is that seed (shortened, no leading 'The'); the verb phrase comes from the Moon keywords." },
+    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 6 words, built around strongest_seed from critique_matches, e.g. 'The Neuromancer Who Bakes'. The noun is that seed (shortened, no leading 'The'); the verb phrase is a concrete, slightly funny everyday habit (1-3 words) inspired by the Moon keywords, e.g. 'Bakes', 'Owns Nothing', 'Hoards Paperbacks'. Never a verb plus a bare style word ('Embraces Eclectic', 'Cultivates Understated')." },
     tagline: { type: "string", description: "One blunt line, at most 12 words, that names at least one of the person's seeds exactly as given. Grounded in the keywords. No flattery." },
     bridge_notes: {
       type: "array",

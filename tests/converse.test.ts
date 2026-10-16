@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromConverse, isConverse, toConverse, type ChatMessage, type ToolDef } from "@/lib/llm";
+import { fromConverse, isConverse, stripReasoning, toConverse, type ChatMessage, type ToolDef } from "@/lib/llm";
 
 describe("Bedrock Converse adapter (Nova)", () => {
   it("routes only Amazon models to Converse", () => {
@@ -33,5 +33,12 @@ describe("Bedrock Converse adapter (Nova)", () => {
     const m = fromConverse({ output: { message: { content: [{ text: "ok " }, { toolUse: { toolUseId: "x", name: "search", input: { q: 1 } } }] } } });
     expect(m?.content).toBe("ok");
     expect(m?.tool_calls?.[0]).toEqual({ id: "x", type: "function", function: { name: "search", arguments: '{"q":1}' } });
+  });
+
+  it("strips gpt-oss <reasoning> and Nova <thinking> from content, including a cut-off tag", () => {
+    expect(stripReasoning('<reasoning>Need to call it.</reasoning>{"a":1}')).toBe('{"a":1}');
+    expect(stripReasoning("<thinking> plan </thinking>\nChecking Daft Punk first.")).toBe("Checking Daft Punk first.");
+    expect(stripReasoning("Done.<reasoning>truncated by max_tok")).toBe("Done.");
+    expect(stripReasoning("no tags here")).toBe("no tags here");
   });
 });

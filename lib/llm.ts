@@ -178,5 +178,16 @@ async function chatOnce(p: Provider, model: string, messages: ChatMessage[], too
   const data = (await res.json()) as { choices?: { message: ChatMessage }[]; error?: { message?: string }; message?: string };
   const msg = converse ? fromConverse(data as Parameters<typeof fromConverse>[0]) : data.choices?.[0]?.message;
   if (!msg) throw new Error(`LLM returned no message (${model}): ${data.error?.message ?? data.message ?? ""}`);
+  if (typeof msg.content === "string") msg.content = stripReasoning(msg.content) || null;
   return msg;
+}
+
+/**
+ * Bedrock's gpt-oss puts its chain of thought in `content` as <reasoning>…</reasoning>, Nova as <thinking>…</thinking>.
+ * It must never reach the live log or a JSON parse. An unclosed tag (cut off by max_tokens) drops the rest.
+ */
+export function stripReasoning(text: string): string {
+  return text
+    .replace(/<(reasoning|thinking)>[\s\S]*?(<\/\1>|$)/gi, "")
+    .trim();
 }
