@@ -20,6 +20,7 @@ export function CursorArrow({ className = "", rest = 0 }: { className?: string; 
     if (!el || !host || reduce) return;
     let last = rest;
     let active = false;
+    let onArrow = false;
     const move = (e: PointerEvent) => {
       const r = el.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width / 2);
@@ -31,6 +32,19 @@ export function CursorArrow({ className = "", rest = 0 }: { className?: string; 
         return;
       }
       active = true;
+      // Directly on the arrow: one clockwise turn, then settle pointing north-east.
+      if (Math.hypot(dx, dy) < r.width / 2) {
+        if (!onArrow) {
+          onArrow = true;
+          const ne = -45;
+          last = ne + Math.ceil((last + 360 - ne) / 360) * 360;
+          rot.set(last);
+          x.set(0);
+          y.set(0);
+        }
+        return;
+      }
+      onArrow = false;
       const target = (Math.atan2(dy, dx) * 180) / Math.PI;
       // shortest path from the last angle, so fast circles keep spinning one way
       last += ((((target - last) % 360) + 540) % 360) - 180;
@@ -42,6 +56,7 @@ export function CursorArrow({ className = "", rest = 0 }: { className?: string; 
     };
     function leave() {
       active = false;
+      onArrow = false;
       last = rest + Math.round((last - rest) / 360) * 360; // settle without unwinding every turn
       rot.set(last);
       x.set(0);
