@@ -162,7 +162,6 @@ export function ResultsView({
       {/* ------------------------------------------------------------ matches */}
       <section id="matches" className="scroll-mt-20">
         <SectionHead
-          n="01"
           kicker="Brand matches"
           title={
             <>
@@ -202,11 +201,11 @@ export function ResultsView({
         )}
       </section>
 
-      {(result.critique.length > 0 || result.rejected.length > 0) && <Critique result={result} n="02" />}
+      {(result.critique.length > 0 || result.rejected.length > 0) && <Critique result={result} />}
 
-      <Matrix result={result} n="03" />
+      <Matrix result={result} />
 
-      <CapsuleAndBridges result={result} n={["04", "05"]} />
+      <CapsuleAndBridges result={result} />
 
       {/* ------------------------------------------------------------ footer */}
       <footer className="flex flex-col items-center gap-3 border-t border-line pt-8 pb-4 text-center">

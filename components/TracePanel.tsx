@@ -22,8 +22,40 @@ export function toRows(events: TraceEvent[]): Row[] {
   return rows;
 }
 
+/** What each agent step means, in words a non-developer would use. The agent's own label stays one tap away. */
+const PLAIN: Record<string, { run: string; done: string }> = {
+  plan: { run: "Deciding what to look up", done: "Made a plan" },
+  resolve: { run: "Finding your picks in Qloo", done: "Found your picks in Qloo" },
+  tags: { run: "Reading the vibe of each pick", done: "Read the vibe of each pick" },
+  insights: { run: "Pulling brands people with your taste like", done: "Pulled a shortlist of brands" },
+  ablate: { run: "Checking which pick earned which brand", done: "Checked which pick earned which brand" },
+  critique: { run: "Throwing out matches it can't back up", done: "Kept the matches it can back up" },
+  sideb: { run: "Searching for the side of you that doesn't fit", done: "Found brands for your other side" },
+  bridges: { run: "Looking for films, books and places to go with it", done: "Found films, books and places to go with it" },
+};
+
+interface Group {
+  step?: Extract<Row, { kind: "step" }>;
+  thoughts: string[];
+  tools: Extract<TraceEvent, { type: "tool" }>[];
+}
+
+function group(rows: Row[]): Group[] {
+  const out: Group[] = [];
+  for (const r of rows) {
+    if (r.kind === "step") out.push({ step: r, thoughts: [], tools: [] });
+    else {
+      if (!out.length) out.push({ thoughts: [], tools: [] });
+      const g = out[out.length - 1];
+      if (r.kind === "thought") g.thoughts.push(r.text);
+      else g.tools.push(r.e);
+    }
+  }
+  return out;
+}
+
 export function TracePanel({ events, running, compact = false }: { events: TraceEvent[]; running: boolean; compact?: boolean }) {
-  const rows = toRows(events);
+  const groups = group(toRows(events));
   const calls = events.reduce((n, e) => n + (e.type === "tool" ? e.calls.length : 0), 0);
   const cached = events.reduce((n, e) => n + (e.type === "tool" ? e.calls.filter((c) => c.cached).length : 0), 0);
 
@@ -32,72 +64,87 @@ export function TracePanel({ events, running, compact = false }: { events: Trace
       <header className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${running ? "bg-accent pulse-dot" : "bg-good"}`} />
-          <h2 className="text-sm font-semibold tracking-tight">Agent trace</h2>
+          <h2 className="text-sm font-semibold tracking-tight">{running ? "What the agent is doing" : "What the agent did"}</h2>
         </div>
         <span className="font-mono text-[11px] text-ink-3">
-          {calls} Qloo call{calls === 1 ? "" : "s"}
-          {cached ? ` · ${cached} cached` : ""}
+          {calls} lookup{calls === 1 ? "" : "s"} in Qloo
+          {cached ? ` · ${cached} reused` : ""}
         </span>
       </header>
-      <ol className={`space-y-1 overflow-y-auto px-3 py-3 ${compact ? "max-h-72" : "max-h-[60vh]"}`}>
-        {rows.map((r, i) => (
-          <li key={i} className="rise">
-            {r.kind === "step" && <StepRow r={r} />}
-            {r.kind === "thought" && (
-              <p className="ml-6 border-l-2 border-line py-1 pl-3 text-[13px] italic text-ink-2">{r.text}</p>
-            )}
-            {r.kind === "tool" && <ToolRow e={r.e} />}
+      <ol className={`space-y-0.5 overflow-y-auto px-2 py-2 ${compact ? "max-h-72" : "max-h-[60vh]"}`}>
+        {groups.map((g, i) => (
+          <li key={g.step?.id ?? `pre-${i}`} className="rise">
+            <StepGroup g={g} />
           </li>
         ))}
-        {running && rows.length === 0 && <li className="px-1 text-sm text-ink-3">Starting the agent…</li>}
+        {running && groups.length === 0 && <li className="px-2 py-1.5 text-sm text-ink-3">Sending your picks to the agent…</li>}
       </ol>
     </section>
   );
 }
 
-function StepRow({ r }: { r: Extract<Row, { kind: "step" }> }) {
-  const icon = r.status === "run" ? <span className="h-1.5 w-1.5 rounded-full bg-accent pulse-dot" /> : r.status === "warn" ? "!" : "✓";
-  const tone = r.status === "warn" ? "bg-warn-soft text-warn" : r.status === "done" ? "bg-good-soft text-good" : "bg-accent-soft";
+function StepGroup({ g }: { g: Group }) {
+  const [open, setOpen] = useState(false);
+  const r = g.step;
+  const status = r?.status ?? "done";
+  const plain = r ? PLAIN[r.id] : undefined;
+  const title = plain ? (status === "run" ? plain.run : plain.done) : (r?.label ?? "Notes");
+  const hasMore = Boolean(r?.label || r?.detail || g.thoughts.length || g.tools.length);
+  const icon = status === "run" ? <span className="h-1.5 w-1.5 rounded-full bg-accent pulse-dot" /> : status === "warn" ? "!" : "✓";
+  const tone = status === "warn" ? "bg-warn-soft text-warn" : status === "done" ? "bg-good-soft text-good" : "bg-accent-soft";
+  const nCalls = g.tools.reduce((n, t) => n + t.calls.length, 0);
+
   return (
-    <div className="flex items-start gap-2.5 py-1">
-      <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold ${tone}`}>{icon}</span>
-      <div className="min-w-0">
-        <p className="text-[13.5px] font-medium leading-snug">{r.label}</p>
-        {r.detail && <p className="truncate text-xs text-ink-3">{r.detail}</p>}
-      </div>
+    <div>
+      <button
+        onClick={() => hasMore && setOpen(!open)}
+        aria-expanded={hasMore ? open : undefined}
+        className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-paper-2"
+      >
+        <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold ${tone}`}>{icon}</span>
+        <span className="min-w-0 flex-1 text-[13.5px] font-medium leading-snug">{title}</span>
+        {hasMore && (
+          <span className="shrink-0 pt-0.5 font-mono text-[10px] text-ink-3">
+            {open ? "less" : nCalls ? `${nCalls} lookup${nCalls === 1 ? "" : "s"}` : "more"}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="mb-1.5 ml-8 mr-1 space-y-2 rounded-lg bg-paper-2 p-2.5 text-[12px] leading-relaxed text-ink-2">
+          {r && plain && <p className="text-ink">{r.label}</p>}
+          {r?.detail && <p className="text-ink-3">{r.detail}</p>}
+          {g.thoughts.map((t, i) => (
+            <p key={i} className="border-l-2 border-line pl-2 italic">
+              {t}
+            </p>
+          ))}
+          {g.tools.map((e, i) => (
+            <ToolDetail key={i} e={e} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ToolRow({ e }: { e: Extract<TraceEvent, { type: "tool" }> }) {
-  const [open, setOpen] = useState(false);
+function ToolDetail({ e }: { e: Extract<TraceEvent, { type: "tool" }> }) {
   return (
-    <div className="ml-6">
-      <button onClick={() => setOpen(!open)} className="group flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left hover:bg-paper-2">
-        <code className="shrink-0 rounded bg-ink px-1.5 py-0.5 font-mono text-[10.5px] text-paper">{e.name}</code>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-2">{e.summary}</span>
-        <span className="shrink-0 text-[10px] text-ink-3 group-hover:text-ink-2">{open ? "hide" : `${e.calls.length} call${e.calls.length === 1 ? "" : "s"}`}</span>
-      </button>
-      {open && (
-        <div className="mb-1 ml-2 mt-1 space-y-1.5 rounded-lg bg-paper-2 p-2.5">
-          {e.calls.map((c, i) => (
-            <div key={i} className="font-mono text-[10.5px] leading-relaxed text-ink-2">
-              <span className="font-semibold text-ink">GET {c.endpoint}</span>
-              <span className="text-ink-3">
-                {" "}
-                · {c.count} results · {c.cached ? "cache" : `${c.ms}ms`}
-              </span>
-              <div className="break-all">
-                {Object.entries(c.params).map(([k, v]) => (
-                  <div key={k}>
-                    <span className="text-accent">{k}</span>={v.length > 90 ? v.slice(0, 90) + "…" : v}
-                  </div>
-                ))}
+    <div className="border-t border-line/70 pt-2 font-mono text-[10.5px]">
+      <p>
+        <code className="rounded bg-ink px-1.5 py-0.5 text-paper">{e.name}</code> <span className="text-ink-2">{e.summary}</span>
+      </p>
+      {e.calls.map((c, i) => (
+        <div key={i} className="mt-1 leading-relaxed text-ink-3">
+          <span className="text-ink-2">GET {c.endpoint}</span> · {c.count} results · {c.cached ? "cache" : `${c.ms}ms`}
+          <div className="break-all">
+            {Object.entries(c.params).map(([k, v]) => (
+              <div key={k}>
+                <span className="text-accent">{k}</span>={v.length > 90 ? v.slice(0, 90) + "…" : v}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }

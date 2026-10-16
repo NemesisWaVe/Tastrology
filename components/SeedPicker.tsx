@@ -41,6 +41,21 @@ const MAX = 8;
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
+/** "Frank Ocean", "frank  ocean", "FRANK OCEAN " all collapse to one key. */
+const norm = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const dupKey = (h: Seed) => `${h.kind}|${norm(h.name)}`;
+
+/** Qloo search sometimes returns case/spacing variants of the same thing; keep the first (best-ranked) one. */
+function dedupe(xs: Seed[]): Seed[] {
+  const seen = new Set<string>();
+  return xs.filter((h) => {
+    const k = dupKey(h);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 /** Qloo-backed autocomplete. Seeds come back with real Qloo entity ids. */
 export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: Seed[]) => void }) {
   const [q, setQ] = useState("");
@@ -49,6 +64,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const [note, setNote] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
   const req = useRef(0);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
@@ -67,7 +84,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind !== "all" ? `&types=${kind}` : ""}`);
         const data = (await res.json()) as { results: Seed[] };
         if (id === req.current) {
-          setHits((data.results ?? []).slice(0, 6));
+          setHits(dedupe(data.results ?? []).slice(0, 6));
           setActive(0);
         }
       } catch {
@@ -79,8 +96,26 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     return () => clearTimeout(t);
   }, [q, kind]);
 
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => {
+      setNote(null);
+      setFlash(null);
+    }, 2200);
+    return () => clearTimeout(t);
+  }, [note]);
+
+  const isTaken = (h: Seed) => seeds.some((x) => x.id === h.id || dupKey(x) === dupKey(h));
+
   const add = (h: Seed) => {
-    if (full || seeds.some((x) => x.id === h.id)) return;
+    if (full) return;
+    const dup = seeds.find((x) => x.id === h.id || dupKey(x) === dupKey(h));
+    if (dup) {
+      setNote(`${dup.name} is already in.`);
+      setFlash(dup.id);
+      return;
+    }
+    setNote(null);
     onChange([...seeds, h]);
     setQ("");
     setHits([]);
@@ -119,6 +154,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
           <input
             ref={input}
             value={q}
+            maxLength={80}
             onChange={(e) => {
               setQ(e.target.value);
               setOpen(true);
@@ -134,7 +170,17 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
                 e.preventDefault();
                 setActive((a) => Math.max(a - 1, 0));
               }
-              if (e.key === "Enter" && hits[active]) add(hits[active]);
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (hits[active]) add(hits[active]);
+                else {
+                  const dup = seeds.find((x) => norm(x.name) === norm(q));
+                  if (dup) {
+                    setNote(`${dup.name} is already in.`);
+                    setFlash(dup.id);
+                  }
+                }
+              }
               if (e.key === "Escape") setOpen(false);
               if (e.key === "Backspace" && !q && seeds.length) onChange(seeds.slice(0, -1));
             }}
@@ -165,7 +211,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
               id={listId}
             >
               {hits.map((h, i) => {
-                const taken = seeds.some((x) => x.id === h.id);
+                const taken = isTaken(h);
                 return (
                   <li key={h.id} id={`${listId}-${i}`} role="option" aria-selected={i === active}>
                     <button
@@ -181,7 +227,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
                         {h.subtitle && <span className="block truncate text-[12px] text-ink-3">{h.subtitle}</span>}
                       </span>
                       <span className="shrink-0 rounded-full border border-line px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-3">
-                        {KIND_LABEL[h.kind] ?? h.kind}
+                        {taken ? "added" : (KIND_LABEL[h.kind] ?? h.kind)}
                       </span>
                     </button>
                   </li>
@@ -196,7 +242,11 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         </AnimatePresence>
       </div>
 
-      <div className="mt-4 flex min-h-[44px] flex-wrap content-start gap-2">
+      <p className="mt-2 min-h-[16px] px-1 text-[12px] text-warn" role="status" aria-live="polite">
+        {note}
+      </p>
+
+      <div className="mt-2 flex min-h-[44px] flex-wrap content-start gap-2">
         <AnimatePresence initial={false} mode="popLayout">
           {seeds.map((sd) => (
             <motion.span
@@ -206,7 +256,9 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.6, transition: { duration: 0.18 } }}
               transition={{ type: "spring", stiffness: 420, damping: 26 }}
-              className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] py-1 pl-1 pr-1 text-[13px] text-ink"
+              className={`inline-flex max-w-full items-center gap-2 rounded-full border py-1 pl-1 pr-1 text-[13px] text-ink transition-colors duration-300 ${
+                flash === sd.id ? "border-warn bg-warn-soft" : "border-white/10 bg-white/[0.06]"
+              }`}
             >
               <Thumb seed={sd} size={26} />
               <span className="truncate">{sd.name}</span>

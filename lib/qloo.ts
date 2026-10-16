@@ -1,5 +1,5 @@
 import "server-only";
-import { sharedCache } from "./cache";
+import { kvCache } from "./cache";
 import { mockQloo } from "./mock/server";
 import type { EntityKind, InsightsParams, QEntity, QlooCallLog, QTag } from "./types";
 
@@ -62,15 +62,19 @@ function normEntity(raw: Record<string, unknown>): QEntity {
   };
 }
 
-const cache = sharedCache<unknown>("qloo", 2000);
+// In memory, plus Upstash when configured. TTL is capped at 6h; nothing is ever written to disk.
+const cache = kvCache<Record<string, unknown>>("qloo", 2000);
 
-/** Every Qloo request goes through here: cache, timing, retry on 429, mock switch. */
+const QLOO_TIMEOUT_MS = 8000;
+const QLOO_ATTEMPTS = 2;
+
+/** Every Qloo request goes through here: cache, timing, one retry on 429/5xx/network, mock switch. */
 async function qget(path: string, params: Record<string, string>, log?: QlooCallLog[]): Promise<Record<string, unknown>> {
   const qs = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
   const mode = qlooMode();
   const key = `${mode}:${path}?${qs}`;
   const t0 = Date.now();
-  const hit = cache.get(key) as Record<string, unknown> | undefined;
+  const hit = await cache.get(key);
   if (hit) {
     log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: true, count: countOf(hit) });
     return hit;
@@ -83,19 +87,28 @@ async function qget(path: string, params: Record<string, string>, log?: QlooCall
     json = mockQloo(path, qs) as Record<string, unknown>;
   } else {
     let res: Response | undefined;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      res = await fetch(`${BASE()}${path}?${qs}`, {
-        headers: { "X-Api-Key": process.env.QLOO_API_KEY!, accept: "application/json" },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (res.status !== 429) break;
-      await new Promise((r) => setTimeout(r, 400 * 2 ** attempt));
+    let netErr: unknown;
+    for (let attempt = 0; attempt < QLOO_ATTEMPTS; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 400));
+      try {
+        res = await fetch(`${BASE()}${path}?${qs}`, {
+          headers: { "X-Api-Key": process.env.QLOO_API_KEY!, accept: "application/json" },
+          signal: AbortSignal.timeout(QLOO_TIMEOUT_MS),
+        });
+        netErr = undefined;
+      } catch (err) {
+        res = undefined;
+        netErr = err; // timeout or network error: retry once
+        continue;
+      }
+      if (res.status !== 429 && res.status < 500) break;
     }
-    if (!res!.ok) throw new Error(`Qloo ${path} → HTTP ${res!.status}`);
-    json = (await res!.json()) as Record<string, unknown>;
+    if (!res) throw new Error(`Qloo ${path}: ${(netErr as Error)?.name === "TimeoutError" ? "timed out" : "network error"}`);
+    if (!res.ok) throw new Error(`Qloo ${path} → HTTP ${res.status}`);
+    json = (await res.json()) as Record<string, unknown>;
   }
   if (json.success === false) throw new Error(`Qloo ${path}: ${String(json.error ?? "request failed")}`);
-  cache.set(key, json);
+  await cache.set(key, json);
   log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: false, count: countOf(json) });
   return json;
 }

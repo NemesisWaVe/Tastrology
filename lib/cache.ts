@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 /** Tiny in-memory LRU with TTL. Survives across requests on a warm serverless instance. */
 export class LRU<V> {
   private map = new Map<string, { v: V; exp: number }>();
@@ -15,9 +17,9 @@ export class LRU<V> {
     return hit.v;
   }
 
-  set(k: string, v: V) {
+  set(k: string, v: V, ttlMs = this.ttlMs) {
     this.map.delete(k);
-    this.map.set(k, { v, exp: Date.now() + this.ttlMs });
+    this.map.set(k, { v, exp: Date.now() + ttlMs });
     while (this.map.size > this.max) this.map.delete(this.map.keys().next().value!);
   }
 }
@@ -27,4 +29,65 @@ export function sharedCache<V>(name: string, max?: number): LRU<V> {
   g.__tmCaches ??= {};
   g.__tmCaches[name] ??= new LRU<unknown>(max);
   return g.__tmCaches[name] as LRU<V>;
+}
+
+/* ------------------------------------------------------------ Upstash */
+
+/** Hard cap for anything written to shared storage (Qloo data included). */
+export const MAX_TTL_MS = 6 * 60 * 60 * 1000;
+
+export const upstashConfigured = () => Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+export const storeMode = (): "upstash" | "memory" => (upstashConfigured() ? "upstash" : "memory");
+
+/**
+ * Runs Redis commands through Upstash's REST API (plain fetch, no SDK).
+ * Returns null on any failure: shared state is an optimization, never a hard dependency.
+ */
+export async function upstash(commands: (string | number)[][]): Promise<unknown[] | null> {
+  if (!upstashConfigured()) return null;
+  try {
+    const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL!.replace(/\/$/, "")}/pipeline`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(commands),
+      signal: AbortSignal.timeout(1500),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const out = (await res.json()) as { result?: unknown; error?: string }[];
+    return out.map((x) => (x.error ? null : x.result));
+  } catch {
+    return null;
+  }
+}
+
+/** Async cache: in-memory LRU in front, Upstash Redis behind it when configured. */
+export interface KV<V> {
+  get(k: string): Promise<V | undefined>;
+  set(k: string, v: V): Promise<void>;
+}
+
+export function kvCache<V>(name: string, max = 500, ttlMs = MAX_TTL_MS): KV<V> {
+  const mem = sharedCache<V>(name, max);
+  const ttl = Math.min(ttlMs, MAX_TTL_MS);
+  const rk = (k: string) => `tm:${name}:${createHash("sha1").update(k).digest("base64url")}`;
+  return {
+    async get(k) {
+      const hit = mem.get(k);
+      if (hit !== undefined || !upstashConfigured()) return hit;
+      const [raw] = (await upstash([["GET", rk(k)]])) ?? [];
+      if (typeof raw !== "string") return undefined;
+      try {
+        const v = JSON.parse(raw) as V;
+        mem.set(k, v, ttl);
+        return v;
+      } catch {
+        return undefined;
+      }
+    },
+    async set(k, v) {
+      mem.set(k, v, ttl);
+      if (upstashConfigured()) await upstash([["SET", rk(k), JSON.stringify(v), "PX", ttl]]);
+    },
+  };
 }

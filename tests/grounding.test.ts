@@ -49,4 +49,26 @@ describe("agent output is grounded in Qloo responses", () => {
     expect(second.changes?.removed.some((r) => r.id === down)).toBe(true);
     expect(second.changes?.why.join(" ")).toMatch(/signal/);
   });
+
+  it("re-plan with every brand 👎: none come back, and the diff says why", async () => {
+    const first = await runAgent(personaRequest(PERSONAS[1]), () => {});
+    const ids = first.brands.map((b) => b.entity.id);
+    const second = await runAgent({ ...personaRequest(PERSONAS[1]), feedback: { liked: [], disliked: ids }, previous: { brandIds: ids } }, () => {});
+    expect(second.brands.filter((b) => ids.includes(b.entity.id))).toEqual([]);
+    expect(second.changes?.removed.map((r) => r.id).sort()).toEqual([...ids].sort());
+    expect(second.changes?.why.join(" ")).toMatch(/filter\.exclude\.entities/);
+  });
+
+  it("copy only claims what was computed", async () => {
+    for (const p of PERSONAS) {
+      const r = await runAgent(personaRequest(p), () => {});
+      const main = r.brands.filter((b) => !b.side);
+      expect(r.critique.join(" ")).toContain(`Kept ${main.length} of`);
+      expect(r.critique.join(" ")).not.toMatch(/at least two of your seeds/);
+      for (const b of r.brands.filter((b) => b.side)) expect(b.why).toMatch(/^Moon pick, on purpose/);
+      expect(r.dna.name).toMatch(/^The .+ Who .+/);
+      expect(r.dna.name.split(" ").length).toBeLessThanOrEqual(5);
+      expect(r.dna.tagline.split(" ").length).toBeLessThanOrEqual(12);
+    }
+  });
 });

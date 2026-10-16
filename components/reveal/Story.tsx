@@ -1,19 +1,31 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, type TargetAndTransition } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { proxied, type CardData, type CardType } from "@/lib/card";
+import { Sigil, type SigilKind } from "@/components/card/Sigils";
+import { displayName, proxied, type CardData, type CardType } from "@/lib/card";
 import type { StyleResult } from "@/lib/types";
 import { KIND_LABEL, overlapFigures } from "./traceModel";
 import s from "./reveal.module.css";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
+
+type Enter = "rise" | "wipe" | "iris" | "drop" | "zoom";
+const ENTER: Record<Enter, { initial: TargetAndTransition; animate: TargetAndTransition; exit: TargetAndTransition }> = {
+  rise: { initial: { opacity: 0, y: 24, filter: "blur(10px)" }, animate: { opacity: 1, y: 0, filter: "blur(0px)" }, exit: { opacity: 0, y: -16, filter: "blur(10px)" } },
+  wipe: { initial: { opacity: 1, clipPath: "inset(0 100% 0 0)" }, animate: { opacity: 1, clipPath: "inset(0 0% 0 0)" }, exit: { opacity: 0, x: -40 } },
+  iris: { initial: { opacity: 1, clipPath: "circle(0% at 50% 40%)" }, animate: { opacity: 1, clipPath: "circle(140% at 50% 40%)" }, exit: { opacity: 0, scale: 0.94 } },
+  drop: { initial: { opacity: 0, y: -60 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: 60, rotate: 3 } },
+  zoom: { initial: { opacity: 0, scale: 1.18 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.9 } },
+};
 const DUR = 4200;
 
 interface Beat {
   key: string;
   dur: number;
   tint: [string, string];
+  /** How the slide enters: each beat gets its own visual device, not the same blur-fade. */
+  enter?: Enter;
   render: (reduce: boolean) => React.ReactNode;
 }
 
@@ -155,10 +167,10 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
           <motion.div
             key={beat.key}
             className="w-full max-w-xl"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 24, filter: "blur(10px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16, filter: "blur(10px)" }}
-            transition={{ duration: 0.45, ease: EASE }}
+            initial={reduce ? { opacity: 0 } : ENTER[beat.enter ?? "rise"].initial}
+            animate={reduce ? { opacity: 1 } : ENTER[beat.enter ?? "rise"].animate}
+            exit={reduce ? { opacity: 0 } : ENTER[beat.enter ?? "rise"].exit}
+            transition={{ duration: beat.enter === "wipe" || beat.enter === "iris" ? 0.7 : 0.45, ease: EASE }}
           >
             {beat.render(reduce)}
           </motion.div>
@@ -166,7 +178,7 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
       </div>
 
       <p className="absolute inset-x-0 bottom-4 z-20 text-center font-mono text-[10px] tracking-[0.18em] text-ink-3">
-        {paused ? "PAUSED" : "TAP · SWIPE · ← →"}
+        {paused ? "❚❚ PAUSED · RELEASE TO PLAY" : "HOLD TO PAUSE · TAP LEFT TO GO BACK"}
       </p>
     </motion.div>
   );
@@ -174,11 +186,28 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
 
 /* ------------------------------------------------------------------ beats */
 
-function Eyebrow({ children, color }: { children: React.ReactNode; color?: string }) {
+function Eyebrow({ children, color, sigil }: { children: React.ReactNode; color?: string; sigil?: SigilKind }) {
   return (
-    <p className="mb-4 font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3" style={color ? { color } : undefined}>
+    <p className="mb-4 flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3" style={color ? { color } : undefined}>
+      {sigil && <Sigil kind={sigil} className="h-4 w-4" />}
       {children}
     </p>
+  );
+}
+
+/** Oversized line sigil behind a slide: the slide's visual device. */
+function Watermark({ kind, color, reduce, className = "" }: { kind: SigilKind; color: string; reduce: boolean; className?: string }) {
+  return (
+    <motion.div
+      aria-hidden
+      className={`pointer-events-none absolute -z-10 ${className}`}
+      style={{ color, filter: `drop-shadow(0 0 24px ${color})` }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.6, rotate: -40 }}
+      animate={reduce ? { opacity: 0.2 } : { opacity: 0.2, scale: 1, rotate: 0 }}
+      transition={{ duration: 1.4, ease: EASE }}
+    >
+      <Sigil kind={kind} className="h-full w-full" />
+    </motion.div>
   );
 }
 
@@ -210,7 +239,7 @@ function Big({ t, children, size = "clamp(44px,13vw,92px)" }: { t: CardType; chi
 
 function buildBeats(r: StyleResult, card: CardData): Beat[] {
   const { sun, moon, rising } = card.bigThree;
-  const seedName = (id: string) => r.seeds.find((x) => x.id === id)?.name ?? "";
+  const seedName = (id: string) => displayName(r.seeds.find((x) => x.id === id)?.name ?? "");
   const beats: Beat[] = [];
   const n = r.seeds.length;
 
@@ -254,7 +283,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
           {r.seeds.map((x, k) => (
             <span key={x.id}>
               {k > 0 && <span className="text-ink-3"> · </span>}
-              {x.name}
+              {displayName(x.name)}
               <span className="ml-1 font-mono text-[9.5px] uppercase text-ink-3">{KIND_LABEL[x.kind] ?? x.kind}</span>
             </span>
           ))}
@@ -274,9 +303,11 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
     key: "sun",
     dur: DUR + 400,
     tint: [`color-mix(in oklab, ${sun.a} 60%, transparent)`, `color-mix(in oklab, ${sun.b} 45%, transparent)`],
+    enter: "wipe",
     render: (reduce) => (
-      <div>
-        <Eyebrow color={sun.a}>☀ your sun · main aesthetic</Eyebrow>
+      <div className="relative isolate">
+        <Watermark kind="sun" color={sun.a} reduce={reduce} className="-right-16 -top-24 h-[78vw] max-h-[420px] w-[78vw] max-w-[420px]" />
+        <Eyebrow color={sun.a} sigil="sun">your sun · main aesthetic</Eyebrow>
         <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(26px,6.6vw,38px)] italic leading-tight text-ink-2">
           Qloo says they share…
         </motion.p>
@@ -310,11 +341,12 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
   if (card.bigThree.moonIsContradiction && sideB) {
     const odd = sideB.seedIds.map((id) => r.seeds.find((x) => x.id === id)).filter((x) => x != null);
     const ov = overlapFigures(r);
-    const oddNames = odd.map((x) => x.name).join(" + ");
+    const oddNames = odd.map((x) => displayName(x.name)).join(" + ");
     beats.push({
       key: "except",
       dur: DUR + 600,
       tint: [`color-mix(in oklab, ${moon.a} 55%, transparent)`, "color-mix(in oklab, #fb7185 35%, transparent)"],
+      enter: "zoom",
       render: (reduce) => (
         <div className="text-center">
           <Eyebrow color="var(--bad)">the plot twist</Eyebrow>
@@ -374,9 +406,11 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
       key: "moon",
       dur: DUR + 400,
       tint: [`color-mix(in oklab, ${moon.a} 60%, transparent)`, `color-mix(in oklab, ${moon.b} 50%, transparent)`],
+      enter: "iris",
       render: (reduce) => (
-        <div>
-          <Eyebrow color={moon.a}>☾ your moon · the hidden side</Eyebrow>
+        <div className="relative isolate">
+          <Watermark kind="moon" color={moon.a} reduce={reduce} className="-left-20 -top-16 h-[70vw] max-h-[380px] w-[70vw] max-w-[380px]" />
+          <Eyebrow color={moon.a} sigil="moon">your moon · the hidden side</Eyebrow>
           <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,36px)] italic leading-tight text-ink-2">
             So we didn&apos;t average it away. {oddNames.split(" ").length > 4 ? "It" : oddNames} gets its own side:
           </motion.p>
@@ -406,9 +440,11 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
       key: "moon",
       dur: DUR,
       tint: [`color-mix(in oklab, ${moon.a} 55%, transparent)`, `color-mix(in oklab, ${moon.b} 45%, transparent)`],
+      enter: "iris",
       render: (reduce) => (
-        <div>
-          <Eyebrow color={moon.a}>☾ your moon · the hidden side</Eyebrow>
+        <div className="relative isolate">
+          <Watermark kind="moon" color={moon.a} reduce={reduce} className="-left-20 -top-16 h-[70vw] max-h-[380px] w-[70vw] max-w-[380px]" />
+          <Eyebrow color={moon.a} sigil="moon">your moon · the hidden side</Eyebrow>
           <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,36px)] italic leading-tight text-ink-2">
             Underneath it, a quieter thread:
           </motion.p>
@@ -438,36 +474,8 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
       key: "rejected",
       dur: DUR + 800,
       tint: ["color-mix(in oklab, #fb7185 32%, transparent)", `color-mix(in oklab, ${sun.b} 30%, transparent)`],
-      render: (reduce) => (
-        <div>
-          <Eyebrow color="var(--bad)">the self-critique</Eyebrow>
-          <motion.h2 {...rise(reduce, 0.05)} className="font-display text-[clamp(38px,11vw,72px)] font-bold leading-[0.95] tracking-[-0.03em]">
-            We threw <span className="font-serif font-normal italic">these</span> out.
-          </motion.h2>
-          <ul className="mt-7 space-y-4">
-            {shown.map((rj, k) => (
-              <motion.li key={rj.entity.id} {...rise(reduce, 0.4 + k * 0.28, 14)}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="relative font-display text-[clamp(22px,6.4vw,32px)] font-semibold leading-tight text-ink-2">
-                    {rj.entity.name}
-                    <motion.span
-                      className={s.strike}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: reduce ? 0 : 0.45, delay: reduce ? 0 : 0.85 + k * 0.28, ease: EASE }}
-                    />
-                  </span>
-                  <span className="shrink-0 font-mono text-[11px] text-ink-3">{rj.affinity.toFixed(2)}</span>
-                </div>
-                <p className="mt-0.5 font-mono text-[10.5px] leading-snug text-ink-3">{rj.reason}</p>
-              </motion.li>
-            ))}
-          </ul>
-          <motion.p {...rise(reduce, 0.6 + shown.length * 0.28, 6)} className="mt-6 font-serif text-[19px] italic text-ink-2">
-            {kept} kept, {r.rejected.length} rejected. One-seed flukes don&apos;t count.
-          </motion.p>
-        </div>
-      ),
+      enter: "drop",
+      render: (reduce) => <ReceiptSlide r={r} shown={shown} kept={kept} reduce={reduce} />,
     });
   }
 
@@ -479,17 +487,28 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
     key: "rising",
     dur: DUR,
     tint: [`color-mix(in oklab, ${rising.a} 55%, transparent)`, `color-mix(in oklab, ${rising.b} 45%, transparent)`],
+    enter: "drop",
     render: (reduce) => (
       <div>
-        <Eyebrow color={rising.a}>↑ your rising · how you come across</Eyebrow>
+        <Eyebrow color={rising.a} sigil="rising">your rising · how you come across</Eyebrow>
         <motion.p {...rise(reduce, 0.05)} className="font-serif text-[clamp(24px,6.2vw,36px)] italic leading-tight text-ink-2">
           To everyone else, you read as
         </motion.p>
-        <motion.div {...rise(reduce, 0.4, 40)} className="mt-5">
-          <Big t={rising} size="clamp(56px,17vw,120px)">
-            {rising.name}
-          </Big>
-        </motion.div>
+        {/* horizon: the word rises from below a line, like a sign clearing the horizon */}
+        <div className="relative mt-5 overflow-hidden pb-1">
+          <motion.div initial={reduce ? { opacity: 0 } : { y: "105%" }} animate={reduce ? { opacity: 1 } : { y: 0 }} transition={{ duration: reduce ? 0.3 : 1.1, delay: reduce ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] }}>
+            <Big t={rising} size="clamp(56px,17vw,120px)">
+              {rising.name}
+            </Big>
+          </motion.div>
+        </div>
+        <motion.div
+          className="h-px origin-left"
+          style={{ background: `linear-gradient(90deg, ${rising.a}, ${rising.b}, transparent)`, boxShadow: `0 0 18px ${rising.a}` }}
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: reduce ? 0 : 0.8, ease: EASE }}
+        />
         <motion.p {...rise(reduce, 1.0, 8)} className="mt-8 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
           {carriers.length ? "the personal style Qloo tags on" : "read from your top brands"}
         </motion.p>
@@ -519,6 +538,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
     key: "minted",
     dur: 3000,
     tint: [`color-mix(in oklab, ${sun.a} 55%, transparent)`, `color-mix(in oklab, ${moon.a} 50%, transparent)`],
+    enter: "zoom",
     render: (reduce) => (
       <div className="text-center">
         <Eyebrow>{card.rarity === "secret" || card.rarity === "holo" ? "this one's rare" : "fresh off the press"}</Eyebrow>
@@ -529,14 +549,16 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
           Your sign has been <Big t={sun} size="1em">minted.</Big>
         </motion.h2>
         <motion.div {...rise(reduce, 0.9, 10)} className="mt-8 flex justify-center gap-3 text-[13px] text-ink-2">
-          {[
-            ["☀", sun],
-            ["☾", moon],
-            ["↑", rising],
-          ].map(([g, t]) => (
-            <span key={(t as CardType).name + g} className="flex items-center gap-1.5">
-              <i className="h-2 w-2 rounded-full" style={{ background: `linear-gradient(135deg, ${(t as CardType).a}, ${(t as CardType).b})` }} />
-              {g as string} {(t as CardType).name}
+          {(
+            [
+              ["sun", sun],
+              ["moon", moon],
+              ["rising", rising],
+            ] as [SigilKind, CardType][]
+          ).map(([g, t]) => (
+            <span key={t.name + g} className="flex items-center gap-1.5">
+              <Sigil kind={g} className="h-3.5 w-3.5" />
+              <span style={{ color: t.a }}>{t.name}</span>
             </span>
           ))}
         </motion.div>
@@ -562,6 +584,75 @@ function OverlapBar({ label, value, color, reduce, delay }: { label: string; val
           animate={{ width: `${Math.max(2, Math.min(100, value * 4))}%` }}
           transition={{ duration: reduce ? 0 : 0.8, delay: reduce ? 0 : delay, ease: EASE }}
         />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ the self-critique, as a receipt */
+
+const STAMP_AT = 1.05;
+const STAMP_GAP = 0.42;
+
+function ReceiptSlide({ r, shown, kept, reduce }: { r: StyleResult; shown: StyleResult["rejected"]; kept: number; reduce: boolean }) {
+  const when = new Date(r.createdAt || Date.now());
+  const stamp = when.toISOString().slice(0, 16).replace("T", " ");
+  return (
+    <div>
+      <Eyebrow color="var(--bad)">the self-critique</Eyebrow>
+      <motion.h2 {...rise(reduce, 0.05, 14)} className="font-display text-[clamp(32px,9vw,60px)] font-bold leading-[0.95] tracking-[-0.03em]">
+        We threw <span className="font-serif font-normal italic">these</span> out.
+      </motion.h2>
+
+      <div className="relative mx-auto mt-6 max-w-[340px]">
+        {/* printer slot */}
+        <div className="relative z-10 mx-[-10px] h-3 rounded-full bg-black/80 shadow-[inset_0_2px_4px_rgb(0_0_0/0.9),0_1px_0_rgb(255_255_255/0.08)]" />
+        <motion.div
+          className={s.receipt}
+          initial={reduce ? { opacity: 0 } : { clipPath: "inset(0 0 100% 0)", y: -18 }}
+          animate={reduce ? { opacity: 1 } : { clipPath: "inset(0 0 0% 0)", y: 0 }}
+          transition={{ duration: reduce ? 0.3 : 0.9, delay: reduce ? 0 : 0.2, ease: [0.3, 0.1, 0.2, 1] }}
+        >
+          <div className="flex justify-between text-[9.5px] tracking-[0.18em]">
+            <span>TASTROLOGY · QC</span>
+            <span>RUN {r.runId.slice(0, 6).toUpperCase()}</span>
+          </div>
+          <p className="mt-0.5 text-[9px] tracking-[0.12em] opacity-60">{stamp} · AGENT SELF-CRITIQUE</p>
+          <div className={s.rule} />
+          <ul className="space-y-2.5">
+            {shown.map((rj, k) => (
+              <motion.li
+                key={rj.entity.id}
+                className="relative pr-14"
+                animate={reduce ? undefined : { x: [0, -2, 2, -1, 0] }}
+                transition={{ duration: 0.22, delay: STAMP_AT + k * STAMP_GAP + 0.08 }}
+              >
+                <div className="flex items-baseline gap-2 text-[12.5px] font-semibold">
+                  <span className="min-w-0 flex-1 truncate">{displayName(rj.entity.name)}</span>
+                  <span className={s.dotLeader} />
+                  <span className="tabular-nums">{rj.affinity.toFixed(2)}</span>
+                </div>
+                <p className="mt-0.5 line-clamp-2 text-[9.5px] leading-snug opacity-65">{rj.reason}</p>
+                <motion.span
+                  className={s.void}
+                  style={{ rotate: k % 2 ? 9 : -11 }}
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 1.4 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={reduce ? { duration: 0.2 } : { type: "spring", stiffness: 700, damping: 22, mass: 0.6, delay: STAMP_AT + k * STAMP_GAP }}
+                >
+                  VOID
+                </motion.span>
+              </motion.li>
+            ))}
+          </ul>
+          <div className={s.rule} />
+          <div className="flex justify-between text-[11px] font-semibold tracking-[0.1em]">
+            <span>KEPT {kept}</span>
+            <span>VOID {r.rejected.length}</span>
+          </div>
+          <p className="mt-1 text-[9.5px] opacity-65">One-seed flukes don&apos;t count. Thank you for your taste.</p>
+          <div className={s.barcode} aria-hidden />
+        </motion.div>
       </div>
     </div>
   );

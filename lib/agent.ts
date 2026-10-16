@@ -1,5 +1,6 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { BRAND } from "./brand";
 import { GroundingLedger } from "./grounding";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
 import { findTags, insights, qlooMode, searchEntities } from "./qloo";
@@ -21,12 +22,14 @@ import type {
 type Emit = (e: TraceEvent) => void;
 
 /** Bump when agent logic changes so cached results from older logic aren't replayed. */
-export const AGENT_VERSION = 8;
+export const AGENT_VERSION = 9;
 
 const FLUKE_SHARE = 0.6; // one seed carries ≥60% of Qloo's explained signal
 const TARGET = 10;
 const SIDE_B = 3; // slots reserved for the minority side when the taste is split
 const MIN_BRANDS = 8;
+/** Total wall-clock budget for LLM planning turns; autopilot finishes whatever is left. */
+const LLM_BUDGET_MS = () => Number(process.env.LLM_RUN_BUDGET_MS) || 45_000;
 
 /** Everything the agent has learned so far in one run. Tools read and write this. */
 class RunState {
@@ -54,6 +57,10 @@ class RunState {
   /** Step promises, keyed by step; prefetched steps buffer their trace events until the LLM asks for them. */
   steps = new Map<string, { p: Promise<unknown>; buf: TraceEvent[] | null }>();
   speculate = false;
+  /** Main-list brands that failed the one-seed check but were kept to fill the list. */
+  backfilled = 0;
+  poolSize = 0;
+  signal?: AbortSignal;
   constructor(public req: AgentRequest, private rawEmit: Emit) {}
 
   emit = (e: TraceEvent) => (emitCtx.getStore() ?? this.rawEmit)(e);
@@ -293,12 +300,13 @@ async function critique(st: RunState) {
     if (final.length >= MIN_BRANDS) break;
     if (f.reason.startsWith("Over")) continue;
     final.push(f.c); // backfill rather than show too few
+    st.backfilled++;
   }
+  st.poolSize = pool.length;
   final.sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0));
   st.rejected = flagged.filter((f) => !final.includes(f.c)).slice(0, 6).map((f) => ({ entity: f.c, affinity: round(f.c.affinity), reason: f.reason }));
   for (const r of st.rejected.filter((r) => r.reason.startsWith("Carried")).slice(0, 2))
     st.critique.push(`Rejected ${r.entity.name} (affinity ${r.affinity.toFixed(2)}): ${r.reason}`);
-  if (accepted.length > target) st.critique.push(`Kept the ${target} strongest brands that at least two of your seeds agree on.`);
 
   st.final = final.map((c) => {
     const row = inf.get(c.id)!;
@@ -331,7 +339,7 @@ async function critique(st: RunState) {
         entity: c,
         affinity: round(c.affinity),
         category: categoryOf(c),
-        explain: Object.fromEntries(side.seedIds.map((id) => [id, round(1 / side.seedIds.length)])),
+        explain: sideExplain(c, side.seedIds),
         ablation: {},
         because: side.seedIds.slice(0, 2),
         side: 1,
@@ -345,7 +353,7 @@ async function critique(st: RunState) {
   st.emit({
     type: "step",
     id: "critique",
-    label: `${st.final.length} brands kept, ${st.rejected.length} rejected`,
+    label: `${st.final.filter((b) => !b.side).length} brands kept${st.lobes.length ? ` (+${st.final.filter((b) => b.side).length} Moon picks)` : ""}, ${st.rejected.length} rejected`,
     status: st.contradictions.length ? "warn" : "done",
     detail: st.contradictions.length ? `${st.contradictions.length} contradicting seed pair(s)` : "Seeds agree with each other",
   });
@@ -384,6 +392,7 @@ async function styleTags(st: RunState) {
   return {
     keywords: st.keywords.map((k) => k.name),
     sides: st.lobes.map((l) => ({ seeds: l.seedIds.map((x) => st.seedName(x)), keywords: l.keywords.map((k) => k.name) })),
+    sign_basis: { sun: sunKeywords(st), moon: moonKeywords(st) },
   };
 }
 
@@ -455,8 +464,10 @@ async function tasteBridges(st: RunState) {
 
 function finalize(st: RunState, args: Record<string, unknown>) {
   if (!st.done.has("critique") || !st.done.has("tags_dna")) return { error: "need critique_matches and get_style_tags before finalize" };
-  if (typeof args.name === "string") st.name = args.name.slice(0, 40);
-  if (typeof args.tagline === "string") st.tagline = args.tagline.slice(0, 140);
+  const name = typeof args.name === "string" ? args.name.trim().replace(/[."]+$/g, "") : "";
+  if (isSignName(name)) st.name = name;
+  const tagline = typeof args.tagline === "string" ? args.tagline.trim() : "";
+  if (tagline && words(tagline) <= 12) st.tagline = tagline.slice(0, 120);
   // Brand lines stay measured ("x% of this match traces to…"); the LLM only phrases bridges.
   for (const n of (Array.isArray(args.bridge_notes) ? args.bridge_notes : []) as { id?: string; why?: string }[]) {
     const b = st.bridges.find((x) => x.entity.id === n.id);
@@ -479,8 +490,8 @@ const TOOLS: ToolDef[] = [
   fn("critique_matches", "Find inert seeds, contradicting seeds (splits the DNA into two sides) and brands carried by a single seed; returns kept and rejected brands.", {}),
   fn("find_taste_bridges", "Ask Qloo for a place, film, artist and book that complete the aesthetic.", {}),
   fn("finalize", "Publish the result. Only reference brand/bridge ids returned by earlier tools.", {
-    name: { type: "string", description: "2-4 word Style DNA name built from the Qloo tags, e.g. 'Quiet Romantic Minimalist'" },
-    tagline: { type: "string", description: "One sentence describing the person's style, grounded in the tags" },
+    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 5 words, e.g. 'The Replicant Who Bakes'. Noun from the Sun keywords, verb phrase from the Moon keywords." },
+    tagline: { type: "string", description: "One blunt line, at most 12 words, grounded in the keywords. No flattery." },
     bridge_notes: {
       type: "array",
       items: { type: "object", properties: { id: { type: "string" }, why: { type: "string" } }, required: ["id", "why"] },
@@ -493,12 +504,12 @@ function fn(name: string, description: string, properties: Record<string, unknow
   return { type: "function", function: { name, description, parameters: { type: "object", properties } } };
 }
 
-const SYSTEM = `You are TasteMirror, a style agent. You turn a person's taste in music, film, books, places and games into a Style DNA and fashion/beauty brand matches.
+const SYSTEM = `You are ${BRAND.name}, a style agent. You turn a person's taste in music, film, books, places and games into a Style DNA and fashion/beauty brand matches.
 Hard rules:
 - Every brand, place or title you mention must come from a tool result. Never invent recommendations or IDs.
 - Style keywords come from get_style_tags, not from you.
 Plan: resolve_seeds → find_brand_tags (skip in mock mode) → get_style_tags → get_brand_insights → ablate_seeds → critique_matches → find_taste_bridges → finalize.
-In finalize, name the Style DNA (2-4 words) from the Qloo keywords, and the tension between the two sides if the taste was split. Write one tagline sentence and a short note per taste bridge citing its driven_by entities.
+In finalize, give the person a taste sign in the form "The <Noun> Who <Verb phrase>" (max 5 words, e.g. "The Replicant Who Bakes"): the noun comes from the Sun keywords (sign_basis.sun), the verb phrase from the Moon keywords (sign_basis.moon), so a split taste shows its tension. Add one blunt tagline of at most 12 words, and a short note per taste bridge citing its driven_by entities.
 Before each tool call, write one short sentence of reasoning (what you expect to learn). Be terse.`;
 
 async function dispatch(st: RunState, name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -533,8 +544,24 @@ async function llmLoop(st: RunState) {
   ];
   st.speculate = true;
   prefetch(st); // Qloo work starts while the LLM reads the brief
+  const deadline = Date.now() + LLM_BUDGET_MS();
   for (let turn = 0; turn < 12 && !st.done.has("finalize"); turn++) {
-    const msg = await chat(messages, TOOLS);
+    st.signal?.throwIfAborted();
+    if (Date.now() >= deadline) {
+      st.emit({ type: "thought", text: `Planner hit its ${Math.round(LLM_BUDGET_MS() / 1000)}s budget. Autopilot finishes the remaining steps with the same Qloo tools.` });
+      return;
+    }
+    let msg: ChatMessage;
+    try {
+      msg = await chat(messages, TOOLS, { deadline });
+    } catch (err) {
+      // Out of time mid-turn after real progress: hand over to autopilot instead of discarding the plan.
+      if (st.llmSteps > 0 && Date.now() >= deadline - 250) {
+        st.emit({ type: "thought", text: "Planner ran out of time mid-turn. Autopilot finishes the remaining steps with the same Qloo tools." });
+        return;
+      }
+      throw err;
+    }
     st.llmSteps++;
     messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
     if (msg.content?.trim()) st.emit({ type: "thought", text: msg.content.trim().slice(0, 300) });
@@ -558,31 +585,149 @@ async function llmLoop(st: RunState) {
 async function autopilot(st: RunState) {
   st.speculate = false;
   // Same steps in order; anything already run (or prefetched) is reused and its trace released.
-  for (const key of Object.keys(STEPS) as StepKey[]) await step(st, key);
+  for (const key of Object.keys(STEPS) as StepKey[]) {
+    st.signal?.throwIfAborted();
+    await step(st, key);
+  }
 }
 
 function fillCopy(st: RunState) {
-  const kw = st.keywords.map((k) => k.name);
-  if (!st.name) st.name = kw.slice(0, 2).join(" ") + (kw[2] ? ` · ${kw[2]}` : "") || "Your Style DNA";
-  if (!st.tagline) st.tagline = `Qloo reads your taste as ${kw.slice(0, 3).join(", ").toLowerCase()}${st.lobes.length ? ", with two distinct sides" : ""}.`;
-  for (const b of st.final) {
-    if (b.why) continue;
-    const names = b.because.map((x) => st.seedName(x));
-    const share = b.because.reduce((t, x) => t + (b.explain[x] ?? 0), 0);
-    b.why = names.length ? `Because you love ${names.join(" and ")}: ${(share * 100).toFixed(0)}% of this match traces to them.` : "Broad match across your seeds.";
-  }
+  const sign = fallbackSign(st);
+  if (!st.name) st.name = sign.name;
+  if (!st.tagline) st.tagline = sign.tagline;
+  st.final.forEach((b, i) => {
+    if (!b.why) b.why = whyLine(st, b, i);
+  });
   for (const b of st.bridges) {
     if (b.why) continue;
     const names = b.because.map((x) => st.seedName(x));
-    b.why = names.length ? `Shares taste DNA with ${names.join(" and ")}.` : "Completes the aesthetic.";
+    b.why = names.length ? `Shares taste DNA with ${joinNames(names)}.` : "Completes the aesthetic.";
   }
+}
+
+const NUM = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const joinNames = (n: string[]) => (n.length <= 1 ? n.join("") : `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`);
+const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+/** For "your <name>": "your Great British Baking Show", not "your The Great…". */
+const yours = (name: string) => name.replace(/^the\s+/i, "");
+
+function labelOf(st: RunState, id: string) {
+  return st.ledger.get(id)?.name ?? st.req.previous?.names?.[id]?.slice(0, 80) ?? "a brand";
+}
+
+/** One line per brand, shaped by what the attribution actually looks like. Numbers appear at most once. */
+function whyLine(st: RunState, b: BrandMatch, i: number): string {
+  if (b.side) {
+    const side = st.lobes[1]?.seedIds ?? b.because;
+    return `Moon pick, on purpose: comes from your ${joinNames(side.map((x) => yours(st.seedName(x))))} side.`;
+  }
+  const like = st.liked.map((l) => ({ l, s: b.entity.explain?.[l] ?? 0 })).sort((x, y) => y.s - x.s)[0];
+  if (like && like.s >= 0.2) return `Pulled in by your 👍 on ${labelOf(st, like.l)}: ${pct(like.s)} of Qloo's explained signal.`;
+
+  const main = st.mainSeeds.map((s) => s.id);
+  const row = Object.entries(b.explain).filter(([id]) => main.includes(id)).sort((x, y) => y[1] - x[1]);
+  const total = row.reduce((t, [, v]) => t + v, 0);
+  if (!row.length || total <= 0) return "Qloo ranks it high for your whole set; no single seed stands out.";
+  // Same influence numbers the one-seed check uses, so the copy and the critique can't disagree.
+  const share = row.map(([id, v]) => ({ name: st.seedName(id), s: Math.min(1, v) }));
+  const [a, c] = share;
+  const n = share.length;
+  const active = share.filter((x) => x.s >= 0.6 / n).length;
+  if (a.s >= 0.5) return i % 2 ? `${a.name} does most of the work here: ${pct(a.s)} of the pull.` : `Mostly your ${yours(a.name)}: ${pct(a.s)} of the pull.`;
+  if (n >= 3 && a.s < 0.35 && active >= n - 1)
+    return active === n ? `All ${NUM[n] ?? n} of your loves point here.` : `${cap(NUM[active] ?? String(active))} of your ${NUM[n] ?? n} loves point here.`;
+  if (c && a.s + c.s >= 0.6)
+    return i % 2 ? `A ${a.name} and ${c.name} pick: the two carry ${pct(a.s + c.s)} of it.` : `Split between ${a.name} and ${c.name}, ${pct(a.s + c.s)} of the pull together.`;
+  return `${a.name} leads with ${pct(a.s)}; the rest is spread across your other loves.`;
+}
+
+/* ---------------------------------------------------------- taste sign */
+
+const sunKeywords = (st: RunState) => (st.lobes.length ? st.lobes[0].keywords : st.keywords.slice(0, 3)).map((k) => k.name);
+const moonKeywords = (st: RunState) => (st.lobes.length ? st.lobes[1].keywords : st.keywords.slice(3, 6)).map((k) => k.name);
+
+/** "The <Noun> Who <Verb phrase>", at most 5 words. */
+function isSignName(n: string) {
+  return /^The\s+\S+.*\s+Who\s+\S+/.test(n) && words(n) <= 5 && n.length <= 48;
+}
+
+/** Small lexicon per aesthetic family. Nouns come from the Sun side, verb phrases from the Moon side. */
+const FAMILIES: { re: RegExp; nouns: string[]; verbs: string[] }[] = [
+  { re: /cyber|futur|tech|neon|industrial|dystop|sci-?fi|avant|dark|goth|punk|edgy|grunge|utilit/, nouns: ["Replicant", "Android", "Glitch"], verbs: ["Wears Black", "Reads Manuals"] },
+  { re: /roman|soft|dream|whims|femin|delicate|pastel|ethereal|melanch|nostalg|poetic|tender/, nouns: ["Poet", "Daydreamer", "Moth"], verbs: ["Writes Letters", "Cries Quietly"] },
+  { re: /minimal|clean|sleek|simple|neutral|quiet|understated|modern|refined/, nouns: ["Monk", "Architect", "Curator"], verbs: ["Owns Nothing", "Edits Everything"] },
+  { re: /vintage|retro|classic|timeless|heritage|preppy|elegan|sophist|tailor|british/, nouns: ["Archivist", "Dandy", "Collector"], verbs: ["Hoards Paperbacks", "Restores Things"] },
+  { re: /boho|bohem|earth|natur|rustic|cozy|cosy|cottage|organic|warm|floral|homey|comfort/, nouns: ["Gardener", "Potter", "Homebody"], verbs: ["Bakes", "Grows Tomatoes"] },
+  { re: /bold|eclect|colou?r|maximal|playful|quirk|vibrant|fun|glam|loud|statement/, nouns: ["Magpie", "Peacock", "Showman"], verbs: ["Dresses Loud", "Overdoes It"] },
+  { re: /street|sport|urban|casual|athlet|skate|hip.?hop|relaxed|oversized/, nouns: ["Skater", "Courier", "Runner"], verbs: ["Never Sits", "Runs Late"] },
+];
+const DEFAULT_FAMILY = { re: /$^/, nouns: ["Wanderer"], verbs: ["Keeps Receipts"] };
+
+function familyOf(kws: string[]) {
+  let best = DEFAULT_FAMILY;
+  let score = 0;
+  for (const f of FAMILIES) {
+    const n = kws.filter((k) => f.re.test(k.toLowerCase())).length;
+    if (n > score) [best, score] = [f, n];
+  }
+  return best;
+}
+
+function hashOf(t: string) {
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/** Deterministic sign + tagline when no LLM named it. */
+function fallbackSign(st: RunState): { name: string; tagline: string } {
+  const sun = sunKeywords(st);
+  const moon = moonKeywords(st);
+  const h = hashOf(st.seeds.map((s) => s.id).join(","));
+  const fs = familyOf(sun);
+  const fm = familyOf(moon.length ? moon : sun);
+  const name = `The ${fs.nouns[h % fs.nouns.length]} Who ${fm.verbs[(h >>> 4) % fm.verbs.length]}`;
+  const lc = (t?: string) => (t ?? "").toLowerCase();
+  let tagline = !sun.length
+    ? "Your loves agree more than you'd think."
+    : st.lobes.length && moon[0]
+      ? `${cap(lc(sun[0]))} by default, ${lc(moon[0])} when nobody's watching.`
+      : moon[0]
+        ? `${cap(lc(sun[0]))} first, ${lc(sun[1] ?? moon[0])} second, ${lc(moon[0])} on weekends.`
+        : `${cap(lc(sun[0]))}, and not sorry about it.`;
+  if (words(tagline) > 12) tagline = `${cap(lc(sun[0]))}, and not sorry about it.`;
+  return { name, tagline };
+}
+
+function sideExplain(c: QEntity, ids: string[]): Record<string, number> {
+  const raw = ids.map((id) => c.explain?.[id] ?? 0);
+  const t = raw.reduce((a, b) => a + b, 0);
+  return Object.fromEntries(ids.map((id, i) => [id, round(t > 0 ? raw[i] / t : 1 / ids.length)]));
+}
+
+/** The "Kept N" sentence, computed from what is actually shown. */
+function keptLine(st: RunState, shown: number, moon: number): string {
+  let line = `Kept ${shown} of the top ${st.poolSize} Qloo candidates.`;
+  if (st.mainSeeds.length < 3) line += " The one-seed check needs 3+ seeds on this side, so it was skipped.";
+  else {
+    const bf = Math.min(st.backfilled, shown);
+    line += bf
+      ? ` ${shown - bf} pass the one-seed check; ${bf} lean on a single seed and were kept only to fill the list.`
+      : " No single seed carries 60% or more of any of them.";
+  }
+  if (st.lobes[1] && moon)
+    line += ` Plus ${moon} Moon pick${moon === 1 ? "" : "s"} from a separate query for your ${joinNames(st.lobes[1].seedIds.map((x) => yours(st.seedName(x))))} side, single-source on purpose.`;
+  return line;
 }
 
 /* --------------------------------------------------------------- entry */
 
-export async function runAgent(req: AgentRequest, emit: Emit): Promise<StyleResult> {
+export async function runAgent(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<StyleResult> {
   const t0 = Date.now();
   const st = new RunState(req, emit);
+  st.signal = signal;
   let planner: "llm" | "autopilot" = "autopilot";
   if (llmConfigured() && llmPaused()) {
     emit({ type: "thought", text: "LLM planner is cooling down after a rate limit. Running the deterministic planner over the same Qloo tools." });
@@ -593,6 +738,7 @@ export async function runAgent(req: AgentRequest, emit: Emit): Promise<StyleResu
       planner = "llm";
       emit({ type: "step", id: "plan", label: `Agent planned ${st.llmSteps} steps`, status: "done" });
     } catch (err) {
+      if (signal?.aborted) throw err;
       emit({ type: "step", id: "plan", label: "LLM unavailable, continuing on autopilot", status: "warn", detail: String((err as Error).message) });
     }
   } else {
@@ -618,20 +764,27 @@ export async function runAgent(req: AgentRequest, emit: Emit): Promise<StyleResu
     feedback: req.feedback,
   };
   if (req.previous) result.changes = diff(st, req.previous.brandIds);
-  // Final grounding gate: anything not returned by Qloo in this run is dropped.
-  result.brands = st.ledger.filter(result.brands, (b) => b.entity.id).kept;
-  result.bridges = st.ledger.filter(result.bridges, (b) => b.entity.id).kept;
+  // Final grounding gate: anything not returned by Qloo in this run is dropped. 👎 brands never come back.
+  const disliked = new Set(st.disliked);
+  result.brands = st.ledger.filter(result.brands, (b) => b.entity.id).kept.filter((b) => !disliked.has(b.entity.id));
+  result.bridges = st.ledger.filter(result.bridges, (b) => b.entity.id).kept.filter((b) => !disliked.has(b.entity.id));
+  result.capsule = capsule(result.brands);
+  result.critique = [...st.critique, keptLine(st, result.brands.filter((b) => !b.side).length, result.brands.filter((b) => b.side).length)];
   return result;
 }
 
 function diff(st: RunState, prev: string[]): StyleResult["changes"] {
-  const label = (id: string) => st.ledger.get(id)?.name ?? st.req.previous?.names?.[id]?.slice(0, 80) ?? "a brand";
+  const label = (id: string) => labelOf(st, id);
   const now = st.final.map((b) => b.entity.id);
   const added = now.filter((id) => !prev.includes(id));
   const removed = prev.filter((id) => !now.includes(id) && !st.liked.includes(id));
   const why: string[] = [];
-  for (const id of st.disliked.filter((x) => prev.includes(x)))
-    why.push(`Excluded ${label(id)} from every Qloo query (filter.exclude.entities).`);
+  const gone = st.disliked.filter((x) => prev.includes(x));
+  if (gone.length) {
+    const names = gone.slice(0, 4).map(label).join(", ") + (gone.length > 4 ? ` and ${gone.length - 4} more` : "");
+    why.push(`Excluded your 👎 on ${names} from every Qloo query (filter.exclude.entities), so ${gone.length === 1 ? "it can't" : "none of them can"} come back.`);
+  }
+  if (gone.length && added.length && added.length === now.length) why.push("Every brand below is new: these are Qloo's next-closest matches once the 👎 brands were removed.");
   if (st.liked.length)
     why.push(`Added ${st.liked.map(label).join(", ")} as extra Qloo signals (signal.interests.entities), so brands near them gained affinity.`);
   for (const id of added.slice(0, 3)) {
@@ -640,7 +793,9 @@ function diff(st: RunState, prev: string[]): StyleResult["changes"] {
     why.push(
       liked && liked.s > 0.05
         ? `${b.entity.name} entered: ${(liked.s * 100).toFixed(0)}% of its signal comes from your 👍 on ${label(liked.l)}.`
-        : `${b.entity.name} moved up into your top ${st.final.length}.`,
+        : gone.length
+          ? `${b.entity.name} entered once your 👎 brands made room.`
+          : `${b.entity.name} moved up into your top ${st.final.length}.`,
     );
   }
   const named = (ids: string[]) => ids.map((id) => ({ id, name: label(id) }));

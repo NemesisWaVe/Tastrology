@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { CardData, CardType } from "@/lib/card";
 import type { StyleResult } from "@/lib/types";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
@@ -106,12 +107,27 @@ export function BigThree({ result, card }: { result: StyleResult; card: CardData
           </div>
           <div className="col-start-2 min-w-0">
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">{r.receipt}</p>
-            <p className="mt-1.5 truncate font-mono text-[10px] text-ink-3" title={r.source}>
-              ↳ {r.source}
-            </p>
+            <Source text={r.source} />
           </div>
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Raw Qloo ids (urn:tag:…) are proof, not reading material: tucked behind a small toggle. */
+function Source({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <p className="mt-1.5 flex min-w-0 items-baseline gap-2 font-mono text-[10px] text-ink-3">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="shrink-0 rounded-full border border-line px-2 py-0.5 uppercase tracking-[0.16em] transition hover:border-ink-3 hover:text-ink-2"
+      >
+        {open ? "hide source" : "source"}
+      </button>
+      {open && <span className="min-w-0 break-all">{text}</span>}
+    </p>
   );
 }

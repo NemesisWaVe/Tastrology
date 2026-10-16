@@ -22,6 +22,8 @@ export interface RevealProps {
   onDone: () => void;
   /** Shown on the error card. */
   onRetry?: () => void;
+  /** Back to the landing page (offered next to retry when the run fails). */
+  onBack?: () => void;
   /** Optional: the seeds the user picked (with images), so the constellation is populated before Qloo resolves them. */
   seeds?: SeedHint[];
   /** Dev/lab: jump straight to a phase once the result is in. */
@@ -34,7 +36,7 @@ type Phase = "reading" | "story" | "pack";
  * The reveal: live "reading your taste" scene → Wrapped-style story → booster pack opening.
  * Fullscreen fixed overlay (z-60). Everything shown is read from the real agent trace and result.
  */
-export function Reveal({ events, result, running, error, onDone, onRetry, seeds, startAt }: RevealProps) {
+export function Reveal({ events, result, running, error, onDone, onRetry, onBack, seeds, startAt }: RevealProps) {
   const reduce = Boolean(useReducedMotion());
   const [phase, setPhase] = useState<Phase>(() => (result && !running && events.length === 0 ? "story" : "reading"));
 
@@ -118,6 +120,14 @@ export function Reveal({ events, result, running, error, onDone, onRetry, seeds,
         {phase === "story" && result && card && <Story key="story" result={result} card={card} reduce={reduce} onFinish={() => setPhase("pack")} />}
         {phase === "pack" && card && result && <Pack key="pack" card={card} loves={result.seeds.length} reduce={reduce} onDone={onDone} />}
       </AnimatePresence>
+      {error && onBack && phase === "reading" && (
+        <button
+          onClick={onBack}
+          className="absolute left-[8.25rem] top-[0.95rem] z-30 rounded-full border border-line bg-paper-2/90 px-3 py-1 font-mono text-[11px] text-ink-2 backdrop-blur hover:text-ink sm:left-[10rem] sm:top-[1.5rem]"
+        >
+          &larr; back
+        </button>
+      )}
       <div className={s.vignette} />
       <div className={s.grain} />
     </div>

@@ -51,55 +51,8 @@
 
 /* ---------- hero ---------- */
 .hero {
-  --sx: 72%;
-  --sy: 38%;
   position: relative;
   isolation: isolate;
-}
-.orb {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  pointer-events: none;
-  z-index: -1;
-  animation: drift 18s ease-in-out infinite alternate;
-}
-@keyframes drift {
-  0% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(4%, -6%, 0) scale(1.08); }
-  100% { transform: translate3d(-5%, 4%, 0) scale(0.96); }
-}
-
-.gridBg {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
-}
-
-/* Flashlight: a hidden constellation of taste words revealed around the cursor. */
-.constellation {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  mask-image: radial-gradient(circle 260px at var(--sx) var(--sy), black 0%, rgb(0 0 0 / 0.5) 45%, transparent 100%);
-  -webkit-mask-image: radial-gradient(circle 260px at var(--sx) var(--sy), black 0%, rgb(0 0 0 / 0.5) 45%, transparent 100%);
-  background-image: radial-gradient(rgb(255 255 255 / 0.22) 1px, transparent 1.4px);
-  background-size: 22px 22px;
-}
-.spot {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(circle 420px at var(--sx) var(--sy), rgb(198 255 61 / 0.075), transparent 70%);
 }
 
 .strike {
@@ -119,9 +72,6 @@
   transition: transform 0.6s cubic-bezier(0.7, 0, 0.2, 1) var(--d, 0s);
 }
 
-@media (hover: none) {
-  .star { display: none; }
-}
 
 /* ---------- specimen ---------- */
 .halo {
@@ -324,7 +274,6 @@
 @media (prefers-reduced-motion: reduce) {
   .grain,
   .holoText,
-  .orb,
   .halo,
   .ph,
   .phInner::after,

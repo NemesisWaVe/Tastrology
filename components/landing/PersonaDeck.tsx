@@ -5,7 +5,7 @@ import { useState } from "react";
 import { KIND_ICON, KIND_LABEL } from "@/components/SeedPicker";
 import { PERSONAS, personaRequest, type Persona } from "@/lib/personas";
 import type { AgentRequest } from "@/lib/types";
-import { EASE, Eyebrow, MaskedWords, Reveal } from "./primitives";
+import { EASE, MaskedWords, Reveal } from "./primitives";
 import { lookOf } from "./personaStyle";
 import s from "./landing.module.css";
 
@@ -27,14 +27,13 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
       <div className="mx-auto max-w-[1320px] px-4 sm:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
-            <Eyebrow n="01">Pick a sign</Eyebrow>
-            <h2 className="mt-5 font-display text-[clamp(2.6rem,9vw,5.6rem)] font-bold leading-[0.9] tracking-[-0.045em]">
-              <MaskedWords text="Zero typing." inView className="block" />
-              <MaskedWords text="One tap." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
+            <h2 className="font-display text-[clamp(2.6rem,9vw,5.6rem)] font-bold leading-[0.9] tracking-[-0.045em]">
+              <MaskedWords text="Not ready to type?" inView className="block" />
+              <MaskedWords text="Borrow a stranger's taste." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
             </h2>
           </div>
           <Reveal delay={0.1} className="max-w-sm text-[15px] leading-relaxed text-ink-3">
-            Three real taste profiles, read live from Qloo. Tap one and watch the agent mint the card, receipts and all.
+            Three made-up people with very real favorites. Tap one and the agent builds their card from scratch, live, so you can see how it works before you hand over your own.
           </Reveal>
         </div>
 
@@ -79,7 +78,7 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
       className="w-[80%] shrink-0 sm:w-auto"
       initial={{ opacity: 0, y: 50 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-10% 0px" }}
+      viewport={{ once: true, margin: "200px" }}
       transition={{ duration: 1, ease: EASE, delay: i * 0.12 }}
     >
       <motion.div className="h-full" animate={{ opacity: dim ? 0.35 : 1, scale: picked ? 0.97 : 1 }} transition={{ duration: 0.35, ease: EASE }}>

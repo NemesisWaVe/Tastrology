@@ -128,7 +128,7 @@ function Nav({ onPick }: { onPick: () => void }) {
     >
       <div
         className={`mx-auto flex h-12 max-w-[1320px] items-center justify-between rounded-full border px-4 transition-all duration-500 sm:h-14 sm:px-5 ${
-          solid ? "border-line bg-paper/70 backdrop-blur-xl" : "border-transparent bg-transparent"
+          solid ? "border-line bg-paper/95" : "border-transparent bg-transparent"
         }`}
       >
         <a href="#" className="flex items-center gap-2.5" aria-label={`${BRAND.name} home`}>

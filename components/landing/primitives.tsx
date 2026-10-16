@@ -31,7 +31,7 @@ export function MaskedWords({
           <motion.span
             className={`inline-block will-change-transform ${wordClassName}`}
             initial={{ y: "110%", rotate: 4 }}
-            {...(inView ? { whileInView: anim, viewport: { once: true, margin: "-10% 0px" } } : { animate: anim })}
+            {...(inView ? { whileInView: anim, viewport: { once: true, margin: "200px" } } : { animate: anim })}
             transition={{ duration: 0.9, ease: EASE, delay: delay + i * stagger }}
           >
             {w}
@@ -85,7 +85,8 @@ export function Magnetic({
       onPointerMove={move}
       onPointerLeave={leave}
       style={{ x: sx, y: sy }}
-      whileTap={rest.disabled ? undefined : { scale: 0.96 }}
+      whileTap={rest.disabled ? undefined : { scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
       className={className}
       {...rest}
     >
@@ -96,11 +97,10 @@ export function Magnetic({
   );
 }
 
-export function Eyebrow({ n, children }: { n: string; children: ReactNode }) {
+export function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <p className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">
-      <span className="text-accent">{n}</span>
-      <span className="h-px w-8 bg-line" />
+      <span className="h-px w-8 bg-accent/70" />
       {children}
     </p>
   );
@@ -113,7 +113,7 @@ export function Reveal({ children, delay = 0, className = "", y = 24 }: { childr
       className={className}
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-8% 0px" }}
+      viewport={{ once: true, margin: "200px" }}
       transition={{ duration: 0.9, ease: EASE, delay }}
     >
       {children}

@@ -7,7 +7,7 @@ import { ResultsView, type Vote } from "@/components/results/ResultsView";
 import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
 import { BRAND } from "@/lib/brand";
-import type { AgentRequest, BrandMatch, StyleResult } from "@/lib/types";
+import type { AgentRequest, BrandMatch, QEntity, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 
 type Stage = "home" | "reveal" | "result";
@@ -20,6 +20,26 @@ interface Saved {
   pinned: BrandMatch[];
 }
 
+/** Drop the heavy per-entity fields the UI never renders (~200KB -> a few KB). */
+function slim(e: QEntity): QEntity {
+  const { explain: _explain, popularity: _popularity, ...rest } = e;
+  return { ...rest, tags: (e.tags ?? []).slice(0, 4) };
+}
+
+function trim(r: StyleResult): StyleResult {
+  return {
+    ...r,
+    seeds: r.seeds.map(slim),
+    brands: r.brands.map((b) => ({ ...b, entity: slim(b.entity) })),
+    rejected: r.rejected.map((x) => ({ ...x, entity: slim(x.entity) })),
+    bridges: r.bridges.map((b) => ({ ...b, entity: slim(b.entity) })),
+  };
+}
+
+function trimPins(p: BrandMatch[]): BrandMatch[] {
+  return p.map((b) => ({ ...b, entity: slim(b.entity) }));
+}
+
 function load(): Saved | null {
   try {
     const raw = localStorage.getItem(STORE);
@@ -30,7 +50,7 @@ function load(): Saved | null {
 }
 
 export default function Home() {
-  const { events, result, running, error, run, setResult } = useAgentRun();
+  const { events, result, running, error, run, setResult, busy, cancel } = useAgentRun();
   const [stage, setStage] = useState<Stage>("home");
   const [req, setReq] = useState<AgentRequest | undefined>();
   const [votes, setVotes] = useState<Record<string, Vote>>({});
@@ -38,38 +58,137 @@ export default function Home() {
   const [replanning, setReplanning] = useState(false);
   const [share, setShare] = useState(false);
   const [returning, setReturning] = useState(false);
+  /** False until localStorage has been checked, so a saved sign never flashes the landing page. */
+  const [ready, setReady] = useState(false);
+  /** A saved sign exists (shown as a "resume" option on the landing page). */
+  const [saved, setSaved] = useState<Saved | null>(null);
 
-  // Memory: a return visit lands straight on your sign.
+  const restore = useCallback(
+    (s: Saved) => {
+      setReq(s.req);
+      setResult(s.result ?? null);
+      setVotes(s.votes ?? {});
+      setPinned(s.pinned ?? []);
+    },
+    [setResult],
+  );
+
+  // Memory: a return visit lands straight on your sign. History is home -> result so Back goes to the landing page.
   useEffect(() => {
     const s = load();
-    if (!s?.result) return;
-    setReq(s.req);
-    setResult(s.result);
-    setVotes(s.votes ?? {});
-    setPinned(s.pinned ?? []);
-    setStage("result");
-    setReturning(true);
-  }, [setResult]);
+    if (s?.result) {
+      restore(s);
+      setSaved(s);
+      setStage("result");
+      setReturning(true);
+      try {
+        history.replaceState({ s: "home" }, "");
+        history.pushState({ s: "result" }, "");
+      } catch {}
+    } else {
+      try {
+        history.replaceState({ s: "home" }, "");
+      } catch {}
+    }
+    setReady(true);
+  }, [restore]);
 
+  // Persist only a finished result (never mid-run), so a failed run can't wipe the last good sign.
   useEffect(() => {
-    if (stage === "home") return;
+    if (stage !== "result" || !result) return;
     try {
-      localStorage.setItem(STORE, JSON.stringify({ req, result: result ?? undefined, votes, pinned } satisfies Saved));
+      localStorage.setItem(STORE, JSON.stringify({ req, result: trim(result), votes, pinned: trimPins(pinned) } satisfies Saved));
     } catch {}
   }, [stage, req, result, votes, pinned]);
 
+  // Browser Back/Forward: Back from reveal/result returns to the landing page; the saved sign stays available.
+  useEffect(() => {
+    const onPop = () => {
+      const s = (history.state as { s?: Stage } | null)?.s;
+      // (a Next dev refresh can wipe our marker on an entry; treat unknown as home)
+      if (s === "result") {
+        const sv = load();
+        if (sv?.result) {
+          restore(sv);
+          setStage("result");
+          return;
+        }
+      }
+      cancel();
+      setReplanning(false);
+      setShare(false);
+      setSaved(load());
+      setStage("home");
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [cancel, restore]);
+
+  // In-page anchors (#matches, #capsule...) scroll without adding history entries, so Back still means "previous stage".
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href^='#']") as HTMLAnchorElement | null;
+      const id = a?.getAttribute("href")?.slice(1);
+      if (!a || !id || e.defaultPrevented || e.metaKey || e.ctrlKey) return;
+      const el = document.getElementById(id);
+      if (!el) return;
+      e.preventDefault();
+      el.scrollIntoView({ behavior: "smooth" });
+      try {
+        history.replaceState(history.state, "", `#${id}`);
+      } catch {}
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   const start = useCallback(
     (r: AgentRequest) => {
+      if (busy()) return; // double tap / re-entry while a run is in flight
       setReq(r);
       setVotes({});
       setPinned([]);
       setReturning(false);
       setStage("reveal");
       window.scrollTo({ top: 0 });
+      try {
+        if ((history.state as { s?: Stage } | null)?.s !== "reveal") history.pushState({ s: "reveal" }, "");
+      } catch {}
       run(r);
     },
-    [run],
+    [run, busy],
   );
+
+  const toResult = () => {
+    setStage("result");
+    window.scrollTo({ top: 0 });
+    try {
+      history.replaceState({ s: "result" }, "");
+    } catch {}
+  };
+
+  /** Back to the landing page without discarding the saved sign. */
+  const goHome = () => {
+    const s = (history.state as { s?: Stage } | null)?.s;
+    if (s && s !== "home") history.back();
+    else {
+      cancel();
+      setSaved(load());
+      setStage("home");
+    }
+  };
+
+  const resume = () => {
+    if (!saved?.result) return;
+    restore(saved);
+    setReturning(true);
+    setStage("result");
+    window.scrollTo({ top: 0 });
+    try {
+      history.pushState({ s: "result" }, "");
+    } catch {}
+  };
 
   const reset = () => {
     try {
@@ -78,9 +197,9 @@ export default function Home() {
     setResult(null);
     setVotes({});
     setPinned([]);
+    setSaved(null);
     setReturning(false);
-    setStage("home");
-    window.scrollTo({ top: 0 });
+    goHome();
   };
 
   const vote = (id: string, v: Vote | null) =>
@@ -101,7 +220,7 @@ export default function Home() {
 
   // Feedback loop: 👍 brands become Qloo signals, 👎 brands are excluded, and the agent re-plans.
   const replan = async () => {
-    if (!result || running) return;
+    if (!result || running || busy()) return;
     const pins = [
       ...pinned.filter((p) => liked.includes(p.entity.id)),
       ...result.brands.filter((b) => liked.includes(b.entity.id) && !pinned.some((p) => p.entity.id === b.entity.id)),
@@ -128,21 +247,38 @@ export default function Home() {
     return { ...result, brands: [...keep, ...result.brands] };
   }, [result, pinned, votes]);
 
-  if (stage === "home") return <Landing onStart={start} />;
+  // The share card never features a brand the user downvoted.
+  const shareable = useMemo(() => (shown ? { ...shown, brands: shown.brands.filter((b) => votes[b.entity.id] !== "down") } : null), [shown, votes]);
+
+  if (!ready) return <div className="min-h-screen" aria-hidden />;
+
+  if (stage === "home")
+    return (
+      <>
+        <Landing onStart={start} />
+        {saved?.result && (
+          <button
+            onClick={resume}
+            className="rise fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-line bg-paper/90 px-5 py-2.5 text-sm font-medium text-ink shadow-2xl backdrop-blur-md hover:border-ink-3"
+          >
+            Back to your sign: {saved.result.dna.name} &rarr;
+          </button>
+        )}
+      </>
+    );
 
   if (stage === "reveal")
     return (
       <Reveal
         events={events}
-        result={result}
+        // A failed run must never advance with the previous (stale) result.
+        result={error ? null : result}
         running={running}
         error={error}
         seeds={req?.seeds.map((s) => ({ name: s.name, kind: s.kind }))}
-        onDone={() => {
-          setStage("result");
-          window.scrollTo({ top: 0 });
-        }}
-        onRetry={() => (req ? start(req) : reset())}
+        onDone={toResult}
+        onBack={goHome}
+        onRetry={() => (req ? start(req) : goHome())}
       />
     );
 
@@ -162,7 +298,7 @@ export default function Home() {
           Welcome back. Your sign and your feedback are where you left them.
         </p>
       )}
-      {error && !replanning && <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">Re-plan failed: {error}</p>}
+      {error && !replanning && <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">{error}</p>}
 
       {shown && <ResultsView result={shown} votes={votes} onVote={vote} onShare={() => setShare(true)} onReplan={replan} pending={pending} />}
 
@@ -175,7 +311,7 @@ export default function Home() {
         </div>
       )}
 
-      {share && result && <ShareSheet result={result} onClose={() => setShare(false)} />}
+      {share && shareable && <ShareSheet result={shareable} onClose={() => setShare(false)} />}
     </div>
   );
 }

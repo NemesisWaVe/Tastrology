@@ -45,3 +45,5 @@ next-env.d.ts
 # never commit recorded Qloo responses (hackathon terms)
 /fixtures/qloo/live/
 
+
+tsconfig.tsbuildinfo
