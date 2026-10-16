@@ -31,10 +31,10 @@ const base = (over: Partial<StyleResult> = {}, pop = 0.5): StyleResult => ({
 
 describe("taste-based rarity", () => {
   it("scores obscurity 40 + pairing 25 + spread 20 + tension 15, each listed in rarityWhy", () => {
-    const c = buildCard(base({ overlap: 0.2, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.2));
+    const c = buildCard(base({ overlap: 0.2, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.91));
     // 40*0.8 + 25*0.8 + 20*5/5 + 15*1
-    expect(c.rarityScore).toBe(32 + 20 + 20 + 15);
-    expect(c.rarityWhy[0]).toBe("+32 obscurity: your picks average 20% popularity");
+    expect(c.rarityScore).toBe(24 + 20 + 20 + 15);
+    expect(c.rarityWhy[0]).toBe("+24 obscurity: your picks sit in the top 9% by popularity");
     expect(c.rarityWhy).toHaveLength(4);
     expect(c.rarity).toBe("secret");
   });
@@ -58,9 +58,9 @@ describe("weakness, Deep Cut, moves", () => {
     const c = buildCard(base({ inert: [{ id: "s3", influence: 0.02 }] }));
     expect(c.weakness).toBe("Weak to: Seed 3. Moved 2% of your picks.");
   });
-  it("Deep Cut only under 30% average popularity", () => {
-    expect(buildCard(base({}, 0.29)).deepCut).toBe(true);
-    expect(buildCard(base({}, 0.3)).deepCut).toBe(false);
+  it("Deep Cut only under 90% average popularity", () => {
+    expect(buildCard(base({}, 0.89)).deepCut).toBe(true);
+    expect(buildCard(base({}, 0.9)).deepCut).toBe(false);
     expect(buildCard(base({ seeds: kinds.map((k, i) => seed(i + 1, k)) })).deepCut).toBe(false);
   });
   it("each move carries its biggest measured ablation drop", () => {
