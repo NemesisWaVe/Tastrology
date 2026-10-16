@@ -138,7 +138,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
               if (e.key === "Escape") setOpen(false);
               if (e.key === "Backspace" && !q && seeds.length) onChange(seeds.slice(0, -1));
             }}
-            placeholder={full ? "That's plenty: 8 max" : "Search a film, artist, book, place, game…"}
+            placeholder={full ? "That's plenty: 8 max" : "Search anything you love…"}
             disabled={full}
             className="w-full min-w-0 bg-transparent px-3 py-4 text-[16px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-50"
             aria-label="Search Qloo for something you love"

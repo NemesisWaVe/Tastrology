@@ -60,13 +60,21 @@ export function Reading({
           )}
           {error ? "STOPPED" : done ? "DONE" : "LIVE"} · {((done && totalMs ? totalMs : elapsed) / 1000).toFixed(1)}s
           {done && cachedRun ? " · replay" : ""}
+          {onSkip && !error && (
+            <button
+              onClick={onSkip}
+              className="ml-2 rounded-full border border-line bg-paper-2/80 px-3 py-1 font-mono text-[11px] text-ink-2 backdrop-blur hover:text-ink"
+            >
+              skip ›
+            </button>
+          )}
         </span>
       </header>
 
       <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-5 pb-4 pt-2 sm:px-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-1 lg:items-center lg:gap-10 lg:pb-8">
         <div className="flex flex-col items-center">
           <p className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.28em] text-ink-3">reading your taste</p>
-          <Constellation m={m} done={done} reduce={reduce} />
+          <Constellation m={m} done={done || Boolean(error)} reduce={reduce} />
           <Headline m={m} done={done} error={error} />
           <Words m={m} />
         </div>
@@ -87,14 +95,6 @@ export function Reading({
         </div>
       )}
 
-      {onSkip && !error && (
-        <button
-          onClick={onSkip}
-          className="absolute bottom-4 right-5 z-20 rounded-full border border-line bg-paper-2/80 px-3.5 py-1.5 font-mono text-[11px] text-ink-2 backdrop-blur hover:text-ink"
-        >
-          skip to my sign ›
-        </button>
-      )}
     </motion.div>
   );
 }
@@ -173,7 +173,7 @@ function Constellation({ m, done, reduce }: { m: SceneModel; done: boolean; redu
         {pos.map((p, i) => {
           const seed = m.seeds[i];
           const on = seed.id ? lit.has(seed.id) : false;
-          const isOut = seed.id === out;
+          const isOut = Boolean(seed.id) && seed.id === out;
           const color = seed.odd ? "var(--m)" : on ? "var(--accent)" : seed.read ? "var(--ink-3)" : "var(--line)";
           return (
             <line
@@ -225,12 +225,12 @@ function Constellation({ m, done, reduce }: { m: SceneModel; done: boolean; redu
       {/* seed nodes */}
       {m.seeds.map((seed, i) => {
         const on = seed.id ? lit.has(seed.id) : false;
-        const isOut = seed.id === out;
+        const isOut = Boolean(seed.id) && seed.id === out;
         return (
           <motion.div
             key={i}
             className="absolute w-[19%] -translate-x-1/2 -translate-y-1/2"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.4 }}
+            initial={reduce ? { opacity: 0, left: `${pos[i].x}%`, top: `${pos[i].y}%` } : { opacity: 0, scale: 0.4, left: `${pos[i].x}%`, top: `${pos[i].y}%` }}
             animate={{ opacity: isOut ? 0.35 : 1, scale: on && !reduce ? 1.08 : 1, left: `${pos[i].x}%`, top: `${pos[i].y}%` }}
             transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : i * 0.06 }}
           >
@@ -272,7 +272,6 @@ function SeedOrb({ seed, on }: { seed: SeedNode; on: boolean }) {
         style={seed.odd ? ({ "--da": "var(--m)", "--db": "#2a0f2a" } as React.CSSProperties) : undefined}
       >
         {seed.image && !broken && (
-          // eslint-disable-next-line @next/next/no-img-element
           <motion.img
             src={seed.image}
             alt=""
@@ -324,7 +323,7 @@ function Headline({ m, done, error }: { m: SceneModel; done: boolean; error: str
 }
 
 function Words({ m }: { m: SceneModel }) {
-  const words = m.words.slice(-7);
+  const words = m.words.slice(-6);
   const tone = {
     tag: "border-accent/40 text-accent",
     brand: "border-line text-ink-2",
@@ -371,12 +370,12 @@ function Feed({ m, running }: { m: SceneModel; running: boolean }) {
       aria-live="polite"
     >
       <header className="flex items-center justify-between gap-3 border-b border-line/80 px-4 py-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <span className={`h-1.5 w-1.5 rounded-full ${running ? "pulse-dot bg-accent" : "bg-good"}`} />
           <h3 className="text-[12.5px] font-semibold tracking-tight">Agent trace</h3>
-          {m.planner && <span className="rounded bg-paper-2 px-1.5 py-px font-mono text-[9px] text-ink-3">LLM planner</span>}
+          {m.planner && <span className="hidden rounded bg-paper-2 px-1.5 py-px font-mono text-[9px] text-ink-3 sm:inline">LLM planner</span>}
         </div>
-        <span className="font-mono text-[10.5px] tabular-nums text-ink-3">
+        <span className="whitespace-nowrap font-mono text-[10.5px] tabular-nums text-ink-3">
           {m.calls} Qloo call{m.calls === 1 ? "" : "s"}
           {m.cached ? ` · ${m.cached} cached` : ""}
         </span>
@@ -389,7 +388,7 @@ function Feed({ m, running }: { m: SceneModel; running: boolean }) {
         }}
         className={`${s.feed} min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3`}
       >
-        {m.rows.length === 0 && <li className="px-2 py-1 font-mono text-[11px] text-ink-3">connecting to the agent…</li>}
+        {m.rows.length === 0 && <li className="px-2 py-1 font-mono text-[11px] text-ink-3">{running ? "connecting to the agent…" : "no trace events"}</li>}
         <AnimatePresence initial={false}>
           {m.rows.map((r) => (
             <motion.li

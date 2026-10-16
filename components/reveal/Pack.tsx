@@ -12,10 +12,10 @@ const EASE = [0.2, 0.7, 0.2, 1] as const;
 type Stage = "sealed" | "opening" | "facedown" | "charging" | "revealed";
 
 const RARITY = {
-  common: { sparks: 0, shake: 0, ray: "rgb(255 255 255 / .5)", rays: 0.35, stamp: "●" },
-  rare: { sparks: 12, shake: 0, ray: "", rays: 0.55, stamp: "✦" },
-  holo: { sparks: 26, shake: 9, ray: "", rays: 0.8, stamp: "✦✦" },
-  secret: { sparks: 40, shake: 16, ray: "#fcd34d", rays: 1, stamp: "✦✦✦" },
+  common: { sparks: 0, shake: 0, ray: "rgb(255 255 255 / .5)", rays: 0.3, stamp: "●" },
+  rare: { sparks: 12, shake: 0, ray: "", rays: 0.45, stamp: "✦" },
+  holo: { sparks: 26, shake: 9, ray: "", rays: 0.6, stamp: "✦✦" },
+  secret: { sparks: 40, shake: 16, ray: "#fcd34d", rays: 0.7, stamp: "✦✦✦" },
 };
 
 function useViewport() {
@@ -300,7 +300,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
                     </motion.div>
                   </motion.div>
-                  <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW }} />
+                  <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW, opacity: leak }} />
                   {/* hint */}
                   {stage === "sealed" && (
                     <div className="pointer-events-none absolute inset-x-0 flex justify-center" style={{ top: tearY - 30 }}>

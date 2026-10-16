@@ -23,7 +23,7 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
   };
 
   return (
-    <section id="pick" className="relative scroll-mt-10 py-24 sm:py-32">
+    <section id="pick" className="relative scroll-mt-10 py-20 sm:py-28">
       <div className="mx-auto max-w-[1320px] px-4 sm:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
@@ -88,7 +88,7 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
         onPointerMove={move}
         onPointerLeave={leave}
         aria-label={`Mint ${p.name}: ${p.blurb}`}
-        className={`${s.persona} group flex h-full min-h-[440px] w-full flex-col overflow-hidden rounded-[28px] border border-line bg-card p-6 text-left outline-none sm:min-h-[500px] sm:p-7`}
+        className={`${s.persona} group flex h-full w-full flex-col overflow-hidden rounded-[28px] border border-line bg-card p-6 text-left outline-none sm:min-h-[500px] sm:p-7`}
         style={{
           backgroundImage: `radial-gradient(120% 70% at 100% 0%, ${look.a}33 0%, transparent 55%), radial-gradient(90% 60% at 0% 100%, ${look.b}26 0%, transparent 60%)`,
         }}
@@ -104,20 +104,20 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
           </span>
         </span>
 
-        <span className="relative mt-8 grid h-24 w-24 place-items-center sm:h-28 sm:w-28">
+        <span className="relative mt-6 grid h-20 w-20 place-items-center sm:mt-8 sm:h-28 sm:w-28">
           <span
             className="absolute inset-0 rounded-full opacity-80 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
             style={{ background: `radial-gradient(circle, ${look.a}, transparent 70%)` }}
           />
           <span
-            className="relative grid h-full w-full place-items-center rounded-full border border-white/15 font-serif text-5xl text-paper transition-transform duration-700 ease-[cubic-bezier(.2,.7,.2,1)] group-hover:rotate-[20deg] group-hover:scale-105 sm:text-6xl"
+            className="relative grid h-full w-full place-items-center rounded-full border border-white/15 font-serif text-paper transition-transform duration-700 ease-[cubic-bezier(.2,.7,.2,1)] group-hover:rotate-[20deg] group-hover:scale-105 text-4xl sm:text-6xl"
             style={{ background: `linear-gradient(135deg, ${look.a}, ${look.b})` }}
           >
             {look.glyph}
           </span>
         </span>
 
-        <span className="mt-8 block font-display text-[clamp(1.9rem,4.2vw,2.5rem)] font-bold leading-[0.95] tracking-[-0.035em] text-ink">
+        <span className="mt-6 block font-display sm:mt-8 text-[clamp(1.9rem,4.2vw,2.5rem)] font-bold leading-[0.95] tracking-[-0.035em] text-ink">
           {hasArticle && <span className="mb-1 block font-serif text-[0.62em] font-normal italic tracking-normal text-ink-3">The</span>}
           {hasArticle ? rest.join(" ") : p.name}
         </span>
@@ -132,7 +132,7 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
           ))}
         </span>
 
-        <span className="mt-auto flex items-center justify-between pt-8">
+        <span className="mt-auto flex items-center justify-between pt-6 sm:pt-8">
           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-2 transition-colors group-hover:text-ink">
             {picked ? "Minting…" : "Mint this sign"}
           </span>

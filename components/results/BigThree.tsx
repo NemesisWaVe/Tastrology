@@ -50,7 +50,7 @@ export function signReceipts(result: StyleResult, card: CardData): SignReceipt[]
           label: "Moon",
           role: "your contradiction",
           t: moon,
-          receipt: `${list(lobeB.seedIds.map(name))} pulls the other way (${Math.round(overlap * 100)}% tag overlap with the rest), so the agent split it into its own side instead of averaging you into mush.${sideB.length ? ` ${sideB.length} brands answer to it.` : ""}`,
+          receipt: `${list(lobeB.seedIds.map(name))} pulls the other way (${overlap < 0.01 ? "almost no" : `only ${Math.round(overlap * 100)}%`} Qloo tag overlap with the rest), so the agent split it into its own side instead of averaging you into mush.${sideB.length ? ` ${sideB.length} brands answer to it.` : ""}`,
           source: moonTag?.id ?? "qloo aesthetic tag · side B",
           alert: true,
         }

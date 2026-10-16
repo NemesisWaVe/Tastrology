@@ -22,13 +22,13 @@ function useCardWidth() {
 }
 
 /* Where the "evolves from" seeds orbit the card (desktop only). */
-const ORBIT = [
-  { left: "-34%", top: "9%" },
-  { right: "-38%", top: "22%" },
-  { left: "-40%", top: "56%" },
-  { right: "-30%", top: "70%" },
-  { left: "-12%", top: "92%" },
-] as const;
+const ORBIT: React.CSSProperties[] = [
+  { right: "calc(100% - 8px)", top: "14%" },
+  { left: "calc(100% - 8px)", top: "30%" },
+  { right: "calc(100% - 10px)", top: "58%" },
+  { left: "calc(100% - 10px)", top: "74%" },
+  { right: "calc(100% - 40px)", top: "90%" },
+];
 
 export function Specimen({
   card,
@@ -36,6 +36,7 @@ export function Specimen({
   events,
   error,
   running,
+  archived,
   personas,
   active,
   onSwap,
@@ -45,6 +46,7 @@ export function Specimen({
   events: TraceEvent[];
   error: string | null;
   running: boolean;
+  archived?: boolean;
   personas: Persona[];
   active: string;
   onSwap: (key: string) => void;
@@ -64,7 +66,7 @@ export function Specimen({
     <div className="flex flex-col items-center">
       <div className="mb-5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-ink-3">
         <span className={`h-1.5 w-1.5 rounded-full ${card ? "bg-accent" : "bg-warn pulse-dot"}`} />
-        {card ? "Live specimen · minted from Qloo" : "Minting specimen"}
+        {card ? (archived ? "Archived specimen · read from Qloo" : "Live specimen · minted from Qloo") : "Minting specimen"}
         {card && running && <span className="text-ink-2"> · re-reading…</span>}
       </div>
 
@@ -157,7 +159,7 @@ export function Specimen({
 
 function BigThreeCell({ label, sym, t, hint, flag }: { label: string; sym: string; t?: CardType; hint: string; flag?: boolean }) {
   return (
-    <div className="relative min-w-0 rounded-2xl border border-line bg-white/[0.02] px-3 py-2.5">
+    <div className="relative min-w-0 rounded-2xl border border-line bg-white/[0.02] px-2.5 py-2.5 sm:px-3">
       <div className="flex items-center gap-1.5">
         <span
           className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] text-paper"
@@ -179,12 +181,19 @@ function BigThreeCell({ label, sym, t, hint, flag }: { label: string; sym: strin
           {t ? t.name : <span className="inline-block h-3.5 w-16 rounded shimmer align-middle" />}
         </motion.p>
       </AnimatePresence>
-      <p className={`mt-1 truncate font-mono text-[9px] uppercase tracking-[0.14em] ${flag ? "text-accent" : "text-ink-3"}`}>{hint}</p>
+      <p className={`mt-1 truncate font-mono text-[8px] uppercase tracking-[0.08em] sm:text-[9px] sm:tracking-[0.14em] ${flag ? "text-accent" : "text-ink-3"}`}>{hint}</p>
     </div>
   );
 }
 
 function Placeholder({ width, events, error }: { width: number; events: TraceEvent[]; error: string | null }) {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const t0 = Date.now();
+    const t = setInterval(() => setSecs(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const calls = events.reduce((n, e) => n + (e.type === "tool" ? e.calls.length : 0), 0);
   const lines = events
     .map((e) => (e.type === "step" ? e.label : e.type === "tool" ? e.summary : null))
     .filter((x): x is string => Boolean(x))
@@ -195,7 +204,7 @@ function Placeholder({ width, events, error }: { width: number; events: TraceEve
         <div className="flex h-full flex-col justify-between p-[7cqw]">
           <div className="flex items-center justify-between font-mono text-[3.2cqw] uppercase tracking-[0.2em] text-ink-3">
             <span>Set 01</span>
-            <span>No. ????</span>
+            <span className="tabular-nums">{calls ? `${calls} Qloo calls` : `${secs}s`}</span>
           </div>
           <div className="grid place-items-center">
             <div className="relative grid h-[34cqw] w-[34cqw] place-items-center">
@@ -207,8 +216,16 @@ function Placeholder({ width, events, error }: { width: number; events: TraceEve
               <div className="absolute inset-[16%] rounded-full bg-[radial-gradient(circle,rgba(198,255,61,0.18),transparent_70%)]" />
               <span className={`${s.holoText} font-serif text-[16cqw] italic leading-none`}>✧</span>
             </div>
-            <p className="mt-[5cqw] font-display text-[6.5cqw] font-semibold tracking-tight text-ink">{error ? "Specimen offline" : "Reading the stars…"}</p>
-            <p className="mt-1 font-serif text-[4.6cqw] italic text-ink-3">{error ? "the graph will be back" : "well, the taste graph"}</p>
+            <p className="mt-[5cqw] font-display text-[6.5cqw] font-semibold tracking-tight text-ink">{error ? "Warming up the graph" : "Reading the stars…"}</p>
+            <p className="mt-1 font-serif text-[4.6cqw] italic text-ink-3">{error ? "your own sign still works below" : "well, the taste graph"}</p>
+          </div>
+          <div className="mb-[3cqw] h-[0.8cqw] overflow-hidden rounded-full bg-white/[0.06]">
+            <motion.div
+              className="h-full rounded-full bg-accent"
+              initial={{ width: "4%" }}
+              animate={{ width: `${Math.min(92, 4 + secs * 4.4 + calls * 1.5)}%` }}
+              transition={{ duration: 0.9, ease: "easeOut" }}
+            />
           </div>
           <ul className="space-y-[1.6cqw] font-mono text-[3cqw] leading-snug text-ink-3" aria-live="polite">
             {(lines.length ? lines : ["Waking the agent", "Opening Qloo's taste graph"]).map((l, i, arr) => (

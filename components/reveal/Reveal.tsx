@@ -24,6 +24,8 @@ export interface RevealProps {
   onRetry?: () => void;
   /** Optional: the seeds the user picked (with images), so the constellation is populated before Qloo resolves them. */
   seeds?: SeedHint[];
+  /** Dev/lab: jump straight to a phase once the result is in. */
+  startAt?: "story" | "pack";
 }
 
 type Phase = "reading" | "story" | "pack";
@@ -32,7 +34,7 @@ type Phase = "reading" | "story" | "pack";
  * The reveal: live "reading your taste" scene → Wrapped-style story → booster pack opening.
  * Fullscreen fixed overlay (z-60). Everything shown is read from the real agent trace and result.
  */
-export function Reveal({ events, result, running, error, onDone, onRetry, seeds }: RevealProps) {
+export function Reveal({ events, result, running, error, onDone, onRetry, seeds, startAt }: RevealProps) {
   const reduce = Boolean(useReducedMotion());
   const [phase, setPhase] = useState<Phase>(() => (result && !running && events.length === 0 ? "story" : "reading"));
 
@@ -53,10 +55,12 @@ export function Reveal({ events, result, running, error, onDone, onRetry, seeds 
 
   const done = Boolean(result) && !running && shown >= events.length;
   useEffect(() => {
-    if (!done || phase !== "reading") return;
+    if (phase !== "reading") return;
+    if (startAt && result && !running) return setPhase(startAt);
+    if (!done) return;
     const t = setTimeout(() => setPhase("story"), reduce ? 900 : 2000);
     return () => clearTimeout(t);
-  }, [done, phase, reduce]);
+  }, [done, phase, reduce, startAt, result, running]);
 
   // Wall clock while reading.
   const t0 = useRef(0);

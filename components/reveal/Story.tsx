@@ -361,7 +361,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
           </motion.p>
           {ov && (
             <motion.div {...rise(reduce, 1.6, 8)} className="mx-auto mt-4 max-w-xs space-y-2 text-left font-mono text-[11px] text-ink-2">
-              <OverlapBar label={`${odd[0]?.name.split(" ").slice(0, 3).join(" ")} ↔ the rest`} value={ov.odd} color="var(--bad)" reduce={reduce} delay={1.8} />
+              <OverlapBar label="this one ↔ the rest" value={ov.odd} color="var(--bad)" reduce={reduce} delay={1.8} />
               {ov.rest != null && <OverlapBar label="among the rest" value={ov.rest} color={sun.a} reduce={reduce} delay={2.0} />}
               <p className="pt-1 text-center text-[10px] text-ink-3">aesthetic tag overlap · Qloo tag graph</p>
             </motion.div>

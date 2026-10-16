@@ -8,7 +8,7 @@ import { useAgentRun } from "@/lib/useAgentRun";
 
 /** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1) */
 export default function CardLab() {
-  const { result, running, error, run } = useAgentRun();
+  const { result, running, error, run, setResult } = useAgentRun();
   const [widths, setWidths] = useState<number[]>([360]);
   const [still, setStill] = useState(false);
   useEffect(() => {
@@ -18,8 +18,19 @@ export default function CardLab() {
     if (w) setWidths(w.split(",").map(Number).filter(Boolean));
     setStill(q.get("still") === "1");
     const p = PERSONAS.find((x) => x.key === key) ?? PERSONAS[1];
-    run(personaRequest(p));
-  }, [run]);
+    // Lab-only: reuse the result /lab/results cached for this persona (?fresh=1 to re-run).
+    let cached = null;
+    try {
+      cached = q.get("fresh") === "1" ? null : JSON.parse(localStorage.getItem(`tastrology:lab:${p.key}`) ?? "null");
+    } catch {}
+    if (cached) setResult(cached);
+    else
+      run(personaRequest(p)).then((r) => {
+        try {
+          if (r) localStorage.setItem(`tastrology:lab:${p.key}`, JSON.stringify(r));
+        } catch {}
+      });
+  }, [run, setResult]);
   const card = useMemo(() => (result ? buildCard(result) : null), [result]);
 
   return (
