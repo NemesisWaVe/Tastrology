@@ -7,6 +7,7 @@ import { ResultsView, type Vote } from "@/components/results/ResultsView";
 import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
 import { BRAND } from "@/lib/brand";
+import { buildCard } from "@/lib/card";
 import type { AgentRequest, BrandMatch, QEntity, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 
@@ -100,6 +101,12 @@ export default function Home() {
       localStorage.setItem(STORE, JSON.stringify({ req, result: trim(result), votes, pinned: trimPins(pinned) } satisfies Saved));
     } catch {}
   }, [stage, req, result, votes, pinned]);
+
+  // Register the minted card's digital twin so the QR on its back (/c/<code>) resolves anywhere.
+  useEffect(() => {
+    if (!result || result.mode === "mock") return;
+    fetch("/api/card", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(buildCard(result)) }).catch(() => {});
+  }, [result]);
 
   // Browser Back/Forward: Back from reveal/result returns to the landing page; the saved sign stays available.
   useEffect(() => {
