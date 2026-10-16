@@ -1,5 +1,6 @@
 "use client";
 
+import { CursorArrow } from "@/components/CursorArrow";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { SeedPicker, type Seed } from "@/components/SeedPicker";
@@ -115,13 +116,11 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
             >
               <span className="flex items-center gap-3">
                 {ready ? "Mint my taste sign" : `Add ${need} more love${need === 1 ? "" : "s"}`}
-                <motion.span
-                  className={`grid h-9 w-9 place-items-center rounded-full ${ready ? "bg-paper text-accent" : "bg-white/5"}`}
-                  animate={{ rotate: ready ? -45 : 0 }}
-                  transition={{ duration: 0.5, ease: EASE }}
-                >
-                  →
-                </motion.span>
+                {ready ? (
+                  <CursorArrow className="h-9 w-9 bg-paper text-accent" />
+                ) : (
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-white/5">→</span>
+                )}
               </span>
             </Magnetic>
             <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">No sign-up · minted in about 20 seconds</p>
