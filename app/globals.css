@@ -128,3 +128,8 @@ button:disabled {
     animation: none;
   }
 }
+
+/* Cards and packs are dragged by our own gestures: never by the browser's image drag-and-drop. */
+img {
+  -webkit-user-drag: none;
+}

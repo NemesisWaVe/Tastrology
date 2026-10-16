@@ -115,6 +115,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     if (d.max > 0.1) animate(scar, Math.max(scar.get(), Math.min(0.3, d.max * 0.38)), { duration: 0.2 });
   };
   const onDown = (e: React.PointerEvent) => {
+    e.preventDefault(); // stop the browser starting a native image drag (ghost copy in Edge/Chrome)
     if (stage !== "sealed" || busy.current || reduce || e.button > 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { x: e.clientX, y: e.clientY, tick: 0, max: 0 };
@@ -178,6 +179,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   }, [stage, peekY, reduce, cardY]);
 
   const onPullDown = (e: React.PointerEvent) => {
+    e.preventDefault(); // no native drag ghost: this gesture is ours
     if (stage !== "inpack" || reduce || e.button > 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     cardY.stop();
