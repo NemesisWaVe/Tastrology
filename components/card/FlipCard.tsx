@@ -113,8 +113,18 @@ export function FlipCard({
           const h = s.hist;
           const dt = Math.max(1, h[h.length - 1].t - h[0].t);
           const vel = ((h[h.length - 1].x - h[0].x) / dt) * 1000 * degPerPx; // deg/s
-          const projected = rot.get() + vel * 0.12; // a flick carries it over
-          go(Math.round(projected / 180) * 180, vel);
+          if (reduce || Math.abs(vel) < 900) {
+            const projected = rot.get() + vel * 0.12; // a flick carries it over
+            go(Math.round(projected / 180) * 180, vel);
+            return;
+          }
+          // A hard fling: real momentum. The card coasts through several turns (more speed, more turns,
+          // capped at 4) and eases onto a clean face, like spinning a real card on a table.
+          const coast = Math.max(-1440, Math.min(1440, vel * 0.45));
+          const to = Math.round((rot.get() + coast) / 180) * 180;
+          target.current = to;
+          animate(rot, to, { type: "inertia", velocity: vel, power: 0.8, timeConstant: 520, modifyTarget: () => to });
+          report(showsBack(to));
         }}
         onPointerCancel={() => {
           if (g.current?.turning) go(Math.round(rot.get() / 180) * 180);
