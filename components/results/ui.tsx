@@ -4,17 +4,13 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 export type Vote = "up" | "down";
 
-/** Editorial section header: numbered mono kicker, big serif title, plain-language note. */
-export function SectionHead({ n, kicker, title, note, right }: { n: string; kicker: string; title: React.ReactNode; note?: React.ReactNode; right?: React.ReactNode }) {
+/** Editorial section header: optional mono kicker, big serif title, plain-language note. Sections vary which parts they use. */
+export function SectionHead({ kicker, title, note, right }: { kicker?: string; title: React.ReactNode; note?: React.ReactNode; right?: React.ReactNode }) {
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0 max-w-3xl">
-        <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-accent">
-          <span className="text-ink-3">{n}</span>
-          <span className="h-px w-6 bg-accent/60" />
-          {kicker}
-        </p>
-        <h2 className="mt-2 font-serif text-[34px] leading-[0.98] tracking-[-0.01em] text-ink sm:text-[46px]">{title}</h2>
+        {kicker && <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{kicker}</p>}
+        <h2 className="font-serif text-[34px] leading-[0.98] tracking-[-0.01em] text-ink sm:text-[46px]">{title}</h2>
         {note && <p className="mt-3 max-w-2xl text-[14.5px] leading-relaxed text-ink-2">{note}</p>}
       </div>
       {right}

@@ -8,10 +8,11 @@ import { BRAND } from "@/lib/brand";
 import { HoloCard, glyph } from "./HoloCard";
 import { Sigil, Sparkle } from "./Sigils";
 
-type Format = "story" | "square";
-const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label: string }> = {
-  story: { w: 360, h: 640, out: [1080, 1920], label: "Story 9:16" },
-  square: { w: 400, h: 400, out: [1080, 1080], label: "Square 1:1" },
+type Format = "story" | "receipt" | "square";
+const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label: string; for: string }> = {
+  story: { w: 360, h: 640, out: [1080, 1920], label: "Story", for: "IG / TikTok stories" },
+  receipt: { w: 360, h: 640, out: [1080, 1920], label: "Receipt", for: "stories, or the group chat" },
+  square: { w: 400, h: 400, out: [1080, 1080], label: "Square", for: "feeds & group chats" },
 };
 
 let fontCSS: Promise<string> | null = null;
@@ -78,7 +79,7 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
       const file = new File([blob], fileName, { type: "image/png" });
       if (mode === "share" && navigator.canShare?.({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: BRAND.name, text: `I'm ${card.archetype}. ${BRAND.question}` });
+          await navigator.share({ files: [file], title: BRAND.name, text: `I pulled a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}` });
           setDone("Shared");
         } catch (e) {
           if ((e as Error).name !== "AbortError") throw e;
@@ -131,7 +132,13 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
 
         <div className="relative overflow-hidden rounded-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-line" style={{ width: size.w * scale, height: size.h * scale }}>
           <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0", width: size.w, height: size.h }}>
-            {fmt === "story" ? <Story ref={node} card={card} result={result} /> : <Square ref={node} card={card} result={result} />}
+            {fmt === "story" ? (
+              <Story ref={node} card={card} />
+            ) : fmt === "receipt" ? (
+              <Receipt ref={node} card={card} result={result} />
+            ) : (
+              <Square ref={node} card={card} result={result} />
+            )}
           </div>
         </div>
 
@@ -147,11 +154,11 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
               disabled={!!busy}
               className={`flex-1 rounded-full py-3.5 text-[15px] font-semibold transition active:scale-[0.98] disabled:opacity-60 ${canShare ? "border border-line text-ink" : "bg-accent text-black"}`}
             >
-              {busy === "save" ? "Minting PNG…" : canShare ? "Save image" : `Download ${fmt === "story" ? "story" : "square"} PNG`}
+              {busy === "save" ? "Minting PNG…" : canShare ? "Save image" : `Download ${SIZE[fmt].label.toLowerCase()} PNG`}
             </button>
           </div>
           <p className="min-h-[18px] text-center font-mono text-[11px] text-ink-3" aria-live="polite" data-share-status>
-            {err ? <span className="text-bad">{err}</span> : done ?? `${size.out[0]}×${size.out[1]} · made for ${fmt === "story" ? "IG / TikTok stories" : "feeds & group chats"}`}
+            {err ? <span className="text-bad">{err}</span> : done ?? `${size.out[0]}×${size.out[1]} · made for ${size.for}`}
           </p>
         </div>
       </div>
@@ -259,40 +266,125 @@ function TopBrands({ result, vertical = false }: { result: StyleResult; vertical
   );
 }
 
-const Story = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult }>(function Story({ card, result }, ref) {
+const Story = forwardRef<HTMLDivElement, { card: CardData }>(function Story({ card }, ref) {
+  const [t1, t2] = card.types;
+  const a = t1?.a ?? "#a78bfa";
+  const b = (t2 ?? t1)?.b ?? "#22d3ee";
   return (
     <div ref={ref} className="relative overflow-hidden text-ink" style={{ width: 360, height: 640, fontFamily: "var(--nf-sans), system-ui, sans-serif" }}>
       <Backdrop card={card} />
-      <div className="relative flex h-full flex-col items-center px-6 pb-6 pt-6">
-        <div className="flex w-full items-center justify-between">
-          <Wordmark />
-          <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-ink-3">
-            {BRAND.cardSet} · № {card.serial}
-          </span>
+      {/* foil band: one holographic stripe running behind the card */}
+      <div
+        className="absolute left-[-20%] right-[-20%] top-[40%] h-[150px] -translate-y-1/2 -rotate-[8deg]"
+        style={{
+          background: `linear-gradient(90deg, transparent, ${a} 12%, #ffed5f 30%, #83fff7 48%, #d875ff 66%, ${b} 84%, transparent)`,
+          opacity: 0.5,
+          maskImage: "linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent)",
+          WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent)",
+        }}
+      />
+
+      <div className="relative flex h-full flex-col items-center px-6 pb-7 pt-12">
+        <div className="shrink-0" style={{ transform: "rotate(-6deg)", filter: "drop-shadow(0 30px 40px rgba(0,0,0,0.65))" }}>
+          <HoloCard card={card} width={288} idle={false} still />
         </div>
 
-        <p className="mt-5 font-mono text-[8.5px] uppercase tracking-[0.3em] text-accent">my taste sign is</p>
-        <h2 className="mt-1.5 text-center font-serif leading-[0.95] text-balance" data-len={card.archetype.length} style={{ fontFamily: "var(--nf-serif), Georgia, serif", fontSize: card.archetype.length > 30 ? 27 : 31 }}>
-          {card.archetype}
-        </h2>
-
-        <div className="mt-4 shrink-0">
-          <HoloCard card={card} width={208} idle={false} still />
-        </div>
-
-        <div className="mt-4 w-full">
-          <BigThreeStrip card={card} />
-        </div>
-        <div className="mt-3 w-full">
-          <p className="mb-1.5 text-center font-mono text-[7px] uppercase tracking-[0.24em] text-ink-3">receipts · top matches from Qloo</p>
-          <TopBrands result={result} />
-        </div>
-
-        <div className="mt-auto flex w-full flex-col items-center pt-2">
-          <p className="font-serif text-[22px] italic leading-none" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
-            {BRAND.question}
+        <div className="mt-auto flex w-full flex-col items-center text-center">
+          <p className="font-serif text-[25px] leading-[1.08]" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
+            I pulled a <span style={{ color: a }}>{card.rarityLabel}</span>.
+            <br />
+            <span className="italic text-ink-2">{BRAND.question}</span>
           </p>
-          <p className="mt-1.5 font-mono text-[7.5px] uppercase tracking-[0.24em] text-ink-3">{BRAND.name.toLowerCase()} · {BRAND.tagline.toLowerCase()}</p>
+          <div className="mt-3 opacity-80">
+            <Wordmark size={9} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const KIND: Record<string, string> = { artist: "music", movie: "film", tv_show: "tv", book: "book", place: "place", podcast: "pod", videogame: "game" };
+
+/** Deterministic bars from the card's own machine-readable line. */
+function barcode(seed: string): string {
+  const stops: string[] = [];
+  let x = 0;
+  for (let i = 0; i < seed.length && x < 250; i++) {
+    const c = seed.charCodeAt(i);
+    const w = 1 + (c % 3);
+    const gap = 1 + ((c >> 2) % 3);
+    stops.push(`#151418 ${x}px ${x + w}px`, `transparent ${x + w}px ${x + w + gap}px`);
+    x += w + gap;
+  }
+  return `linear-gradient(90deg, ${stops.join(", ")}, transparent ${x}px)`;
+}
+
+function ReceiptRow({ l, r, strong }: { l: string; r: string; strong?: boolean }) {
+  return (
+    <div className={`flex items-baseline gap-1.5 ${strong ? "font-bold" : ""}`}>
+      <span className="min-w-0 truncate">{l}</span>
+      <span className="min-w-[10px] flex-1 border-b border-dotted border-black/35" />
+      <span className="shrink-0 tabular-nums">{r}</span>
+    </div>
+  );
+}
+const Rule = () => <div className="my-2 border-t border-dashed border-black/40" />;
+
+/* Receiptify-style thermal printout: every line is a field from the run, nothing invented. */
+const Receipt = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult }>(function Receipt({ card, result }, ref) {
+  const brands = result.brands.filter((x) => !x.side).slice(0, 6);
+  const loves = result.seeds.slice(0, 8);
+  const d = new Date(result.createdAt || Date.now());
+  const date = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+  const zigB = "conic-gradient(from -45deg at bottom, transparent, #000 1deg 89deg, transparent 90deg) 50% / 12px 100%";
+  const zigT = "conic-gradient(from 135deg at top, transparent, #000 1deg 89deg, transparent 90deg) 50% / 12px 100%";
+  return (
+    <div ref={ref} className="relative overflow-hidden" style={{ width: 360, height: 640, background: "#0b0b0e" }}>
+      <div className="absolute inset-0" style={{ background: "radial-gradient(70% 50% at 50% 45%, rgba(255,255,255,0.08), transparent 70%)" }} />
+      <div className="absolute left-1/2 top-[16px] w-[300px] -translate-x-1/2 rotate-[-1.2deg]" style={{ filter: "drop-shadow(0 24px 30px rgba(0,0,0,0.7))" }}>
+        <div style={{ WebkitMask: zigT, mask: zigT, paddingTop: 6, background: "linear-gradient(#f3f0e8 0 12px, transparent 12px)" }}>
+          <div
+            className="px-5 pt-3 text-[9.5px] uppercase leading-[1.45] text-[#151418]"
+            style={{ fontFamily: "var(--nf-mono), ui-monospace, Menlo, monospace", WebkitMask: zigB, mask: zigB, paddingBottom: 20, background: "#f3f0e8" }}
+          >
+            <p className="text-center text-[19px] font-bold tracking-[0.18em]">{BRAND.name}</p>
+            <p className="text-center text-[8.5px] tracking-[0.1em]">{BRAND.poweredBy}</p>
+            <div className="mt-1.5 flex justify-between text-[8.5px]">
+              <span>order #{card.serial}</span>
+              <span>{BRAND.cardSet}</span>
+              <span>{date}</span>
+            </div>
+            <Rule />
+            <p className="mb-0.5 font-bold">loves</p>
+            {loves.map((s, i) => (
+              <ReceiptRow key={s.id} l={`${i + 1}. ${s.name}`} r={KIND[s.kind] ?? s.kind} />
+            ))}
+            <Rule />
+            <div className="mb-0.5 flex justify-between font-bold">
+              <span>brands</span>
+              <span>affinity</span>
+            </div>
+            {brands.map((b) => (
+              <ReceiptRow key={b.entity.id} l={b.entity.name} r={`.${String(Math.round(b.affinity * 100)).padStart(2, "0")}`} />
+            ))}
+            <Rule />
+            <ReceiptRow l={`sun ${card.bigThree.sun.name}`} r="" />
+            <ReceiptRow l={`moon ${card.bigThree.moon.name}`} r={card.bigThree.moonIsContradiction ? "split" : ""} />
+            <ReceiptRow l={`rising ${card.bigThree.rising.name}`} r="" />
+            <Rule />
+            <div className="text-[14px]">
+              <ReceiptRow l="total taste" r={String(card.power)} strong />
+            </div>
+            <ReceiptRow l={card.rarityLabel} r={`${card.domains} domain${card.domains === 1 ? "" : "s"}`} />
+            <div className="mt-3 h-[34px]" style={{ background: barcode(card.mrz.join("")) }} />
+            <p className="mt-1.5 overflow-hidden whitespace-nowrap text-[7.6px] leading-[1.35]">
+              {card.mrz[0]}
+              <br />
+              {card.mrz[1]}
+            </p>
+            <p className="mt-2 text-center text-[8.5px] tracking-[0.14em]">{BRAND.question}</p>
+          </div>
         </div>
       </div>
     </div>

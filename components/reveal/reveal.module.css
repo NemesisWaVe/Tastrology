@@ -223,62 +223,16 @@
   100% { transform: translateX(60px); opacity: 0; }
 }
 
-/* --------------------------------------------------------------- card back */
+/* --------------------------------------------------------------- orbiting seed posters */
 
-.back {
-  container-type: inline-size;
-  position: relative;
-  aspect-ratio: 63 / 88;
-  border-radius: 4.6cqw;
-  padding: 2.4cqw;
-  background: linear-gradient(135deg, var(--a), var(--b) 50%, var(--m));
-  box-shadow: 0 3cqw 8cqw -2cqw rgb(0 0 0 / 0.7), 0 0 16cqw -4cqw var(--a), inset 0 0 0 0.35cqw rgb(255 255 255 / 0.3);
-  cursor: pointer;
-}
-.backFace {
-  position: relative;
-  height: 100%;
-  border-radius: 3cqw;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  background:
-    repeating-conic-gradient(from 0deg at 50% 50%, rgb(255 255 255 / 0.035) 0 6deg, transparent 6deg 12deg),
-    radial-gradient(70% 50% at 50% 50%, color-mix(in oklab, var(--a) 35%, transparent), transparent 70%),
-    #0b0b10;
-}
-.backFace::before {
-  content: "";
+.poster {
   position: absolute;
-  inset: 4cqw;
-  border-radius: 2cqw;
-  border: 0.4cqw solid rgb(255 255 255 / 0.12);
-}
-.backFace::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.22) 45%, transparent 55%);
-  background-size: 260% 100%;
-  animation: backSheen 3.2s ease-in-out infinite;
-  mix-blend-mode: overlay;
-}
-@keyframes backSheen {
-  0% { background-position: 130% 0; }
-  60%, 100% { background-position: -40% 0; }
-}
-
-.emblem {
-  width: 42cqw;
-  aspect-ratio: 1;
-  border-radius: 9999px;
-  display: grid;
-  place-items: center;
-  background:
-    radial-gradient(circle, #0b0b10 56%, transparent 57%),
-    conic-gradient(from var(--spin, 0deg), var(--a), var(--b), var(--m), var(--a));
-  animation: spin 7s linear infinite;
-  box-shadow: 0 0 12cqw -2cqw var(--a);
+  left: 0;
+  top: 0;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px -10px rgb(0 0 0 / 0.85), inset 0 0 0 1px rgb(255 255 255 / 0.22);
+  will-change: transform, opacity;
 }
 
 /* --------------------------------------------------------------- burst */
@@ -316,10 +270,59 @@
   .core,
   .scan,
   .foil,
-  .emblem,
   .rays,
-  .hintSweep,
-  .backFace::after {
+  .hintSweep {
     animation: none;
   }
+}
+
+/* --------------------------------------------------------------- receipt (self-critique) */
+
+.receipt {
+  position: relative;
+  margin-top: -6px;
+  padding: 16px 16px 22px;
+  color: #1b1a1f;
+  background:
+    linear-gradient(180deg, rgb(0 0 0 / 0.12), transparent 18px),
+    #f3efe6;
+  font-family: var(--font-mono, ui-monospace), ui-monospace, monospace;
+  text-transform: none;
+  box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.8);
+  /* torn zig-zag bottom edge */
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%;
+}
+.rule {
+  margin: 10px 0;
+  border-top: 1.5px dashed rgb(27 26 31 / 0.35);
+}
+.dotLeader {
+  flex: 0 0 18px;
+  border-bottom: 1.5px dotted rgb(27 26 31 / 0.4);
+  transform: translateY(-3px);
+}
+.void {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  padding: 2px 6px;
+  border: 2.5px solid #d4243b;
+  border-radius: 4px;
+  color: #d4243b;
+  font-family: var(--font-display, system-ui), system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  mix-blend-mode: multiply;
+  /* worn ink */
+  -webkit-mask: radial-gradient(circle at 30% 40%, #000 55%, rgb(0 0 0 / 0.7) 70%, #000 85%) , repeating-linear-gradient(115deg, #000 0 3px, rgb(0 0 0 / 0.75) 3px 4px);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.barcode {
+  height: 28px;
+  margin-top: 12px;
+  background: repeating-linear-gradient(90deg, #1b1a1f 0 2px, transparent 2px 4px, #1b1a1f 4px 5px, transparent 5px 8px, #1b1a1f 8px 11px, transparent 11px 12px);
+  opacity: 0.85;
 }

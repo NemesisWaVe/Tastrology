@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
 import { typeOf } from "@/lib/card";
 import type { StyleResult } from "@/lib/types";
-import { EASE, Eyebrow, MaskedWords, Reveal } from "./primitives";
+import { EASE, MaskedWords, Reveal } from "./primitives";
 import s from "./landing.module.css";
 
 const clean = (n: string) => n.replace(/\s*\(.*\)$/, "");
@@ -92,21 +92,20 @@ export function Receipts({ result }: { result: StyleResult | null }) {
       <div className="mx-auto max-w-[1320px] px-4 sm:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
-            <Eyebrow n="03">Why it&apos;s different</Eyebrow>
-            <h2 className="mt-5 font-display text-[clamp(2.6rem,9vw,5.6rem)] font-bold leading-[0.9] tracking-[-0.045em]">
-              <MaskedWords text="Receipts," inView className="block" />
-              <MaskedWords text="not vibes." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
+            <h2 className="font-display text-[clamp(2.6rem,9vw,5.6rem)] font-bold leading-[0.9] tracking-[-0.045em]">
+              <MaskedWords text="Your horoscope" inView className="block" />
+              <MaskedWords text="never showed its math." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
             </h2>
           </div>
           <Reveal delay={0.1} className="max-w-sm text-[15px] leading-relaxed text-ink-3">
-            Horoscopes guess. This one shows its work: every line below is {v.live ? "live from the card above" : "from a real run"}, read from Qloo.
+            Everything below comes from {v.live ? "the card at the top of this page" : "a real run"}: the actual Qloo scores, the actual picks, nothing typed in by us.
           </Reveal>
         </div>
 
         <div className="mt-16 space-y-20 sm:mt-24 sm:space-y-28">
           <Beat
-            n="01"
-            title="Grounded in the graph"
+            tag="where the brands come from"
+            title="Your picks, cross-read"
             body={
               <>
                 Every pick is a live Qloo affinity score, read across film, music, books, places, games, podcasts and TV.{" "}
@@ -118,9 +117,9 @@ export function Receipts({ result }: { result: StyleResult | null }) {
           </Beat>
 
           <Beat
-            n="02"
+            tag="leave-one-out test"
             flip
-            title="Shows its work"
+            title="Every brand names who sent it"
             body={
               <>
                 Each brand comes with who earned it. Then the agent removes each love and{" "}
@@ -132,8 +131,8 @@ export function Receipts({ result }: { result: StyleResult | null }) {
           </Beat>
 
           <Beat
-            n="03"
-            title="Catches contradictions"
+            tag="when your taste argues"
+            title="Two sides, not one beige"
             body={
               <>
                 Love {v.lobes[0].seeds[0] ?? "one thing"} <em className="font-serif text-ink">and</em> {v.lobes[1].seeds[0] ?? "its opposite"}? It doesn&apos;t average
@@ -151,14 +150,14 @@ export function Receipts({ result }: { result: StyleResult | null }) {
   );
 }
 
-function Beat({ n, title, body, children, flip }: { n: string; title: string; body: ReactNode; children: ReactNode; flip?: boolean }) {
+function Beat({ tag, title, body, children, flip }: { tag: string; title: string; body: ReactNode; children: ReactNode; flip?: boolean }) {
   return (
     <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
       <div className={`min-w-0 ${flip ? "lg:order-2" : ""}`}>
         <Reveal>
-          <span className={`${s.holoText} font-display text-[clamp(4.5rem,12vw,8rem)] font-bold leading-none tracking-[-0.06em]`}>{n}</span>
+          <span className="inline-block rounded-full border border-line px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-2">{tag}</span>
         </Reveal>
-        <h3 className="mt-3 font-display text-[clamp(1.9rem,5vw,3rem)] font-semibold leading-none tracking-[-0.035em]">
+        <h3 className="mt-5 font-display text-[clamp(1.9rem,5vw,3rem)] font-semibold leading-none tracking-[-0.035em]">
           <MaskedWords text={title} inView />
         </h3>
         <Reveal delay={0.1}>
@@ -175,7 +174,7 @@ function Beat({ n, title, body, children, flip }: { n: string; title: string; bo
 /* Beat 1: seeds → Qloo → brands, drawn as live wires. */
 function Graph({ v }: { v: View }) {
   const ref = useRef<HTMLDivElement>(null);
-  const on = useInView(ref, { once: true, margin: "-15% 0px" });
+  const on = useInView(ref, { once: true, margin: "200px" });
   const seeds = v.seeds.slice(0, 5);
   const brands = v.brands;
   const ys = (n: number) => Array.from({ length: n }, (_, i) => ((i + 0.5) / n) * 100);
@@ -280,7 +279,7 @@ function Graph({ v }: { v: View }) {
 /* Beat 2: a literal receipt. */
 function Receipt({ v }: { v: View }) {
   const ref = useRef<HTMLDivElement>(null);
-  const on = useInView(ref, { once: true, margin: "-15% 0px" });
+  const on = useInView(ref, { once: true, margin: "200px" });
   const reduce = useReducedMotion();
   const max = Math.max(...v.earned.map((e) => e.share), 0.01);
   const tier = v.item.tier ? "$".repeat(v.item.tier) : "";
@@ -383,7 +382,7 @@ function Receipt({ v }: { v: View }) {
 /* Beat 3: two lobes that refuse to merge. */
 function Split({ v }: { v: View }) {
   const ref = useRef<HTMLDivElement>(null);
-  const on = useInView(ref, { once: true, margin: "-20% 0px" });
+  const on = useInView(ref, { once: true, margin: "200px" });
   const [a, b] = v.lobes;
   const ta = typeOf(a.tags[0] ?? "Sun");
   const tb = typeOf(b.tags[0] ?? "Moon");
@@ -455,9 +454,9 @@ function Count({ to, on }: { to: number; on: boolean }) {
 
 function Stats({ calls }: { calls: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const on = useInView(ref, { once: true, margin: "-10% 0px" });
+  const on = useInView(ref, { once: true, margin: "200px" });
   const items: [number, string, string][] = [
-    [0, "purchases needed", "Cold start, solved. No history, no sign-up."],
+    [0, "purchases needed", "We never look at what you buy. No account, no history."],
     [calls, "live Qloo calls", "Behind the specimen above, re-queries that check its work included."],
     [7, "taste domains", "Film, music, books, places, games, podcasts and TV, cross-read."],
   ];

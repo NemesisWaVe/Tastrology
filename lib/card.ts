@@ -33,7 +33,8 @@ export interface CardData {
   rarityLabel: string;
   serial: string;
   moves: { name: string; value: number; note: string }[];
-  stats: { label: string; value: number }[];
+  /** Each stat carries a one-line `hint` that says exactly what it measures. */
+  stats: { label: string; value: number; hint: string }[];
   weakness?: string;
   ignores?: string;
   evolvesFrom: { name: string; kind: string; image?: string }[];
@@ -46,6 +47,8 @@ export interface CardData {
   domains: number;
   /** Human reasons for the rarity tier, from the same inputs as the rarity score. */
   rarityWhy: string[];
+  /** Points behind the rarity tier (range + edge + contradiction); thresholds 40 / 58 / 75. */
+  rarityScore: number;
 }
 
 const TYPE_STYLES: [RegExp, Omit<CardType, "name">][] = [
@@ -95,19 +98,36 @@ export function buildCard(r: StyleResult): CardData {
   const main = r.brands.filter((b) => !b.side);
   const top = main.slice(0, 3);
   const avgAff = top.reduce((t, b) => t + b.affinity, 0) / Math.max(1, top.length);
+  const n = Math.max(1, r.seeds.length);
+
+  // ---- Stats: each one is a single, explainable reading of the run (see `hint`).
+  // Range: how many of the 7 seed domains you use, and how evenly your loves spread across them.
+  const kindCounts = new Map<string, number>();
+  for (const sd of r.seeds) kindCounts.set(sd.kind, (kindCounts.get(sd.kind) ?? 0) + 1);
+  const domains = kindCounts.size;
+  const entropy = [...kindCounts.values()].reduce((t, c) => t - (c / n) * Math.log(c / n), 0);
+  const evenness = domains > 1 ? entropy / Math.log(domains) : 0;
+  const range = clampStat(100 * (0.6 * (domains / SEED_DOMAINS) + 0.4 * evenness));
+
+  // Edge: share of your signature brands that sit outside Qloo's top-10% popularity.
   const pops = main.map((b) => b.entity.popularity).filter((p): p is number => typeof p === "number");
-  const avgPop = pops.length ? pops.reduce((a, b) => a + b, 0) / pops.length : 0.8;
-  const domains = new Set(r.seeds.map((s) => s.kind)).size;
+  const offMainstream = pops.filter((p) => p < 0.9).length;
+  const edge = clampStat(pops.length ? (100 * offMainstream) / pops.length : 30);
 
-  // Stats: all derived from the run.
-  const range = Math.round(Math.min(99, 25 + (domains / 5) * 74));
-  const edge = Math.round(Math.min(99, Math.max(5, (1 - avgPop) * 260)));
-  const cohesion = Math.round(dual ? 22 + (r.contradictions[0]?.overlap ?? 0) * 300 : Math.min(99, 55 + avgAff * 45));
-  const signal = Math.round(Math.min(99, avgAff * 100));
+  // Cohesion: how many loves share the main aesthetic, and how many of them each brand draws on.
+  const mainLobe = r.dna.lobes[0]?.seedIds.length ?? n;
+  const lobeShare = dual ? mainLobe / n : 1;
+  const drawn = top.length ? top.reduce((t, b) => t + Object.values(b.explain).filter((v) => v >= 0.05).length, 0) / top.length : n;
+  const cohesion = clampStat(100 * (0.5 * lobeShare + 0.5 * Math.min(1, drawn / n)));
 
-  // Rarity: breadth of taste + nicheness + a contradiction makes you rarer.
-  const score = domains * 10 + edge * 0.4 + (dual ? 25 : 0) + (r.rejected.length > 3 ? 5 : 0);
-  const rarity: Rarity = score >= 85 ? "secret" : score >= 65 ? "holo" : score >= 45 ? "rare" : "common";
+  // Signal: of everything Qloo returned, how much survived the self-critique.
+  const kept = r.brands.length;
+  const signal = clampStat((100 * kept) / Math.max(1, kept + r.rejected.length));
+
+  // Rarity: breadth + nicheness + a real contradiction. Every point is listed in `rarityWhy`.
+  const pts = { range: Math.round(range * 0.35), edge: Math.round(edge * 0.35), twist: dual ? 20 : 0 };
+  const rarityScore = pts.range + pts.edge + pts.twist;
+  const rarity: Rarity = rarityScore >= 75 ? "secret" : rarityScore >= 58 ? "holo" : rarityScore >= 40 ? "rare" : "common";
   const rarityLabel = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[rarity];
 
   const sideB = r.dna.lobes[1];
@@ -127,11 +147,10 @@ export function buildCard(r: StyleResult): CardData {
   // Constellation: deterministic positions per seed, brightness from summed Qloo influence on the signature brands.
   const pull = r.seeds.map((s) => main.reduce((t, b) => t + (b.explain[s.id] ?? 0), 0));
   const maxPull = Math.max(0.0001, ...pull);
-  const n = Math.max(1, r.seeds.length);
   const stars = r.seeds.map((s, i) => {
     const h = hash(s.id || s.name);
     return {
-      name: s.name,
+      name: displayName(s.name),
       kind: s.kind,
       x: 0.1 + ((i + 0.5) / n) * 0.8 + (((h % 100) / 100 - 0.5) * 0.6) / n,
       y: 0.18 + (((h >>> 8) % 1000) / 1000) * 0.6,
@@ -139,7 +158,7 @@ export function buildCard(r: StyleResult): CardData {
     };
   });
 
-  const serial = String(hash(r.seeds.map((s) => s.id).sort().join("|")) % 10000).padStart(4, "0");
+  const serial = String(hash(r.seeds.map((s) => s.id).sort().join("|")) % 10000).padStart(4, "0"); // computed once
   const mrzWord = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "<");
   const fit = (s: string) => (s + "<".repeat(36)).slice(0, 36);
   const mrz: [string, string] = [
@@ -148,17 +167,18 @@ export function buildCard(r: StyleResult): CardData {
   ];
 
   const rarityWhy = [
-    `${domains} taste domain${domains === 1 ? "" : "s"}`,
-    `edge ${edge}`,
-    ...(dual ? ["a real contradiction"] : []),
-    ...(r.rejected.length > 3 ? [`${r.rejected.length} picks rejected`] : []),
+    `+${pts.range} range (${domains} of ${SEED_DOMAINS} domains)`,
+    `+${pts.edge} edge (${offMainstream} of ${pops.length} brands off-mainstream)`,
+    ...(dual ? [`+${pts.twist} a real contradiction`] : []),
   ];
 
+  const plural = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
   return {
     stars,
     mrz,
     domains,
     rarityWhy,
+    rarityScore,
     bigThree,
     archetype: r.dna.name,
     flavor: r.dna.tagline,
@@ -167,23 +187,41 @@ export function buildCard(r: StyleResult): CardData {
     dual,
     rarity,
     rarityLabel,
-    serial: String(hash(r.seeds.map((s) => s.id).sort().join("|")) % 10000).padStart(4, "0"),
+    serial,
     moves: top.map((b) => ({
-      name: b.entity.name,
+      name: displayName(b.entity.name),
       value: Math.round(b.affinity * 100),
-      note: b.because.map((id) => r.seeds.find((s) => s.id === id)?.name).filter(Boolean).join(" + "),
+      note: b.because
+        .map((id) => r.seeds.find((s) => s.id === id)?.name)
+        .filter((x): x is string => Boolean(x))
+        .map(displayName)
+        .join(" + "),
     })),
     stats: [
-      { label: "Range", value: range },
-      { label: "Edge", value: edge },
-      { label: "Cohesion", value: Math.max(5, Math.min(99, cohesion)) },
-      { label: "Signal", value: signal },
+      { label: "Range", value: range, hint: `Range: ${domains} of ${SEED_DOMAINS} domains, ${evenness > 0.9 ? "evenly" : "unevenly"} spread` },
+      { label: "Edge", value: edge, hint: `Edge: how far from the mainstream your brands sit (${offMainstream}/${pops.length} outside Qloo's top 10%)` },
+      { label: "Cohesion", value: cohesion, hint: `Cohesion: ${mainLobe}/${n} loves share one aesthetic; brands draw on ${Math.round(drawn)}` },
+      { label: "Signal", value: signal, hint: `Signal: ${plural(kept, "pick")} survived the critique, ${r.rejected.length} thrown out` },
     ],
     weakness: sideB ? sideB.keywords.map((k) => k.name).slice(0, 2).join(" / ") : undefined,
-    ignores: inert ? inert.split(" barely moves")[0] : undefined,
-    evolvesFrom: r.seeds.map((s) => ({ name: s.name, kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
+    ignores: inert ? displayName(inert.split(" barely moves")[0]) : undefined,
+    evolvesFrom: r.seeds.map((s) => ({ name: displayName(s.name), kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
     art: r.seeds.map((s) => s.image).filter((x): x is string => Boolean(x)).slice(0, 5).map(proxied),
   };
+}
+
+const SEED_DOMAINS = 7;
+const clampStat = (v: number) => Math.round(Math.max(5, Math.min(99, v)));
+
+/** "Neuromancer (Sprawl, #1)" → "Neuromancer". Strips trailing (…) / […] groups, keeps the rest intact. */
+export function displayName(name: string): string {
+  let out = name.trim();
+  for (let k = 0; k < 3; k++) {
+    const next = out.replace(/\s*[([][^()[\]]*[)\]]\s*$/, "").trim();
+    if (!next || next === out) break;
+    out = next;
+  }
+  return out || name;
 }
 
 /** Same-origin image URL so the share export can draw it onto a canvas. */

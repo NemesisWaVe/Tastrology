@@ -13,7 +13,7 @@ import s from "./landing.module.css";
 function useCardWidth() {
   const [w, setW] = useState(340);
   useEffect(() => {
-    const f = () => setW(window.innerWidth < 400 ? 252 : window.innerWidth < 640 ? 280 : window.innerWidth < 1280 ? 320 : 350);
+    const f = () => setW(window.innerWidth <= 360 ? 220 : window.innerWidth <= 480 ? 240 : window.innerWidth < 640 ? 280 : window.innerWidth < 1280 ? 320 : 350);
     f();
     window.addEventListener("resize", f);
     return () => window.removeEventListener("resize", f);
@@ -64,7 +64,7 @@ export function Specimen({
 
   return (
     <div className="flex flex-col items-center">
-      <div className="mb-5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-ink-3">
+      <div className="mb-5 flex items-center gap-2 font-mono max-[480px]:mb-3 text-[10px] uppercase tracking-[0.24em] text-ink-3">
         <span className={`h-1.5 w-1.5 rounded-full ${card ? "bg-accent" : "bg-warn pulse-dot"}`} />
         {card ? (archived ? "Archived specimen · read from Qloo" : "Live specimen · minted from Qloo") : "Minting specimen"}
         {card && running && <span className="text-ink-2"> · re-reading…</span>}
@@ -104,8 +104,8 @@ export function Specimen({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ delay: 0.5 + i * 0.09, duration: 0.7, ease: EASE }}
               >
-                <div className={s.float} style={{ animationDelay: `${-i * 1.3}s` }}>
-                  <div className="flex max-w-[190px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-1 pr-3 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)] backdrop-blur-md">
+                <div>
+                  <div className="flex max-w-[190px] items-center gap-2 rounded-full border border-white/10 py-1 pl-1 pr-3 bg-paper/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)]">
                     {e.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={e.image} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover grayscale-[0.3]" />
@@ -125,14 +125,14 @@ export function Specimen({
       </div>
 
       {/* Big Three */}
-      <div className="mt-8 grid w-full max-w-[420px] grid-cols-3 gap-2">
+      <div className="mt-8 grid w-full max-w-[420px] grid-cols-3 gap-2 max-[480px]:hidden">
         <BigThreeCell label="Sun" sym="☉" t={sun} hint="main aesthetic" />
         <BigThreeCell label="Moon" sym="☽" t={moon} hint={card?.bigThree.moonIsContradiction ? "contradiction" : "hidden side"} flag={card?.bigThree.moonIsContradiction} />
         <BigThreeCell label="Rising" sym="↑" t={rising} hint="how you read" />
       </div>
 
       {/* Specimen switcher */}
-      <div className="mt-5 flex items-center gap-3">
+      <div className="mt-5 flex items-center gap-3 max-[480px]:hidden">
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Shuffle</span>
         <div className="flex gap-1.5 rounded-full border border-line bg-white/[0.02] p-1">
           {personas.map((p) => {
@@ -216,8 +216,8 @@ function Placeholder({ width, events, error }: { width: number; events: TraceEve
               <div className="absolute inset-[16%] rounded-full bg-[radial-gradient(circle,rgba(198,255,61,0.18),transparent_70%)]" />
               <span className={`${s.holoText} font-serif text-[16cqw] italic leading-none`}>✧</span>
             </div>
-            <p className="mt-[5cqw] font-display text-[6.5cqw] font-semibold tracking-tight text-ink">{error ? "Warming up the graph" : "Reading the stars…"}</p>
-            <p className="mt-1 font-serif text-[4.6cqw] italic text-ink-3">{error ? "your own sign still works below" : "well, the taste graph"}</p>
+            <p className="mt-[5cqw] font-display text-[6.5cqw] font-semibold tracking-tight text-ink">{error ? "Qloo is slow right now" : "Building this card live"}</p>
+            <p className="mt-1 font-serif text-[4.6cqw] italic text-ink-3">{error ? "trying once more; yours still works below" : "from a stranger's favorites"}</p>
           </div>
           <div className="mb-[3cqw] h-[0.8cqw] overflow-hidden rounded-full bg-white/[0.06]">
             <motion.div
@@ -228,7 +228,7 @@ function Placeholder({ width, events, error }: { width: number; events: TraceEve
             />
           </div>
           <ul className="space-y-[1.6cqw] font-mono text-[3cqw] leading-snug text-ink-3" aria-live="polite">
-            {(lines.length ? lines : ["Waking the agent", "Opening Qloo's taste graph"]).map((l, i, arr) => (
+            {(lines.length ? lines : ["Sending the picks to the agent", "Looking them up in Qloo"]).map((l, i, arr) => (
               <li key={`${i}-${l}`} className={`flex gap-2 truncate ${i === arr.length - 1 ? "text-ink-2" : ""}`}>
                 <span className="text-accent">›</span>
                 <span className="truncate">{l}</span>

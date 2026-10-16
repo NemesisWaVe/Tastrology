@@ -15,7 +15,7 @@ export function Footer({ onPick }: { onPick: () => void }) {
       <div className="relative mx-auto max-w-[1320px] px-4 sm:px-8 lg:px-12">
         <Reveal className="flex flex-col items-start gap-8 sm:flex-row sm:items-end sm:justify-between">
           <p className="max-w-xl font-display text-[clamp(2rem,6vw,3.6rem)] font-semibold leading-[0.95] tracking-[-0.04em] text-ink">
-            The stars were never <span className="font-serif font-normal italic text-ink-2">about the stars.</span>
+            Send it to the friend who <span className="font-serif font-normal italic text-ink-2">says you have no taste.</span>
           </p>
           <Magnetic
             onClick={onPick}

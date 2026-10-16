@@ -16,12 +16,12 @@ export function Changes({ result }: { result: StyleResult }) {
       <h2 className="mt-2 font-serif text-[30px] leading-none sm:text-[38px]">What changed, and why</h2>
       <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
         {c.added.map((t) => (
-          <span key={t.id} title={t.id} className="rounded-full border border-good/30 bg-good-soft px-3 py-1 text-good">
+          <span key={t.id} className="rounded-full border border-good/30 bg-good-soft px-3 py-1 text-good">
             + {t.name}
           </span>
         ))}
         {c.removed.map((t) => (
-          <span key={t.id} title={t.id} className="rounded-full border border-bad/30 bg-bad-soft px-3 py-1 text-bad line-through decoration-1">
+          <span key={t.id} className="rounded-full border border-bad/30 bg-bad-soft px-3 py-1 text-bad line-through decoration-1">
             {t.name}
           </span>
         ))}
@@ -45,21 +45,19 @@ export function Changes({ result }: { result: StyleResult }) {
 
 /* ------------------------------------------------------------------ self-critique */
 
-export function Critique({ result, n }: { result: StyleResult; n: string }) {
+export function Critique({ result }: { result: StyleResult }) {
   const seedName = (id: string) => result.seeds.find((s) => s.id === id)?.name ?? "";
   const checks = result.critique.filter((c) => !c.startsWith("Contradiction") && !c.startsWith("Rejected"));
   const con = result.contradictions[0];
   return (
     <section id="doubts" className="scroll-mt-20">
       <SectionHead
-        n={n}
-        kicker="Self-critique"
         title={
           <>
             The agent argued <em className="text-ink-2">with itself</em>
           </>
         }
-        note="Before answering, it stress-tests what Qloo returned and throws out matches it can't defend."
+        note="Before showing you anything, it checks what Qloo sent back and drops the matches it can't defend."
       />
       <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr]">
         <div className="space-y-3 rounded-[22px] border border-line bg-card p-4 sm:p-5">
@@ -115,7 +113,7 @@ export function Critique({ result, n }: { result: StyleResult; n: string }) {
 
 /* ------------------------------------------------------------------ attribution matrix */
 
-export function Matrix({ result, n }: { result: StyleResult; n: string }) {
+export function Matrix({ result }: { result: StyleResult }) {
   const [mode, setMode] = useState<"explain" | "ablation">("explain");
   const [cell, setCell] = useState<{ b: string; s: string } | null>(null);
   const maxAb = Math.max(0.0001, ...result.brands.flatMap((b) => Object.values(b.ablation)));
@@ -125,7 +123,6 @@ export function Matrix({ result, n }: { result: StyleResult; n: string }) {
   return (
     <section id="receipts" className="scroll-mt-20">
       <SectionHead
-        n={n}
         kicker="Receipts"
         title={
           <>
@@ -222,12 +219,12 @@ function BridgeImg({ src, icon }: { src?: string; icon: string }) {
   return <img src={src} alt="" loading="lazy" onError={() => setBad(true)} className="h-16 w-16 shrink-0 rounded-2xl bg-paper-2 object-cover" />;
 }
 
-export function CapsuleAndBridges({ result, n }: { result: StyleResult; n: [string, string] }) {
+export function CapsuleAndBridges({ result }: { result: StyleResult }) {
   const brand = (id: string) => result.brands.find((b) => b.entity.id === id)?.entity;
   return (
     <div className="grid gap-12 lg:grid-cols-2 lg:gap-8">
       <section id="capsule" className="scroll-mt-20">
-        <SectionHead n={n[0]} kicker="Capsule plan" title="Build it piece by piece" />
+        <SectionHead title="Start with these, in this order" note="One brand per piece, picked from the matches above." />
         <ol className="overflow-hidden rounded-[22px] border border-line bg-card">
           {result.capsule.map((c, i) => (
             <li key={c.category} className="flex items-center gap-4 border-t border-line/70 px-4 py-3.5 first:border-t-0 sm:px-5">
@@ -257,7 +254,7 @@ export function CapsuleAndBridges({ result, n }: { result: StyleResult; n: [stri
         </ol>
       </section>
       <section id="bridges" className="scroll-mt-20">
-        <SectionHead n={n[1]} kicker="Taste bridges" title="Beyond the wardrobe" />
+        <SectionHead kicker="Outside the closet" title="Same taste, other shelves" note="Films, books and places Qloo links to the same loves." />
         <div className="space-y-2.5">
           {result.bridges.map((b) => (
             <div key={b.entity.id} className="flex gap-3.5 rounded-[22px] border border-line bg-card p-3.5 sm:p-4">

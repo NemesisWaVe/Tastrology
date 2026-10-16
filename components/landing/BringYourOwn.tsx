@@ -14,9 +14,9 @@ const BUDGETS: { v?: 1 | 2 | 3; label: string; hint: string }[] = [
 ];
 
 const STEPS = [
-  ["Add 3 to 8 loves", "Films, albums, books, places, games, shows, podcasts. Mix domains for a sharper read."],
-  ["The agent reads the graph", "Qloo connects your loves across domains to the aesthetics and brands they share."],
-  ["Your sign is minted", "Big Three, rarity, stats, and the brands that fit, each with its receipt."],
+  ["Add 3 to 8 favorites", "An album, a film, the book you lend out, a city. The more they differ, the sharper the read."],
+  ["The agent looks them up", "Qloo knows what people who like your picks also like, across music, film, books and brands."],
+  ["You get a card", "Sun, Moon, Rising, a rarity, and brands, each one tagged with the pick that earned it."],
 ];
 
 export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void }) {
@@ -37,17 +37,12 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
 
   return (
     <section id="byo" className="relative scroll-mt-10 py-20 sm:py-28">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[60%] opacity-60"
-        style={{ background: "radial-gradient(60% 50% at 70% 30%, rgba(120,148,255,0.10), transparent 70%)" }}
-        aria-hidden
-      />
       <div className="relative mx-auto grid max-w-[1320px] gap-12 px-4 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:px-12">
         <div className="min-w-0">
-          <Eyebrow n="02">Bring your own taste</Eyebrow>
+          <Eyebrow>Bring your own taste</Eyebrow>
           <h2 className="mt-5 font-display text-[clamp(2.6rem,9vw,5.6rem)] font-bold leading-[0.9] tracking-[-0.045em]">
-            <MaskedWords text="Your loves." inView className="block" />
-            <MaskedWords text="Your sign." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
+            <MaskedWords text="Type the stuff" inView className="block" />
+            <MaskedWords text="you'd defend at a party." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
           </h2>
 
           <ol className="mt-10 space-y-6">
@@ -66,7 +61,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
         </div>
 
         <Reveal className="min-w-0" delay={0.1}>
-          <div className="relative rounded-[28px] border border-line bg-[linear-gradient(160deg,rgba(255,255,255,0.045),rgba(255,255,255,0.01))] p-4 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] backdrop-blur-sm sm:p-7">
+          <div className="relative rounded-[28px] border border-line bg-[linear-gradient(160deg,rgba(255,255,255,0.045),rgba(255,255,255,0.01))] p-4 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] sm:p-7">
             <div className="mb-5 flex items-center justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Your loves</p>
               <SlotMeter n={seeds.length} />

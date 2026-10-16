@@ -2,7 +2,8 @@
 
 import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HoloCard } from "@/components/card/HoloCard";
+import { CardBack, HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
+import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
 import s from "./reveal.module.css";
@@ -49,6 +50,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   const r = RARITY[card.rarity];
   const big = card.rarity === "holo" || card.rarity === "secret";
   const { sun, moon, rising } = card.bigThree;
+  const glow = RARITY_GLOW[card.rarity];
 
   const vars = {
     "--a": sun.a,
@@ -97,39 +99,130 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     else animate(p, 0, { type: "spring", stiffness: 400, damping: 30 });
   };
 
-  /* ---------------------------------------------------------------- flip */
+  /* ---------------------------------------------------------------- hold to mint + flip */
+
+  const [crack, setCrack] = useState(false);
+  const [hot, setHot] = useState(false);
+  const hotRef = useRef(false);
+  const charge = useRef({ v: 0, holding: false, collapse: -1, ang: 0, tick: 0 });
+  const backEl = useRef<HTMLButtonElement>(null);
+  const jitterEl = useRef<HTMLDivElement>(null);
+  const orbitEl = useRef<HTMLDivElement>(null);
+  const posters = useMemo(() => card.evolvesFrom.slice(0, 6), [card.evolvesFrom]);
+  const posterW = Math.round(Math.max(54, Math.min(84, cardW * 0.24)));
+  const orbitRx = Math.min(cardW * 0.78, w / 2 - posterW * 0.35);
 
   const flip = useCallback(async () => {
-    if (busy.current || stage !== "facedown") return;
+    if (busy.current || (stage !== "facedown" && stage !== "charging")) return;
     busy.current = true;
-    if (big && !reduce) {
-      setStage("charging");
-      await new Promise((res) => setTimeout(res, card.rarity === "secret" ? 1300 : 950));
-    }
+    const c = charge.current;
+    c.holding = false;
     if (reduce) {
       setFace("front");
-    } else {
-      await animate(rotY, 90, { duration: 0.2, ease: "easeIn" });
-      setFace("front");
-      rotY.set(-90);
-      animate(rotY, 0, { type: "spring", stiffness: 260, damping: 18 });
+      setStage("revealed");
+      busy.current = false;
+      return;
     }
+    // Posters spiral into the card, then the flip lands with a burst.
+    c.collapse = 0;
+    navigator.vibrate?.(card.rarity === "secret" || card.rarity === "holo" ? [12, 40, 24] : 14);
+    await new Promise((res) => setTimeout(res, 260));
+    if (card.rarity === "secret") {
+      setCrack(true);
+      await new Promise((res) => setTimeout(res, 520));
+    }
+    await animate(rotY, 90, { duration: 0.18, ease: "easeIn" });
+    setFace("front");
+    rotY.set(-90);
+    animate(rotY, 0, { type: "spring", stiffness: 260, damping: 18 });
     setStage("revealed");
-    if (r.shake && !reduce) shake.start({ x: [0, -r.shake, r.shake * 0.8, -r.shake * 0.6, r.shake * 0.4, -r.shake * 0.2, 0], y: [0, r.shake * 0.4, -r.shake * 0.5, r.shake * 0.3, 0, 0, 0], transition: { duration: 0.55 } });
+    if (r.shake) shake.start({ x: [0, -r.shake, r.shake * 0.8, -r.shake * 0.6, r.shake * 0.4, -r.shake * 0.2, 0], y: [0, r.shake * 0.4, -r.shake * 0.5, r.shake * 0.3, 0, 0, 0], transition: { duration: 0.55 } });
     busy.current = false;
-  }, [big, card.rarity, r.shake, reduce, rotY, shake, stage]);
+  }, [card.rarity, r.shake, reduce, rotY, shake, stage]);
+
+  const startHold = useCallback(() => {
+    if (busy.current || stage !== "facedown" || reduce) return;
+    charge.current.holding = true;
+    setStage("charging");
+  }, [stage, reduce]);
+
+  // One loop drives the orbit, the charge glow, the jitter and the haptic ticks (no re-renders).
+  useEffect(() => {
+    if (stage !== "facedown" && stage !== "charging") return;
+    if (reduce) return;
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(50, now - last);
+      last = now;
+      const c = charge.current;
+      if (c.holding) c.v = Math.min(1, c.v + dt / 1400);
+      else if (c.collapse < 0) c.v = Math.max(0, c.v - dt / 700);
+      if (c.collapse >= 0) c.collapse = Math.min(1, c.collapse + dt / 260);
+      const v = c.v;
+      backEl.current?.style.setProperty("--charge", v.toFixed(3));
+      if (backEl.current) backEl.current.toggleAttribute("data-charging", c.holding || c.collapse >= 0);
+      if (jitterEl.current) {
+        const j = (big ? 5 : 2.5) * v * v;
+        jitterEl.current.style.transform = `translate(${((Math.random() - 0.5) * j).toFixed(2)}px, ${((Math.random() - 0.5) * j).toFixed(2)}px) scale(${1 + v * 0.035})`;
+      }
+      if (c.holding) {
+        c.tick += dt;
+        if (c.tick > 150 - v * 90) {
+          c.tick = 0;
+          navigator.vibrate?.(8);
+        }
+        if (v > 0.5 && !hotRef.current) {
+          hotRef.current = true;
+          setHot(true);
+        }
+      }
+      // orbit: speeds up and spirals inward with the charge, collapses into the card on release
+      c.ang += (dt / 1000) * (0.32 + v * v * 6.5);
+      const shrink = (1 - 0.72 * v * v) * (c.collapse >= 0 ? 1 - c.collapse : 1);
+      const kids = orbitEl.current?.children;
+      if (kids) {
+        const N = kids.length;
+        for (let k = 0; k < N; k++) {
+          const el = kids[k] as HTMLElement;
+          const a = c.ang + (k / N) * Math.PI * 2;
+          const x = Math.cos(a) * orbitRx * shrink;
+          const y = Math.sin(a) * cardW * 0.3 * shrink - cardW * 0.08;
+          const depth = Math.sin(a);
+          const sc = (0.78 + depth * 0.2) * (c.collapse >= 0 ? 1 - c.collapse * 0.7 : 1);
+          el.style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${(Math.cos(a) * -12).toFixed(1)}deg) scale(${sc.toFixed(3)})`;
+          el.style.zIndex = depth > 0 ? "30" : "1";
+          el.style.opacity = String((c.collapse >= 0 ? 1 - c.collapse : 1) * (0.55 + (depth + 1) * 0.225));
+          el.style.filter = depth > 0 ? "none" : `blur(${(1.5 - depth).toFixed(1)}px) brightness(0.7)`;
+        }
+      }
+      if (c.holding && v >= 1) flip();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [stage, reduce, big, cardW, orbitRx, flip]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" && e.key !== " ") return;
-      if ((e.target as HTMLElement)?.tagName === "BUTTON") return;
+      if ((e.target as HTMLElement)?.tagName === "BUTTON" && stage !== "facedown" && stage !== "charging") return;
       e.preventDefault();
+      if (e.repeat) return;
       if (stage === "sealed") open();
-      else if (stage === "facedown") flip();
+      else if (e.key === " " && stage === "facedown" && !reduce) startHold();
+      else if (stage === "facedown" || stage === "charging") flip();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === " " && charge.current.holding) flip();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [stage, open, flip]);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [stage, open, flip, startHold, reduce]);
 
   /* ---------------------------------------------------------------- pointer tilt for the sealed pack */
 
@@ -192,7 +285,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 <>
                   <p className="font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3">1 card inside</p>
                   <h2 className="mt-1.5 font-serif text-[clamp(30px,8vw,42px)] italic leading-none">
-                    {stage === "charging" ? "Oh. Oh, this one’s rare." : "Tap to flip."}
+                    {reduce ? "Tap to flip." : stage === "charging" ? (hot && big ? "Oh. Oh, this one’s rare." : "Minting…") : "Hold to mint."}
                   </h2>
                 </>
               )}
@@ -325,39 +418,69 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ type: "spring", stiffness: 140, damping: 16 }}
               >
-                {/* charge-up glow */}
+                {/* charge-up glow, in the rarity colour */}
                 <motion.div
                   className="pointer-events-none absolute -inset-6 rounded-[28px]"
-                  style={{ background: `radial-gradient(closest-side, ${card.rarity === "secret" ? "#fcd34d" : sun.a}, transparent)`, filter: "blur(20px)" }}
-                  animate={{ opacity: stage === "charging" ? [0.3, 1, 0.6, 1] : stage === "revealed" ? (big ? 0.55 : 0.25) : 0.2, scale: stage === "charging" ? [1, 1.15, 1.05, 1.25] : 1 }}
-                  transition={{ duration: stage === "charging" ? 1.1 : 0.6 }}
+                  style={{ background: `radial-gradient(closest-side, ${glow}, transparent)`, filter: "blur(22px)" }}
+                  animate={{ opacity: stage === "charging" ? 0.95 : stage === "revealed" ? (big ? 0.55 : 0.25) : 0.18, scale: stage === "charging" ? 1.22 : 1 }}
+                  transition={{ duration: stage === "charging" ? 1.4 : 0.6, ease: "easeIn" }}
                 />
-                <motion.div
-                  style={{ rotateY: rotY, transformStyle: "preserve-3d" }}
-                  animate={stage === "charging" ? { x: [0, -3, 3, -4, 4, -5, 5, -3, 0], rotate: [0, -1, 1, -1.5, 1.5, 0] } : { x: 0, rotate: 0 }}
-                  transition={stage === "charging" ? { duration: 0.9, repeat: Infinity } : { duration: 0.2 }}
-                >
-                  {face === "back" ? (
-                    <AnimatePresence mode="wait">
-                      <motion.button
-                        key="back"
-                        type="button"
-                        onClick={flip}
-                        aria-label="Flip the card"
-                        className={`${s.back} block w-full text-left`}
-                        whileHover={reduce ? undefined : { y: -4 }}
-                        whileTap={reduce ? undefined : { scale: 0.98 }}
-                        exit={{ opacity: 0 }}
+
+                {/* seed posters orbiting the face-down card; they spiral in as you hold */}
+                {face === "back" && !reduce && (
+                  <div ref={orbitEl} className="pointer-events-none absolute left-1/2 top-1/2" aria-hidden>
+                    {posters.map((p, k) => (
+                      <div
+                        key={p.name + k}
+                        className={`${s.duo} ${s.poster}`}
+                        style={{ width: posterW, ["--da" as string]: k % 2 ? moon.a : sun.a, ["--db" as string]: k % 2 ? moon.b : sun.b, transform: "translate(-50%, -50%) scale(0)" }}
                       >
-                        <CardBack />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {p.image && <img src={p.image} alt="" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <motion.div className="relative z-10" style={{ rotateY: rotY, transformStyle: "preserve-3d" }}>
+                  {face === "back" ? (
+                    <div ref={jitterEl}>
+                      <motion.button
+                        ref={backEl}
+                        type="button"
+                        aria-label={reduce ? "Flip the card" : "Press and hold to mint your card (Space), or Enter to flip"}
+                        className="block w-full touch-none select-none rounded-[16px] text-left outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                        whileHover={reduce ? undefined : { y: -4 }}
+                        onClick={reduce ? flip : undefined}
+                        onPointerDown={(e) => {
+                          if (reduce) return;
+                          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                          startHold();
+                        }}
+                        onPointerUp={() => !reduce && charge.current.holding && flip()}
+                        onPointerCancel={() => !reduce && charge.current.holding && flip()}
+                        onContextMenu={(e) => e.preventDefault()}
+                      >
+                        <CardBack card={card} crack={crack} />
                       </motion.button>
-                    </AnimatePresence>
+                    </div>
                   ) : (
                     <motion.div initial={reduce ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
-                      <HoloCard card={card} width={cardW} idle />
+                      <HoloCard card={card} width={cardW} idle print={!reduce} />
                     </motion.div>
                   )}
                 </motion.div>
+
+                {/* shockwave */}
+                {stage === "revealed" && !reduce && (
+                  <motion.i
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-20 rounded-full"
+                    style={{ width: cardW, height: cardW, marginLeft: -cardW / 2, marginTop: -cardW / 2, border: `2px solid ${glow}`, boxShadow: `0 0 40px ${glow}, inset 0 0 30px ${glow}` }}
+                    initial={{ scale: 0.3, opacity: 1 }}
+                    animate={{ scale: 2.6, opacity: 0 }}
+                    transition={{ duration: 0.9, ease: [0.1, 0.8, 0.3, 1] }}
+                  />
+                )}
 
                 {/* sparks */}
                 {stage === "revealed" &&
@@ -387,7 +510,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
             )}
             {stage === "facedown" && (
               <motion.p key="h2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="font-mono text-[11px] text-ink-3">
-                tap the card
+                {reduce ? "tap the card" : "press & hold the card · space works too"}
               </motion.p>
             )}
             {stage === "revealed" && (
@@ -399,9 +522,9 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 transition={{ duration: 0.5, delay: reduce ? 0 : 0.9, ease: EASE }}
               >
                 <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[12px] text-ink-2">
-                  <Sign g="☀" t={sun} />
-                  <Sign g="☾" t={moon} />
-                  <Sign g="↑" t={rising} />
+                  <Sign g="sun" t={sun} />
+                  <Sign g="moon" t={moon} />
+                  <Sign g="rising" t={rising} />
                 </div>
                 <button
                   onClick={onDone}
@@ -420,11 +543,11 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   );
 }
 
-function Sign({ g, t }: { g: string; t: CardType }) {
+function Sign({ g, t }: { g: SigilKind; t: CardType }) {
   return (
     <span className="flex items-center gap-1.5">
       <i className="h-2 w-2 rounded-full" style={{ background: `linear-gradient(135deg, ${t.a}, ${t.b})` }} />
-      <span className="text-ink-3">{g}</span> {t.name}
+      <Sigil kind={g} className="h-3.5 w-3.5 text-ink-3" /> {t.name}
     </span>
   );
 }
@@ -475,7 +598,7 @@ function PackArt({ card, loves, w, h, tearY }: { card: CardData; loves: number; 
             boxShadow: "inset 0 0 0 1.5px rgb(255 255 255 / .55), 0 10px 40px -8px rgb(0 0 0 / .5)",
           }}
         >
-          <span style={{ fontSize: 22 * u, lineHeight: 1, textShadow: "0 2px 18px rgb(0 0 0 / .35)" }}>{sun.glyph}</span>
+          <TypeSigil glyph={sun.glyph} className="drop-shadow-[0_2px_18px_rgb(0_0_0/0.35)]" style={{ width: 22 * u, height: 22 * u }} />
         </div>
         <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 14.5 * u, marginTop: 7 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
           {BRAND.name}
@@ -486,28 +609,6 @@ function PackArt({ card, loves, w, h, tearY }: { card: CardData; loves: number; 
       </div>
       <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.5 * u, letterSpacing: "0.22em", opacity: 0.85 }}>
         1 holographic taste sign · from {loves} loves
-      </div>
-    </div>
-  );
-}
-
-function CardBack() {
-  return (
-    <div className={s.backFace}>
-      <div className="relative z-10 flex flex-col items-center gap-[5cqw] text-center">
-        <div className={s.emblem}>
-          <span className="font-serif italic text-white" style={{ fontSize: "20cqw", lineHeight: 1 }}>
-            T
-          </span>
-        </div>
-        <div>
-          <p className="font-display font-bold tracking-[-0.03em] text-white" style={{ fontSize: "8cqw" }}>
-            {BRAND.name}
-          </p>
-          <p className="mt-[1cqw] font-mono uppercase text-white/50" style={{ fontSize: "2.6cqw", letterSpacing: "0.3em" }}>
-            tap to reveal
-          </p>
-        </div>
       </div>
     </div>
   );
