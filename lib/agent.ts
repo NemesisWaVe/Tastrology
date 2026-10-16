@@ -167,6 +167,8 @@ async function resolveSeeds(st: RunState) {
         );
       }),
     );
+    const order = st.req.seeds.map((s) => s.name.split(/\s+\/\s+/)[0].slice(0, 60).trim());
+    log.sort((a, b) => order.indexOf(a.params.query ?? "") - order.indexOf(b.params.query ?? "")); // finish order → seed order
     const ok = out.filter(Boolean) as QEntity[];
     return { value: ok, summary: `${ok.length}/${st.req.seeds.length} seeds matched to Qloo entity IDs` };
   });
@@ -395,6 +397,9 @@ async function styleTags(st: RunState) {
     // Live: only Qloo's fashion vocabularies (personal style + aesthetic properties), not genre/venue tags.
     const tagTypes = qlooMode() === "live" ? STYLE_TAG_TYPES : undefined;
     const per = await Promise.all(st.seeds.map((s) => insights({ type: "tag", entityIds: [s.id], tagTypes, take: 12 }, log).catch(() => [])));
+    // Parallel calls log in finish order; the reading scene pairs them with seeds by position, so put them in seed order.
+    const at = new Map(st.seeds.map((s, i) => [s.id, i]));
+    log.sort((a, b) => (at.get(a.params["signal.interests.entities"]) ?? 99) - (at.get(b.params["signal.interests.entities"]) ?? 99));
     per.forEach((r, i) => {
       st.ledger.record(r);
       st.seedTags.set(st.seeds[i].id, dedupeTags(r));

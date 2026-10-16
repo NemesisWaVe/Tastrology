@@ -130,7 +130,8 @@ export function buildScene(events: TraceEvent[], hints?: SeedHint[]): SceneModel
 
   const seeds: SeedNode[] = names.map((n, k) => {
     const id = ids.length === names.length ? ids[k] : undefined;
-    const hint = hints?.[k];
+    // By name first: once a seed drops out, positions no longer line up with the hints.
+    const hint = hints?.find((h) => h.name.toLowerCase() === n.name.toLowerCase()) ?? (hints?.length === names.length ? hints[k] : undefined);
     return {
       name: n.name,
       kind: n.kind ?? hint?.kind,
