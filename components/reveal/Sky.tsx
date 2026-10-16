@@ -236,6 +236,8 @@ export function Sky({
   drawn = false,
   fixed = false,
   quiet = false,
+  travel = false,
+  pulse = 0,
 }: {
   f: Folded;
   anchor?: RefObject<HTMLElement | null>;
@@ -245,8 +247,20 @@ export function Sky({
   fixed?: boolean;
   /** Background for a reading page: no captions, graticule or flares, and it sits behind the content (-z-10). */
   quiet?: boolean;
+  /** Slow, deep flight through the stars, outward from the anchor (while a card is being read). */
+  travel?: boolean;
+  /** Bumped on every real data beat: the flight surges briefly, then settles. */
+  pulse?: number;
 }) {
   const cv = useRef<HTMLCanvasElement>(null);
+  const travelRef = useRef(travel);
+  travelRef.current = travel;
+  const surgeAt = useRef(-1e9);
+  const lastPulse = useRef(pulse);
+  if (pulse !== lastPulse.current) {
+    lastPulse.current = pulse;
+    surgeAt.current = typeof performance === "undefined" ? 0 : performance.now();
+  }
   const fRef = useRef(f);
   fRef.current = f;
   const dimRef = useRef(dim);
@@ -307,6 +321,14 @@ export function Sky({
       }));
     };
     build();
+
+    // Flight: stars in a 3D box streaming past the camera. z shrinks toward the viewer; respawn far away.
+    const fr = rng("tastrology-flight");
+    const warpN = () => (W < 640 ? 220 : 520);
+    const warp = Array.from({ length: warpN() }, () => ({ x: (fr() - 0.5) * 2.4, y: (fr() - 0.5) * 2.4, z: 0.08 + fr() * 0.92, c: tempOf(fr()) }));
+    let speed = 0;
+    let travelMix = travelRef.current ? 1 : 0;
+
     let rebuild: ReturnType<typeof setTimeout> | undefined;
     const ro = new ResizeObserver(() => {
       clearTimeout(rebuild);
@@ -388,10 +410,61 @@ export function Sky({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      // plate (gradient, dust, band, far field)
+      // flight state: eases in/out with `travel`; a data beat surges it, then it settles back to a slow drift
+      travelMix += ((travelRef.current && !reduce ? 1 : 0) - travelMix) * 0.03;
+      const surge = Math.exp(-(now - surgeAt.current) / 900);
+      speed = travelMix * (0.022 + 0.11 * surge);
+
+      // plate (gradient, dust, band, far field); while travelling it breathes very slowly, as if the camera pushes in
       const o0 = off(2);
+      const zoom = 1 + travelMix * (0.025 + 0.02 * Math.sin(t / 22));
+      const pw = (W + M * 2) * zoom;
+      const ph = (H + M * 2) * zoom;
       ctx.globalAlpha = Math.min(1, 0.35 + 0.65 * D);
-      ctx.drawImage(plate, -M + o0.x, -M + o0.y, W + M * 2, H + M * 2);
+      ctx.drawImage(plate, (W - pw) / 2 + o0.x, (H - ph) / 2 + o0.y, pw, ph);
+
+      // the flight: stars streaming outward from the well, faint and far until they pass close
+      if (travelMix > 0.01) {
+        const ab = anchor?.current?.getBoundingClientRect();
+        const hb = canvas.getBoundingClientRect();
+        const fx = ab ? ab.left - hb.left + ab.width / 2 : W / 2;
+        const fy = ab ? ab.top - hb.top + ab.height / 2 : H / 2;
+        const F = Math.max(W, H) * 0.42;
+        const dt = 1 / 60;
+        ctx.lineCap = "round";
+        for (const s of warp) {
+          const pz = s.z;
+          s.z -= speed * dt;
+          if (s.z < 0.06) {
+            s.x = (fr() - 0.5) * 2.4;
+            s.y = (fr() - 0.5) * 2.4;
+            s.z = 1;
+            continue;
+          }
+          const x = fx + (s.x / s.z) * F;
+          const y = fy + (s.y / s.z) * F;
+          if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+          const near = 1 - s.z;
+          const a = travelMix * Math.min(1, near * 1.6) * 0.85 * D;
+          if (a < 0.02) continue;
+          ctx.globalAlpha = a;
+          ctx.strokeStyle = s.c;
+          ctx.fillStyle = s.c;
+          const r = 0.3 + near * near * 1.6;
+          // a short trail toward where it was: only visible as it nears the camera or during a surge
+          const px = fx + (s.x / pz) * F;
+          const py = fy + (s.y / pz) * F;
+          if (Math.hypot(x - px, y - py) > 0.8) {
+            ctx.lineWidth = r * 1.2;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+          } else {
+            ctx.fillRect(x - r / 2, y - r / 2, r, r);
+          }
+        }
+      }
 
       // mid and near field, batched by colour
       for (const [layer, k] of [

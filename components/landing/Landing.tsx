@@ -9,6 +9,8 @@ import { buildCard } from "@/lib/card";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import type { AgentRequest } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
+import { Sky } from "@/components/reveal/Sky";
+import { skyState } from "@/components/reveal/traceModel";
 import { BringYourOwn } from "./BringYourOwn";
 import { Footer } from "./Footer";
 import { Hero } from "./Hero";
@@ -80,8 +82,16 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
     [lenis],
   );
 
+  // The specimen's sky sits far back behind the whole landing: quiet (no captions), like art on a wall.
+  const reduce = Boolean(useReducedMotion());
+  const sky = useMemo(
+    () => (shown ? skyState(shown.seeds, shown.dna.name, shown.dna.lobes.map((l) => l.seedIds), (shown.inert ?? []).map((x) => x.id)) : skyState([], "")),
+    [shown],
+  );
+
   return (
-    <div className={`${s.root} min-h-screen text-ink`}>
+    <div className={`${s.root} relative isolate min-h-screen text-ink`}>
+      <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.45} />
       <div className={s.grain} aria-hidden />
       <Nav onPick={() => go("pick")} />
 

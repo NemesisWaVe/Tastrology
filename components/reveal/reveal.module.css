@@ -440,3 +440,18 @@
   background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.7) 45%, var(--a) 50%, rgb(255 255 255 / 0.5) 55%, transparent 70%);
   background-size: 250% 100%;
 }
+
+/* Pack window: a few bright stars scintillate (scale + opacity, from their own centre). */
+.twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: twinkle 3.4s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  45% { opacity: 0.55; transform: scale(0.78); }
+  60% { opacity: 0.9; transform: scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .twinkle { animation: none; }
+}

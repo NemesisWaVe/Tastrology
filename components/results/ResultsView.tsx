@@ -62,7 +62,8 @@ export function ResultsView({
   return (
     <div className="space-y-16 sm:space-y-24" style={tone}>
       {/* ------------------------------------------------------------ hero */}
-      <section ref={heroRef} className="rise relative isolate overflow-hidden rounded-[30px] border border-line bg-card sm:rounded-[36px]">
+      {/* translucent, so your sky shows faintly through the hero panel */}
+      <section ref={heroRef} className="rise relative isolate overflow-hidden rounded-[30px] border border-line bg-card/55 sm:rounded-[36px]">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10"
