@@ -16,7 +16,7 @@ export interface ToolDef {
 }
 
 interface Provider {
-  id: "primary" | "secondary";
+  id: "primary" | "secondary" | "tertiary";
   baseUrl: string;
   apiKey: string;
   models: string[];
@@ -24,7 +24,7 @@ interface Provider {
 
 const list = (s?: string) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 
-/** Primary: LLM_* (with LLM_FALLBACK_MODELS). Optional secondary: LLM2_*, tried after the whole primary chain fails. */
+/** Primary: LLM_* (with LLM_FALLBACK_MODELS). Optional LLM2_* then LLM3_*, each tried after the chain before it fails. */
 function providers(): Provider[] {
   const out: Provider[] = [];
   const e = process.env;
@@ -32,7 +32,64 @@ function providers(): Provider[] {
     out.push({ id: "primary", baseUrl: e.LLM_BASE_URL, apiKey: e.LLM_API_KEY, models: [e.LLM_MODEL, ...list(e.LLM_FALLBACK_MODELS)] });
   if (e.LLM2_API_KEY && e.LLM2_BASE_URL && e.LLM2_MODEL)
     out.push({ id: "secondary", baseUrl: e.LLM2_BASE_URL, apiKey: e.LLM2_API_KEY, models: [e.LLM2_MODEL] });
+  if (e.LLM3_API_KEY && e.LLM3_BASE_URL && e.LLM3_MODEL)
+    out.push({ id: "tertiary", baseUrl: e.LLM3_BASE_URL, apiKey: e.LLM3_API_KEY, models: [e.LLM3_MODEL] });
   return out;
+}
+
+/** Amazon's own models (Nova) only speak Bedrock's Converse API, not the OpenAI-compatible one. */
+export const isConverse = (model: string) => /^(?:[a-z]{2}\.)?amazon\./.test(model);
+
+type Block = { text?: string; toolUse?: { toolUseId: string; name: string; input: unknown }; toolResult?: { toolUseId: string; content: { text: string }[] } };
+
+/** OpenAI-style chat → Bedrock Converse request body. Consecutive same-role turns merge (Converse requires alternation). */
+export function toConverse(messages: ChatMessage[], tools: ToolDef[] | undefined, maxTokens: number) {
+  const system = messages.filter((m) => m.role === "system").map((m) => ({ text: m.content ?? "" }));
+  const out: { role: "user" | "assistant"; content: Block[] }[] = [];
+  for (const m of messages) {
+    if (m.role === "system") continue;
+    const role = m.role === "assistant" ? "assistant" : "user";
+    const content: Block[] =
+      m.role === "tool"
+        ? [{ toolResult: { toolUseId: m.tool_call_id ?? "", content: [{ text: m.content ?? "" }] } }]
+        : [
+            ...(m.content ? [{ text: m.content }] : []),
+            ...(m.tool_calls ?? []).map((c) => ({ toolUse: { toolUseId: c.id, name: c.function.name, input: safeJson(c.function.arguments) } })),
+          ];
+    if (!content.length) continue;
+    const last = out[out.length - 1];
+    if (last?.role === role) last.content.push(...content);
+    else out.push({ role, content });
+  }
+  return {
+    ...(system.length ? { system } : {}),
+    messages: out,
+    inferenceConfig: { maxTokens, temperature: 0.4 },
+    ...(tools?.length
+      ? { toolConfig: { tools: tools.map((t) => ({ toolSpec: { name: t.function.name, description: t.function.description, inputSchema: { json: t.function.parameters } } })) } }
+      : {}),
+  };
+}
+
+/** Bedrock Converse response → OpenAI-style assistant message. */
+export function fromConverse(data: { output?: { message?: { content?: Block[] } } }): ChatMessage | undefined {
+  const blocks = data.output?.message?.content;
+  if (!blocks) return undefined;
+  const text = blocks.map((b) => b.text ?? "").join("").trim();
+  const calls = blocks.filter((b) => b.toolUse).map((b) => ({
+    id: b.toolUse!.toolUseId,
+    type: "function" as const,
+    function: { name: b.toolUse!.name, arguments: JSON.stringify(b.toolUse!.input ?? {}) },
+  }));
+  return { role: "assistant", content: text || null, ...(calls.length ? { tool_calls: calls } : {}) };
+}
+
+function safeJson(s: string): unknown {
+  try {
+    return JSON.parse(s || "{}");
+  } catch {
+    return {};
+  }
 }
 
 export const llmConfigured = () => providers().length > 0;
@@ -89,21 +146,28 @@ async function chatOnce(p: Provider, model: string, messages: ChatMessage[], too
   // Free models usually answer in ~1.5s but occasionally queue; better to move down the chain than wait.
   void bumpDaily("llm");
   const timeout = Math.max(500, Math.min(Number(process.env.LLM_TIMEOUT_MS) || 8000, o.deadline ? o.deadline - Date.now() : Infinity));
-  const res = await fetch(`${p.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+  const maxTokens = Number(process.env.LLM_MAX_TOKENS) || 1536;
+  const converse = isConverse(model);
+  const base = p.baseUrl.replace(/\/$/, "").replace(/\/openai\/v1$/, "");
+  const res = await fetch(converse ? `${base}/model/${encodeURIComponent(model)}/converse` : `${p.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${p.apiKey}`,
       ...(/openrouter\.ai/.test(p.baseUrl) ? { "HTTP-Referer": "https://github.com/tastrology", "X-Title": BRAND.name } : {}),
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.4,
-      max_tokens: Number(process.env.LLM_MAX_TOKENS) || 1536,
-      ...(tools ? { tools, tool_choice: "auto" } : {}),
-      ...(o.json ? { response_format: { type: "json_object" } } : {}),
-    }),
+    body: JSON.stringify(
+      converse
+        ? toConverse(messages, tools, maxTokens)
+        : {
+            model,
+            messages,
+            temperature: 0.4,
+            max_tokens: maxTokens,
+            ...(tools ? { tools, tool_choice: "auto" } : {}),
+            ...(o.json ? { response_format: { type: "json_object" } } : {}),
+          },
+    ),
     signal: AbortSignal.timeout(timeout),
   });
   if (res.status === 429) {
@@ -111,8 +175,8 @@ async function chatOnce(p: Provider, model: string, messages: ChatMessage[], too
     throw new Error(`LLM rate-limited (${p.id})`);
   }
   if (!res.ok) throw new Error(`LLM HTTP ${res.status} (${model})`);
-  const data = (await res.json()) as { choices?: { message: ChatMessage }[]; error?: { message?: string } };
-  const msg = data.choices?.[0]?.message;
-  if (!msg) throw new Error(`LLM returned no message (${model}): ${data.error?.message ?? ""}`);
+  const data = (await res.json()) as { choices?: { message: ChatMessage }[]; error?: { message?: string }; message?: string };
+  const msg = converse ? fromConverse(data as Parameters<typeof fromConverse>[0]) : data.choices?.[0]?.message;
+  if (!msg) throw new Error(`LLM returned no message (${model}): ${data.error?.message ?? data.message ?? ""}`);
   return msg;
 }
