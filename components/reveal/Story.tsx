@@ -49,14 +49,22 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
   const prev = useCallback(() => setI(Math.max(0, at.current - 1)), []);
 
   // Clock: drives the active progress bar directly (no re-render per frame), pauses on hold/hidden tab.
+  // Elapsed time on the current beat survives pause/resume; it only resets when the beat changes.
+  const elapsed = useRef(0);
+  const bars = useRef<(HTMLDivElement | null)[]>([]);
+  useEffect(() => {
+    elapsed.current = 0;
+    // Bars are driven imperatively, so re-sync all of them (going back must empty the later ones).
+    bars.current.forEach((b, k) => b && (b.style.transform = `scaleX(${k < i ? 1 : 0})`));
+  }, [i]);
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-    let t = 0;
     const tick = (now: number) => {
       const dt = now - last;
       last = now;
-      if (!paused && !document.hidden) t += dt;
+      if (!paused && !document.hidden) elapsed.current += dt;
+      const t = elapsed.current;
       if (fill.current) fill.current.style.transform = `scaleX(${Math.min(1, t / beat.dur)})`;
       if (t >= beat.dur) next();
       else raf = requestAnimationFrame(tick);
@@ -123,18 +131,20 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
 
       {/* progress */}
       <div className="absolute inset-x-0 top-0 z-20 px-3 pt-3 sm:px-6 sm:pt-5">
-        <div className="mx-auto flex max-w-xl gap-1">
+        <div className="mx-auto flex max-w-xl lg:max-w-4xl gap-1">
           {beats.map((b, k) => (
             <div key={b.key} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/15">
               <div
-                ref={k === i ? fill : undefined}
+                ref={(el) => {
+                  bars.current[k] = el;
+                  if (k === i) fill.current = el;
+                }}
                 className="h-full origin-left rounded-full bg-white"
-                style={{ transform: `scaleX(${k < i ? 1 : 0})` }}
               />
             </div>
           ))}
         </div>
-        <div className="mx-auto mt-3 flex max-w-xl items-center justify-between">
+        <div className="mx-auto mt-3 flex max-w-xl lg:max-w-4xl items-center justify-between">
           <span className="font-display text-[14px] font-semibold tracking-tight">
             Tastrology<span className="text-accent">.</span>
             <span className="ml-2 font-mono text-[10px] font-normal tracking-[0.2em] text-ink-3">
@@ -166,7 +176,7 @@ export function Story({ result, card, reduce, onFinish }: { result: StyleResult;
         <AnimatePresence mode="wait">
           <motion.div
             key={beat.key}
-            className="w-full max-w-xl"
+            className="w-full max-w-xl lg:max-w-4xl"
             initial={reduce ? { opacity: 0 } : ENTER[beat.enter ?? "rise"].initial}
             animate={reduce ? { opacity: 1 } : ENTER[beat.enter ?? "rise"].animate}
             exit={reduce ? { opacity: 0 } : ENTER[beat.enter ?? "rise"].exit}
