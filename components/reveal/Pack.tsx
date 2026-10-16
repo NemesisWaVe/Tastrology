@@ -5,9 +5,10 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardBack, RARITY_GLOW } from "@/components/card/HoloCard";
 import { FlipCard } from "@/components/card/FlipCard";
-import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
+import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
+import { PackWindow } from "./PackWindow";
 import { Sky } from "./Sky";
 import { skyState } from "./traceModel";
 import s from "./reveal.module.css";
@@ -514,7 +515,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   <div className="absolute inset-x-[8%] -bottom-6 h-10 rounded-[50%] bg-black/60 blur-xl" />
                   {/* body */}
                   <div className="absolute inset-0" style={{ clipPath: bodyClip(packW, packH, tearY) }}>
-                    <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
+                    <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} reduce={reduce} />
                   </div>
                   {/* light leaking from the tear */}
                   <motion.div
@@ -538,7 +539,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       className="absolute inset-0"
                       style={{ clipPath: stripClip(packW, tearY), rotate: stripRotate, y: stripY, scaleX: stripSX, scaleY: stripSY, transformOrigin: `${packW}px ${tearY}px` }}
                     >
-                      <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
+                      <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} reduce={reduce} />
                     </motion.div>
                   </motion.div>
                   <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW, opacity: leak }} />
@@ -777,11 +778,10 @@ function bodyClip(w: number, h: number, tearY: number) {
   return `polygon(${pts.join(",")})`;
 }
 
-function PackArt({ card, loves, w, h, tearY }: { card: CardData; loves: number; w: number; h: number; tearY: number }) {
-  const { sun } = card.bigThree;
+function PackArt({ card, loves, w, h, tearY, reduce }: { card: CardData; loves: number; w: number; h: number; tearY: number; reduce: boolean }) {
   const u = w / 100;
   return (
-    <div className={s.packArt}>
+    <div className={s.packArt} style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / .35), inset 0 1px 0 rgb(255 255 255 / .6)" }}>
       <div className={s.foil} />
       {/* plastic gloss */}
       <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .35), transparent 12%, rgb(255 255 255 / .16) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .4))" }} />
@@ -793,21 +793,14 @@ function PackArt({ card, loves, w, h, tearY }: { card: CardData; loves: number; 
         <p className="font-mono uppercase" style={{ fontSize: 2.6 * u, letterSpacing: "0.32em", opacity: 0.8 }}>
           {BRAND.cardSet} · booster
         </p>
-        <div
-          className="relative mt-[6%] grid place-items-center rounded-full"
-          style={{
-            width: 46 * u,
-            height: 46 * u,
-            background: "radial-gradient(circle, rgb(255 255 255 / .22), rgb(255 255 255 / .04) 62%, transparent 63%), conic-gradient(from 0deg, rgb(255 255 255 / .55), transparent 25%, rgb(255 255 255 / .45) 50%, transparent 75%, rgb(255 255 255 / .55))",
-            boxShadow: "inset 0 0 0 1.5px rgb(255 255 255 / .55), 0 10px 40px -8px rgb(0 0 0 / .5)",
-          }}
-        >
-          <TypeSigil glyph={sun.glyph} className="drop-shadow-[0_2px_18px_rgb(0_0_0/0.35)]" style={{ width: 22 * u, height: 22 * u }} />
+        {/* a window into your own sky, set into the foil */}
+        <div className="mt-[4%]" style={{ filter: "drop-shadow(0 10px 24px rgb(0 0 0 / .45))" }}>
+          <PackWindow card={card} width={64 * u} height={Math.min(74 * u, h - tearY - 60 * u)} reduce={reduce} />
         </div>
-        <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 14.5 * u, marginTop: 7 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
+        <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 12 * u, marginTop: 5 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
           {BRAND.name}
         </p>
-        <p className="font-serif italic" style={{ fontSize: 5.2 * u, marginTop: 1.5 * u, opacity: 0.92 }}>
+        <p className="font-serif italic" style={{ fontSize: 4.6 * u, marginTop: 1.2 * u, opacity: 0.92 }}>
           {BRAND.tagline}
         </p>
       </div>

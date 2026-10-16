@@ -113,7 +113,7 @@ export function Reading({
       exit={{ opacity: 0, scale: reduce ? 1 : 1.04, filter: reduce ? "none" : "blur(8px)" }}
       transition={{ duration: 0.6, ease: EASE }}
     >
-      {well && <Sky f={shownF} anchor={wellRef} reduce={reduce} />}
+      {well && <Sky f={shownF} anchor={wellRef} reduce={reduce} travel={!done && !error} pulse={applied} />}
       <header className="relative z-10 flex items-center justify-between px-5 pt-4 sm:px-8 sm:pt-6">
         <span className="font-display text-[15px] font-semibold tracking-tight">
           Tastrology<span className="text-accent">.</span>
@@ -139,7 +139,7 @@ export function Reading({
         </span>
       </header>
 
-      <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-5 pb-4 pt-2 sm:px-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-1 lg:items-center lg:gap-10 lg:pb-8">
+      <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col items-center justify-center px-5 pb-16 pt-2 sm:px-8">
         <div className="flex flex-col items-center">
           <p className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.28em] text-ink-3">reading your taste</p>
           {well ? (
@@ -167,8 +167,8 @@ export function Reading({
             </>
           )}
         </div>
-        <Feed m={m} running={!done && !error} />
       </div>
+      <UnderTheHood m={m} running={!done && !error} reduce={reduce} />
 
       {error && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center p-5">
@@ -575,7 +575,79 @@ function Words({ m }: { m: SceneModel }) {
 
 /* ------------------------------------------------------------------ feed */
 
-function Feed({ m, running }: { m: SceneModel; running: boolean }) {
+/**
+ * The agent trace, tucked away: a small pill shows it's live (calls, current step). Opening it slides the full
+ * dashboard in (a right panel on desktop, a bottom sheet on phones) for anyone who wants to see the work.
+ */
+function UnderTheHood({ m, running, reduce }: { m: SceneModel; running: boolean; reduce: boolean }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  const spring = reduce ? { duration: 0.2 } : { type: "spring" as const, stiffness: 320, damping: 32 };
+  return (
+    <>
+      <AnimatePresence>
+        {!open && (
+          <motion.button
+            key="pill"
+            type="button"
+            onClick={() => setOpen(true)}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={spring}
+            aria-expanded={false}
+            className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-line/80 bg-paper-2/80 py-2 pl-3.5 pr-3 font-mono text-[11px] text-ink-2 backdrop-blur-md transition-colors hover:border-ink-3 hover:text-ink lg:left-auto lg:right-6 lg:translate-x-0"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${running ? "pulse-dot bg-accent" : "bg-good"}`} />
+            <span className="uppercase tracking-[0.16em]">Under the hood</span>
+            <span className="tabular-nums text-ink-3">{m.calls} Qloo calls</span>
+            <span aria-hidden className="text-ink-3">▴</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div
+              key="scrim"
+              className="absolute inset-0 z-30 bg-black/40 lg:bg-transparent"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpen(false)}
+            />
+            <motion.div
+              key="drawer"
+              role="dialog"
+              aria-label="Agent trace"
+              className="absolute inset-x-2 bottom-2 z-40 flex h-[62%] flex-col lg:inset-x-auto lg:bottom-6 lg:right-6 lg:top-20 lg:h-auto lg:w-[420px]"
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, x: 0 }}
+              animate={{ opacity: 1, y: 0, x: 0 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, y: 40 }}
+              transition={spring}
+            >
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="absolute -top-3 right-3 z-10 rounded-full border border-line bg-paper-2 px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-2 hover:text-ink"
+              >
+                close ▾
+              </button>
+              <Feed m={m} running={running} className="h-full flex-1" />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+function Feed({ m, running, className = "" }: { m: SceneModel; running: boolean; className?: string }) {
   const box = useRef<HTMLOListElement>(null);
   const stick = useRef(true);
   useEffect(() => {
@@ -585,7 +657,7 @@ function Feed({ m, running }: { m: SceneModel; running: boolean }) {
 
   return (
     <section
-      className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-card/70 backdrop-blur-md lg:max-h-[72vh]"
+      className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-card/85 backdrop-blur-md ${className}`}
       aria-label="Agent trace"
       aria-live="polite"
     >
