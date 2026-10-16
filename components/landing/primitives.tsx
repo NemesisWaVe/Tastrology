@@ -47,7 +47,7 @@ export function MaskedWords({
 export function Magnetic({
   children,
   className = "",
-  strength = 0.35,
+  strength = 0.15,
   ...rest
 }: { children: ReactNode; className?: string; strength?: number } & Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -67,8 +67,10 @@ export function Magnetic({
     const r = ref.current!.getBoundingClientRect();
     const dx = e.clientX - (r.left + r.width / 2);
     const dy = e.clientY - (r.top + r.height / 2);
-    x.set(dx * strength);
-    y.set(dy * strength);
+    // A subtle lean, capped so a pill never drifts into its neighbour.
+    const clamp = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+    x.set(clamp(dx * strength, 8));
+    y.set(clamp(dy * strength, 5));
     ix.set(dx * strength * 0.35);
     iy.set(dy * strength * 0.35);
   };
