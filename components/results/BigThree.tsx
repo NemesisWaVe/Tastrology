@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CardData, CardType } from "@/lib/card";
+import { displayName, type CardData, type CardType } from "@/lib/card";
 import type { StyleResult } from "@/lib/types";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { glyph } from "@/components/card/HoloCard";
@@ -22,19 +22,19 @@ const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1
 /** Each sign's receipt, written only from what Qloo returned in this run. */
 export function signReceipts(result: StyleResult, card: CardData): SignReceipt[] {
   const { sun, moon, rising, moonIsContradiction } = card.bigThree;
-  const name = (id: string) => result.seeds.find((s) => s.id === id)?.name ?? "";
+  const name = (id: string) => displayName(result.seeds.find((s) => s.id === id)?.name ?? "");
   const kw = result.dna.keywords;
   const lobeA = result.dna.lobes[0];
   const lobeB = result.dna.lobes[1];
   const sunTag = kw.find((k) => k.name === sun.name);
-  const sunFrom = moonIsContradiction && lobeA ? lobeA.seedIds.map(name) : result.seeds.map((s) => s.name);
+  const sunFrom = moonIsContradiction && lobeA ? lobeA.seedIds.map(name) : result.seeds.map((s) => displayName(s.name));
 
   const moonTag = (lobeB?.keywords ?? kw).find((k) => k.name === moon.name);
   const sideB = result.brands.filter((b) => b.side);
   const overlap = result.contradictions[0]?.overlap ?? 0;
 
   const main = result.brands.filter((b) => !b.side).slice(0, 6);
-  const carriers = main.filter((b) => cleanStyle(b.entity.style).includes(rising.name)).map((b) => b.entity.name);
+  const carriers = main.filter((b) => cleanStyle(b.entity.style).includes(rising.name)).map((b) => displayName(b.entity.name));
 
   return [
     {

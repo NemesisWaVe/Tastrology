@@ -215,7 +215,8 @@ const clampStat = (v: number) => Math.round(Math.max(5, Math.min(99, v)));
 
 /** "Neuromancer (Sprawl, #1)" → "Neuromancer". Strips trailing (…) / […] groups, keeps the rest intact. */
 export function displayName(name: string): string {
-  let out = name.trim();
+  // Qloo omnibus editions ("Ikigai: ... / The Little Book of Lykke / Lagom…"): keep the first title.
+  let out = name.split(" / ")[0].trim();
   for (let k = 0; k < 3; k++) {
     const next = out.replace(/\s*[([][^()[\]]*[)\]]\s*$/, "").trim();
     if (!next || next === out) break;
