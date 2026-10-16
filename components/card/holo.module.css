@@ -1051,7 +1051,11 @@
   animation: twinkle 3.4s ease-in-out infinite;
   animation-delay: calc(var(--i) * -0.7s);
 }
+/* Absolute centring: % heights don't resolve inside an auto-sized grid row, which pushed icons top-left. */
 .node svg {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   width: 56%;
   height: 56%;
 }
