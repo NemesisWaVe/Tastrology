@@ -98,12 +98,6 @@ export function Reveal({ events, result, running, error, onDone, onRetry, onBack
 
   return (
     <div className={s.stage} style={vars} role="dialog" aria-modal="true" aria-label="Your taste sign">
-      {phase === "reading" && (
-        <>
-          <div className={s.orb} style={{ width: "60vmax", height: "60vmax", left: "-28vmax", top: "-30vmax", background: "color-mix(in oklab, var(--a) 30%, transparent)" }} />
-          <div className={s.orb} style={{ width: "55vmax", height: "55vmax", right: "-28vmax", bottom: "-30vmax", background: "color-mix(in oklab, var(--m) 22%, transparent)" }} />
-        </>
-      )}
       <AnimatePresence mode="wait">
         {phase === "reading" && (
           <Reading

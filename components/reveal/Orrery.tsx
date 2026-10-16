@@ -490,7 +490,7 @@ export function Orrery({
   const sideB = new Set(f.sides[1] ?? []);
   const inert = new Set(f.critique?.inert ?? []);
   return (
-    <div ref={box} className="relative aspect-square w-[min(90vw,42vh,470px)] lg:w-[min(46vw,60vh,540px)]">
+    <div ref={box} className="relative aspect-square w-[min(92vw,44vh,480px)] lg:w-[min(48vw,66vh,620px)]">
       <canvas ref={cv} className="absolute inset-0 h-full w-full" aria-hidden />
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[24%] w-[24%] -translate-x-1/2 -translate-y-1/2">{center}</div>
       {f.seeds.map((s) => (
