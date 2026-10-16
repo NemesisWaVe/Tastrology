@@ -92,22 +92,44 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     }, 1150);
   }, [pt, fl, shake, reduce]);
 
-  const SNAP = 0.62; // fraction of the pack width you must drag before it gives
-  const drag = useRef<{ x: number; moved: boolean; tick: number } | null>(null);
+  /*
+   * The ONLY pointer path to open the pack: a deliberate horizontal pull along the top seam.
+   * Taps, clicks and short or wandering drags never open it; nothing auto-completes, there is no timer.
+   * Keyboard / reduced-motion users get the explicit "Open pack" button instead.
+   */
+  const SNAP = 0.74; // fraction of the pack width the pull must cover before the foil gives
+  const drag = useRef<{ x: number; y: number; tick: number; max: number } | null>(null);
+  const [tearing, setTearing] = useState(false);
+  const scar = useMotionValue(0); // permanent partial tear left by abandoned pulls (capped, never opens)
+  const scarW = useTransform(scar, (v) => `${(v * 100).toFixed(1)}%`);
+  const release = (e?: React.PointerEvent) => {
+    const d = drag.current;
+    drag.current = null;
+    setTearing(false);
+    const el = e?.currentTarget as HTMLElement | undefined;
+    if (e && el?.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    if (!d) return;
+    pt.set(0); // not torn far enough: the spring drags the strip back (it overshoots, like real foil)
+    if (d.max > 0.1) animate(scar, Math.max(scar.get(), Math.min(0.3, d.max * 0.38)), { duration: 0.2 });
+  };
   const onDown = (e: React.PointerEvent) => {
-    if (stage !== "sealed" || busy.current || reduce) return;
+    if (stage !== "sealed" || busy.current || reduce || e.button > 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { x: e.clientX, moved: false, tick: 0 };
+    drag.current = { x: e.clientX, y: e.clientY, tick: 0, max: 0 };
+    setTearing(true);
   };
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
     const dx = Math.max(0, e.clientX - d.x);
-    if (dx > 6) d.moved = true;
+    const dy = Math.abs(e.clientY - d.y);
+    // wandering off the seam (mostly vertical, or far from it) abandons the pull
+    if (dy > Math.max(48, tearY * 1.5) && dy > dx * 0.6) return release(e);
     const raw = dx / (packW * SNAP);
     // resistance: the foil fights you, the harder the pull the less it gives
     const t = (1 - Math.pow(1 - Math.min(1, raw), 1.8)) * 0.94;
     pt.set(t);
+    d.max = Math.max(d.max, t);
     const bucket = Math.floor(t * 5);
     if (bucket > d.tick) {
       d.tick = bucket;
@@ -115,15 +137,9 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     }
     if (raw >= 1) {
       drag.current = null;
+      setTearing(false);
       open();
     }
-  };
-  const onUp = () => {
-    const d = drag.current;
-    drag.current = null;
-    if (!d) return;
-    if (!d.moved) open();
-    else pt.set(0); // not torn far enough: the spring pulls it back
   };
 
   /* ---------------------------------------------------------------- hold to mint + flip */
@@ -241,11 +257,11 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" && e.key !== " ") return;
+      if (stage === "sealed") return; // only the explicit "Open pack" button (or the drag) opens it
       if ((e.target as HTMLElement)?.tagName === "BUTTON" && stage !== "facedown" && stage !== "charging") return;
       e.preventDefault();
       if (e.repeat) return;
-      if (stage === "sealed") open();
-      else if (e.key === " " && stage === "facedown" && !reduce) startHold();
+      if (e.key === " " && stage === "facedown" && !reduce) startHold();
       else if (stage === "facedown" || stage === "charging") flip();
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -285,6 +301,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   const seamW = useTransform([p, fl], ([a, f]) => `${Math.min(100, ((a as number) * 0.8 + (f as number) * 0.2) * 100)}%`);
   const leak = useTransform([p, fl], ([a, f]) => Math.min(1, (a as number) * 0.55 + (f as number) * 0.9));
   const leakH = useTransform(fl, [0, 1], [60, 150]);
+  const cueO = useTransform(p, [0, 0.12], [1, 0]);
   const leakY = useTransform(leakH, (v) => (60 - v) / 2);
 
   const sparks = useMemo(
@@ -393,21 +410,13 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 transition={{ type: "spring", stiffness: 160, damping: 18 }}
               >
                 <motion.div
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Tear open the pack"
-                  className={`${s.pack} outline-none`}
+                  role="img"
+                  aria-label="Sealed booster pack. Drag along the top seam to tear it open."
+                  className={s.pack}
                   style={{ width: packW, height: packH, rotateX: tiltX, rotateY: tiltY, scaleX: packSX, transformStyle: "preserve-3d" }}
-                  animate={stage === "sealed" && !reduce ? { y: [0, -6, 0] } : undefined}
-                  transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-                  onPointerDown={onDown}
-                  onPointerMove={(e) => {
-                    onMove(e);
-                    onHover(e);
-                  }}
-                  onPointerUp={onUp}
-                  onPointerCancel={onUp}
-                  onClick={reduce ? open : undefined}
+                  animate={stage === "sealed" && !reduce && !tearing ? { y: [0, -6, 0] } : { y: 0 }}
+                  transition={tearing ? { duration: 0.2 } : { duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                  onPointerMove={onHover}
                   onPointerLeave={onLeave}
                 >
                   {/* drop shadow */}
@@ -442,13 +451,31 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                     </motion.div>
                   </motion.div>
                   <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW, opacity: leak }} />
-                  {/* hint */}
+                  {/* partial tear left behind by an abandoned pull */}
+                  {stage === "sealed" && <motion.div className={s.scar} style={{ top: tearY - 2, width: scarW }} />}
+                  {/* affordance: a notch on the seam, "drag to tear", and an arrow that nudges while idle */}
                   {stage === "sealed" && (
-                    <div className="pointer-events-none absolute inset-x-0 flex justify-center" style={{ top: tearY - 30 }}>
-                      <span className={`${reduce ? "" : s.hintSweep} rounded-full bg-black/50 px-2.5 py-1 font-mono text-[10px] text-white backdrop-blur`}>
-                        ✂ drag →
+                    <motion.div className={s.tearCue} style={{ top: tearY, opacity: cueO }} data-tearing={tearing ? "1" : undefined} aria-hidden>
+                      <i className={s.notch} />
+                      <span className="rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.25)] backdrop-blur">
+                        drag to tear
                       </span>
-                    </div>
+                      <svg className={s.cueArrow} viewBox="0 0 28 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 6h24M20 1l5 5-5 5" />
+                      </svg>
+                    </motion.div>
+                  )}
+                  {/* the grip: the top seam band, tall enough to include the "drag to tear" notch */}
+                  {stage === "sealed" && !reduce && (
+                    <div
+                      className={s.grip}
+                      style={{ top: -10, height: tearY + 84 }}
+                      onPointerDown={onDown}
+                      onPointerMove={onMove}
+                      onPointerUp={release}
+                      onPointerCancel={release}
+                      onLostPointerCapture={() => drag.current && release()}
+                    />
                   )}
                 </motion.div>
               </motion.div>
@@ -552,9 +579,16 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
         <div className="relative z-10 flex min-h-[112px] flex-col items-center justify-end gap-3 px-6 pb-6">
           <AnimatePresence mode="wait">
             {stage === "sealed" && (
-              <motion.p key="h1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="font-mono text-[11px] text-ink-3">
-                drag across the top to tear · or tap the pack
-              </motion.p>
+              <motion.div key="h1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-2">
+                {!reduce && <p className="font-mono text-[11px] text-ink-3">pull the notch all the way across the top seam</p>}
+                <button
+                  type="button"
+                  onClick={open}
+                  className={`${reduce ? "" : "sr-only focus-visible:not-sr-only"} rounded-full border border-white/25 bg-white/5 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 outline-none focus-visible:ring-2 focus-visible:ring-white/60`}
+                >
+                  Open pack
+                </button>
+              </motion.div>
             )}
             {stage === "facedown" && (
               <motion.p key="h2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="font-mono text-[11px] text-ink-3">

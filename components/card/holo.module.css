@@ -944,8 +944,8 @@
   border-radius: 3cqw;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  padding: 4.2cqw 4.6cqw 4.4cqw;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+  padding: 4cqw 4.6cqw 2.6cqw;
   color: var(--paperw);
   background:
     radial-gradient(circle at 50% 42%, color-mix(in oklab, var(--glow) calc(14% + var(--charge) * 30%), transparent), transparent 58%),
@@ -985,9 +985,33 @@
   color: var(--glow);
 }
 
+.backMid {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  margin: 1.4cqw 0 0.6cqw;
+}
 .backSky {
   position: relative;
-  margin: 2cqw 0;
+  height: 100%;
+  aspect-ratio: 1;
+  max-width: 100%;
+}
+.backSky .micro {
+  font-family: var(--f-mono);
+  font-size: 1.25px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  fill: color-mix(in oklab, var(--glow) 50%, white);
+  opacity: 0.6;
+}
+.backSky .ticks {
+  fill: none;
+  stroke: color-mix(in oklab, var(--glow) 75%, white);
+  stroke-width: 0.45;
+  stroke-linecap: round;
+  opacity: 0.75;
 }
 .backSky svg {
   position: absolute;
@@ -1057,6 +1081,173 @@
   text-shadow: 0 0 3cqw color-mix(in oklab, var(--glow) 70%, transparent);
 }
 
+/* 1st-edition stamp (rarity cue, printed in the rarity colour) */
+.edition {
+  position: absolute;
+  left: 0.4cqw;
+  top: 0.6cqw;
+  rotate: -8deg;
+  display: grid;
+  gap: 0.5cqw;
+  padding: 1cqw 1.8cqw;
+  border: 0.35cqw solid color-mix(in oklab, var(--glow) 75%, white);
+  outline: 0.2cqw solid color-mix(in oklab, var(--glow) 45%, transparent);
+  outline-offset: 0.55cqw;
+  border-radius: 0.8cqw;
+  font-family: var(--f-mono);
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1;
+  color: color-mix(in oklab, var(--glow) 60%, white);
+  background: rgb(7 7 11 / 0.6);
+}
+.edition b {
+  font-size: 2.3cqw;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+.edition span {
+  font-size: 1.75cqw;
+  letter-spacing: 0.14em;
+}
+
+/* Holo-foil seal: on print this is the hot-foil plate (data-layer="foil"); on screen a moving foil. */
+.foilSeal {
+  position: absolute;
+  right: -0.6cqw;
+  bottom: -0.4cqw;
+  width: 19cqw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: rgb(10 10 16 / 0.85);
+  background: conic-gradient(from var(--bspin, 0deg), #ffb3b3, #fff0a0, #c4ffb0, #b0f7ff, #b9c3ff, #f3b8ff, #ffb3b3);
+  box-shadow: 0 0 0 0.35cqw rgb(255 255 255 / 0.55), 0 1cqw 3cqw -1cqw rgb(0 0 0 / 0.8);
+  animation: bspin 7s linear infinite;
+}
+.backScene[data-rarity="secret"] .foilSeal {
+  background: conic-gradient(from var(--bspin, 0deg), #fff1b8, #c8912e, #fff6d6, #a77421, #f8dc84, #fff1b8);
+}
+.backScene[data-rarity="common"] .foilSeal {
+  background: conic-gradient(from var(--bspin, 0deg), #f1f3f6, #9aa1ad, #ffffff, #8b919c, #e3e6eb, #f1f3f6);
+}
+.foilSeal svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.foilSeal text {
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  fill: currentColor;
+}
+.foilSeal circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.sealMark {
+  width: 32%;
+  height: 32%;
+}
+
+.backId {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1.8cqw;
+}
+.cert {
+  position: relative;
+  margin: 1.2cqw auto 0;
+  max-width: 84cqw;
+  text-align: center;
+  font-family: var(--f-serif);
+  font-size: 3.1cqw;
+  line-height: 1.25;
+  color: rgb(245 243 238 / 0.78);
+}
+.cert b {
+  font-style: italic;
+  font-weight: 400;
+  color: color-mix(in oklab, var(--glow) 45%, white);
+}
+
+.verify {
+  position: relative;
+  display: grid;
+  grid-template-columns: 21cqw 1fr;
+  align-items: center;
+  gap: 3cqw;
+  margin-top: 2.2cqw;
+  padding-top: 2.2cqw;
+  border-top: 0.25cqw dashed rgb(255 255 255 / 0.18);
+}
+.qr {
+  display: block;
+  width: 100%;
+  border-radius: 1cqw;
+}
+.qr path {
+  fill: #0b0b12;
+}
+.verifyText {
+  display: grid;
+  gap: 1cqw;
+  min-width: 0;
+  text-align: left;
+}
+.code {
+  font-family: var(--f-dots);
+  font-size: 6cqw;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--paperw);
+}
+.url {
+  font-family: var(--f-mono);
+  font-size: 2.2cqw;
+  letter-spacing: 0.03em;
+  color: rgb(245 243 238 / 0.7);
+  overflow-wrap: anywhere;
+}
+.microLine {
+  position: relative;
+  margin-top: 1.8cqw;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--f-mono);
+  font-size: 0.95cqw;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: rgb(245 243 238 / 0.34);
+}
+
+/* Print-safe: no glow, sheen, blend modes or motion. Foil zone renders as a flat key colour. */
+.backScene[data-print-safe] .backCard {
+  box-shadow: inset 0 0 0 0.3cqw color-mix(in oklab, var(--glow) 55%, transparent);
+}
+.backScene[data-print-safe] .backCard::before,
+.backScene[data-print-safe] .foilSeal,
+.backScene[data-print-safe] .node {
+  animation: none;
+}
+.backScene[data-print-safe] .node {
+  box-shadow: 0 0 0 0.3cqw color-mix(in oklab, var(--glow) 70%, white);
+}
+.backScene[data-print-safe] .backSerial {
+  text-shadow: none;
+}
+.backScene[data-print-safe] .foilSeal {
+  background: #c9ccd3;
+  box-shadow: none;
+}
+
 .backSheen {
   position: absolute;
   inset: 0;
@@ -1110,6 +1301,7 @@
   .card[data-print] .heroTitle,
   .card[data-print] .heroRarity,
   .node,
+  .foilSeal,
   .backSheen,
   .backCard::before {
     animation: none !important;
