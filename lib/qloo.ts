@@ -66,9 +66,9 @@ function normEntity(raw: Record<string, unknown>): QEntity {
 const cache = kvCache<Record<string, unknown>>("qloo", 2000);
 
 const QLOO_TIMEOUT_MS = 8000;
-const QLOO_ATTEMPTS = 2;
+const QLOO_ATTEMPTS = 4;
 
-/** Every Qloo request goes through here: cache, timing, one retry on 429/5xx/network, mock switch. */
+/** Every Qloo request goes through here: cache, timing, up to 3 backed-off retries on 429/5xx/network, mock switch. */
 async function qget(path: string, params: Record<string, string>, log?: QlooCallLog[]): Promise<Record<string, unknown>> {
   const qs = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
   const mode = qlooMode();
@@ -89,7 +89,12 @@ async function qget(path: string, params: Record<string, string>, log?: QlooCall
     let res: Response | undefined;
     let netErr: unknown;
     for (let attempt = 0; attempt < QLOO_ATTEMPTS; attempt++) {
-      if (attempt) await new Promise((r) => setTimeout(r, 400));
+      if (attempt) {
+        // Bursts (5 seed searches at once) trip Qloo's 429; jittered backoff spreads the retries apart.
+        const after = Number(res?.headers.get("retry-after"));
+        const wait = after > 0 ? Math.min(after * 1000, 3000) : 500 * 2 ** (attempt - 1) + Math.random() * 400;
+        await new Promise((r) => setTimeout(r, wait));
+      }
       try {
         res = await fetch(`${BASE()}${path}?${qs}`, {
           headers: { "X-Api-Key": process.env.QLOO_API_KEY!, accept: "application/json" },
@@ -98,7 +103,8 @@ async function qget(path: string, params: Record<string, string>, log?: QlooCall
         netErr = undefined;
       } catch (err) {
         res = undefined;
-        netErr = err; // timeout or network error: retry once
+        netErr = err; // timeout or network error: retry once (4 × 8s timeouts would eat the route's budget)
+        if (attempt >= 1) break;
         continue;
       }
       if (res.status !== 429 && res.status < 500) break;

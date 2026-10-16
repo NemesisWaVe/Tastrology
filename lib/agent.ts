@@ -153,8 +153,12 @@ async function resolveSeeds(st: RunState) {
         // search then rejects (HTTP 400). Query the head of the title, and let one bad seed drop out
         // instead of failing the whole reading.
         const q = s.name.split(/\s+\/\s+/)[0].slice(0, 60).trim();
-        const hits = await searchEntities(q, [s.kind], 5, log).catch(async () =>
-          q.includes(":") ? searchEntities(q.split(":")[0].trim(), [s.kind], 5, log).catch(() => []) : [],
+        const dropped = (err: unknown) => {
+          console.warn(JSON.stringify({ evt: "seed_drop", kind: s.kind, error: String((err as Error)?.message ?? err) }));
+          return [];
+        };
+        const hits = await searchEntities(q, [s.kind], 5, log).catch(async (err) =>
+          q.includes(":") ? searchEntities(q.split(":")[0].trim(), [s.kind], 5, log).catch(dropped) : dropped(err),
         );
         return (
           hits.find((h) => h.id === s.id) ??
