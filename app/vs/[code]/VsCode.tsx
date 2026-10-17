@@ -53,7 +53,7 @@ export function VsCode({ code }: { code: string }) {
   if (st.kind === "fight") return <BattleStage out={st.out} />;
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">
+    <main className="relative isolate mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">
       {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {st.kind === "loading" && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding the challenger…</p>}
       {st.kind === "unavailable" && (
