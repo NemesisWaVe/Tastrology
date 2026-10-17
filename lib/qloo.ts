@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { kvCache, sharedCache, MAX_TTL_MS } from "./cache";
 import { mockQloo } from "./mock/server";
 import { bumpDaily } from "./ratelimit";
@@ -85,10 +86,38 @@ const inflight = new Map<string, Promise<Record<string, unknown>>>();
 
 /** At most QLOO_CONCURRENCY live requests per instance; the rest wait in line (bursts are what trip Qloo 429s). */
 const QLOO_CONCURRENCY = Number(process.env.QLOO_CONCURRENCY) || 4;
+/** Longest a request waits in line for a free slot before giving up. */
+const GATE_WAIT_MS = 30_000;
 let active = 0;
 const waiting: (() => void)[] = [];
-async function gate<T>(fn: () => Promise<T>): Promise<T> {
-  if (active >= QLOO_CONCURRENCY) await new Promise<void>((r) => waiting.push(r));
+
+const abortError = (signal?: AbortSignal) => (signal?.reason instanceof Error ? signal.reason : Object.assign(new Error("Qloo request aborted"), { name: "AbortError" }));
+
+/** Runs `fn` once a slot is free. A queued waiter leaves the line when `signal` aborts or after GATE_WAIT_MS. */
+export async function gate<T>(fn: () => Promise<T>, signal?: AbortSignal, waitMs = GATE_WAIT_MS): Promise<T> {
+  signal?.throwIfAborted();
+  if (active >= QLOO_CONCURRENCY) {
+    await new Promise<void>((resolve, reject) => {
+      const go = () => {
+        cleanup();
+        resolve();
+      };
+      const leave = (err: Error) => {
+        cleanup();
+        const i = waiting.indexOf(go);
+        if (i >= 0) waiting.splice(i, 1);
+        reject(err);
+      };
+      const onAbort = () => leave(abortError(signal));
+      const t = setTimeout(() => leave(Object.assign(new Error("Qloo queue timed out"), { name: "TimeoutError" })), waitMs);
+      const cleanup = () => {
+        clearTimeout(t);
+        signal?.removeEventListener("abort", onAbort);
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      waiting.push(go);
+    });
+  }
   active++;
   try {
     return await fn();
@@ -98,11 +127,36 @@ async function gate<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Tests only: how many requests hold or wait for a slot. */
+export const gateLoad = () => ({ active, waiting: waiting.length });
+
+/**
+ * The abort signal for every Qloo call made inside `fn` (an agent run), without threading it through each tool.
+ * qget() also takes an explicit signal, which wins.
+ */
+const signalCtx = new AsyncLocalStorage<AbortSignal>();
+export function withQlooSignal<T>(signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+  return signal ? signalCtx.run(signal, fn) : fn();
+}
+
 const QLOO_TIMEOUT_MS = 8000;
 const QLOO_ATTEMPTS = 4;
 
+/** Resolves with `p`, or rejects as soon as `signal` aborts (the shared work itself carries on for other callers). */
+function raceAbort<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) return Promise.reject(abortError(signal));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
 /** Every Qloo request goes through here: cache (shared or local), in-flight dedupe, timing. */
-async function qget(path: string, params: Record<string, string>, log?: QlooCallLog[]): Promise<Record<string, unknown>> {
+export async function qget(path: string, params: Record<string, string>, log?: QlooCallLog[], signal?: AbortSignal): Promise<Record<string, unknown>> {
+  const sig = signal ?? signalCtx.getStore();
+  sig?.throwIfAborted();
   const qs = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
   const mode = qlooMode();
   const key = `${mode}:${path}?${qs}`;
@@ -113,23 +167,46 @@ async function qget(path: string, params: Record<string, string>, log?: QlooCall
     log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: true, count: countOf(hit) });
     return hit;
   }
-  let p = inflight.get(key);
-  if (!p) {
-    p = fetchQloo(path, qs, mode).finally(() => inflight.delete(key));
+  const start = () => {
+    const p = fetchQloo(path, qs, mode, sig).finally(() => inflight.get(key) === p && inflight.delete(key));
     inflight.set(key, p);
+    return p;
+  };
+  let p = inflight.get(key) ?? start();
+  let json: Record<string, unknown>;
+  try {
+    json = await raceAbort(p, sig);
+  } catch (err) {
+    // We joined someone else's request and *their* run was aborted while it waited in line: ours is still wanted.
+    if ((err as Error)?.name !== "AbortError" || sig?.aborted) throw err;
+    p = inflight.get(key) ?? start();
+    json = await raceAbort(p, sig);
   }
-  const json = await p;
   if (share) await shared.set(key, json);
   else local.set(key, json, MAX_TTL_MS);
   log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: false, count: countOf(json) });
   return json;
 }
 
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(t);
+      reject(abortError(signal));
+    };
+    const t = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /** One Qloo request: mock switch, or a gated live fetch with up to 3 backed-off retries on 429/5xx/network. */
-async function fetchQloo(path: string, qs: URLSearchParams, mode: "live" | "mock"): Promise<Record<string, unknown>> {
+async function fetchQloo(path: string, qs: URLSearchParams, mode: "live" | "mock", signal?: AbortSignal): Promise<Record<string, unknown>> {
   if (mode === "mock") {
     // Simulated network latency so the mock trace streams like a live run.
-    await new Promise((r) => setTimeout(r, 140 + Math.random() * 260));
+    await sleep(140 + Math.random() * 260, signal);
     return mockQloo(path, qs) as Record<string, unknown>;
   }
   return gate(async () => {
@@ -140,15 +217,16 @@ async function fetchQloo(path: string, qs: URLSearchParams, mode: "live" | "mock
         // Bursts (5 seed searches at once) trip Qloo's 429; jittered backoff spreads the retries apart.
         const after = Number(res?.headers.get("retry-after"));
         const wait = after > 0 ? Math.min(after * 1000, 3000) : 500 * 2 ** (attempt - 1) + Math.random() * 400;
-        await new Promise((r) => setTimeout(r, wait));
+        await sleep(wait, signal);
       }
       try {
         res = await fetch(`${BASE()}${path}?${qs}`, {
           headers: { "X-Api-Key": process.env.QLOO_API_KEY!, accept: "application/json" },
-          signal: AbortSignal.timeout(QLOO_TIMEOUT_MS),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(QLOO_TIMEOUT_MS)]) : AbortSignal.timeout(QLOO_TIMEOUT_MS),
         });
         netErr = undefined;
       } catch (err) {
+        if (signal?.aborted) throw abortError(signal);
         res = undefined;
         netErr = err; // timeout or network error: retry once (4 × 8s timeouts would eat the route's budget)
         if (attempt >= 1) break;
@@ -157,13 +235,16 @@ async function fetchQloo(path: string, qs: URLSearchParams, mode: "live" | "mock
       if (res.status === 429) void bumpDaily("qloo_429");
       if (res.status !== 429 && res.status < 500) break;
     }
-    if (!res) throw new Error(`Qloo ${path}: ${(netErr as Error)?.name === "TimeoutError" ? "timed out" : "network error"}`);
-    if (!res.ok) throw new Error(`Qloo ${path} → HTTP ${res.status}`);
+    if (!res) throw Object.assign(new Error(`Qloo ${path}: ${(netErr as Error)?.name === "TimeoutError" ? "timed out" : "network error"}`), { upstream: true });
+    if (!res.ok) throw Object.assign(new Error(`Qloo ${path} → HTTP ${res.status}`), { upstream: res.status === 429 || res.status >= 500 });
     const json = (await res.json()) as Record<string, unknown>;
     if (json.success === false) throw new Error(`Qloo ${path}: ${String(json.error ?? "request failed")}`);
     return json;
-  });
+  }, signal);
 }
+
+/** True for errors that mean Qloo itself is down or overloaded (network, timeout, 429, 5xx), not a bad query. */
+export const isUpstreamError = (err: unknown) => Boolean((err as { upstream?: boolean })?.upstream) || (err as Error)?.name === "TimeoutError";
 
 function countOf(json: Record<string, unknown>): number {
   const r = json.results as unknown;

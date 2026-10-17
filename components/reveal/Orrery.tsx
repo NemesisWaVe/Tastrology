@@ -29,6 +29,8 @@ interface Body {
   label?: string;
   sub?: string;
   img?: HTMLImageElement;
+  /** The image failed to load; don't try again. */
+  imgFailed?: boolean;
   letter?: string;
   /** Threads drawn from this body to these body ids. */
   links?: { to: string; w: number }[];
@@ -110,9 +112,14 @@ export function Orrery({
     for (const s of f.seeds) {
       const ang = seedAng.get(s.id) ?? 0;
       const b = get(`s:${s.id}`, "seed", polar(ang, 0.15), { letter: s.name[0] });
-      if (!b.img && s.image) {
+      if (!b.img && !b.imgFailed && s.image) {
         const img = new Image();
         img.decoding = "async";
+        // A broken image is dropped for good: the seed keeps its letter disc, and nothing retries it every frame.
+        img.onerror = () => {
+          b.img = undefined;
+          b.imgFailed = true;
+        };
         img.src = proxied(s.image);
         b.img = img;
       }

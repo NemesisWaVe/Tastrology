@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { clerkOn, currentUserId } from "@/lib/auth";
 import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
@@ -10,6 +11,7 @@ import { isPersonaRequest, PERSONAS } from "@/lib/personas";
 import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
 import { acquireSlot, allow, bumpDaily, clientId, clientIp } from "@/lib/ratelimit";
 import { registerFighter, toSheet } from "@/lib/fighters";
+import { dropLease, leaseHeld, takeLease } from "@/lib/runLease";
 import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
@@ -31,10 +33,33 @@ interface Flight {
   events: TraceEvent[];
   listeners: Set<(e: TraceEvent) => void>;
   done: Promise<StyleResult>;
+  /** Settles once the run and its bookkeeping (slot release, mint stats, refund, lease) have all finished. */
+  drained: Promise<unknown>;
   ac: AbortController;
 }
 const g = globalThis as unknown as { __tmFlights?: Map<string, Flight> };
 const flights = (g.__tmFlights ??= new Map<string, Flight>());
+
+/** Hard ceiling for one run. Past it the run is aborted (Qloo queue included) and the last good reading, if any, is served. */
+const RUN_DEADLINE_MS = 120_000;
+/** Autopilot results (LLM configured but skipped or down) are cached briefly: repeat clicks replay, and the LLM gets another go soon. */
+const AUTOPILOT_TTL_MS = 10 * 60 * 1000;
+
+/** The run hit RUN_DEADLINE_MS. */
+class DeadlineError extends Error {
+  readonly reason = "deadline";
+  constructor() {
+    super("The reading ran out of time.");
+  }
+}
+
+/** Keeps post-response work alive on serverless (next/server after()). Outside a request scope (tests) it just runs. */
+function later(task: Promise<unknown>) {
+  const p = task.catch(() => {});
+  try {
+    after(p);
+  } catch {}
+}
 
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -71,7 +96,11 @@ async function fileOwnMint(userId: string, code: string, card: ReturnType<typeof
 function startFlight(key: string, fallbackKey: string, req: AgentRequest, release: () => Promise<void>, minter?: Minter): Flight {
   const t0 = Date.now();
   const ac = new AbortController();
+  const deadline = setTimeout(() => ac.abort(new DeadlineError()), RUN_DEADLINE_MS);
   const f = { events: [], listeners: new Set(), ac } as unknown as Flight;
+  /** Bookkeeping that must finish even after every client has gone. */
+  const tail: Promise<unknown>[] = [];
+  const bg = (p: Promise<unknown>) => void tail.push(p.catch(() => {}));
   const run = runAgent(
     req,
     (e) => {
@@ -88,16 +117,19 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         const code = await registerTwin(card);
         await registerFighter(code, toSheet(result));
         if (minter) await fileOwnMint(minter.userId, code, card).catch(() => {});
-        void recordMint(code, SEASON, card.rarityScore).catch(() => {});
+        bg(recordMint(code, SEASON, card.rarityScore));
       }
-      // Don't pin a fallback run: next time the LLM may be back (Qloo calls are cached either way).
+      // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of
+      // burning a slot, and in 10 minutes the LLM may be back (Qloo calls stay cached either way).
       if (!llmConfigured() || result.planner === "llm") await results.set(key, rec);
+      else await results.set(key, rec, AUTOPILOT_TTL_MS);
       await lastGood.set(fallbackKey, rec);
       logRun({ runId: result.runId, planner: result.planner, qlooCalls: result.stats.qlooCalls, ms: Date.now() - t0, cached: false, error: null });
       return result;
     },
     (err: Error) => {
-      logRun({ runId: null, planner: null, qlooCalls: null, ms: Date.now() - t0, cached: false, error: ac.signal.aborted ? "client aborted" : String(err?.message ?? err) });
+      const why = ac.signal.reason instanceof DeadlineError ? "deadline" : ac.signal.aborted ? "aborted" : String(err?.message ?? err);
+      logRun({ runId: null, planner: null, qlooCalls: null, ms: Date.now() - t0, cached: false, error: why });
       throw err;
     },
   );
@@ -105,21 +137,29 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
   const settled = charged
     ? run.catch((err) => {
         // The run didn't produce a card: give the credit back (write-once per run id).
-        void refundCredit(charged.userId, charged.runId).catch(() => {});
+        bg(refundCredit(charged.userId, charged.runId));
         throw err;
       })
     : run;
   f.done = settled.finally(() => {
+    clearTimeout(deadline);
     if (flights.get(key) === f) flights.delete(key);
-    void release();
+    bg(release());
+    bg(dropLease(key));
   });
   f.done.catch(() => {});
+  f.drained = f.done.then(
+    () => Promise.allSettled(tail),
+    () => Promise.allSettled(tail),
+  );
   flights.set(key, f);
   return f;
 }
 
 export async function POST(request: Request) {
   let raw: unknown;
+  // Refuse an oversized body before reading it (the byte check below still covers chunked bodies with no length).
+  if (Number(request.headers.get("content-length") ?? 0) > BODY_MAX_BYTES) return Response.json({ error: "Request too large." }, { status: 413 });
   try {
     const text = await request.text();
     if (Buffer.byteLength(text) > BODY_MAX_BYTES) return Response.json({ error: "Request too large." }, { status: 413 });
@@ -134,7 +174,7 @@ export async function POST(request: Request) {
   const fallbackKey = cacheKey(body, "*");
   const cached = await results.get(key);
   let flight = cached ? undefined : flights.get(key);
-  if (flight?.ac.signal.aborted) flight = undefined; // its last listener left; start fresh
+  if (flight?.ac.signal.aborted) flight = undefined; // hit its deadline; start fresh
   /** Set when this request just passed the bot check; rides on whatever response goes back. */
   let setCookie: string | undefined;
   const reply = (body: unknown, init: ResponseInit) => {
@@ -142,6 +182,10 @@ export async function POST(request: Request) {
     if (setCookie) r.headers.append("set-cookie", setCookie);
     return r;
   };
+  const running = () => reply({ reason: "running", hint: "Already reading this one. Poll again." }, { status: 202, headers: { "retry-after": "4", "cache-control": "no-store" } });
+  // Already running elsewhere (another instance, or our own stream dropped and the client came back): don't start a
+  // second run or charge again; the client polls and gets the cached replay once it lands.
+  if (!cached && !flight && (await leaseHeld(key))) return running();
   if (!cached && !flight) {
     // Mint gate: demo personas stay anonymous; any other fresh reading needs an account when Clerk is on.
     const persona = isPersonaRequest(body);
@@ -149,10 +193,10 @@ export async function POST(request: Request) {
     if (clerkOn() && !userId && !persona) return Response.json({ error: "Sign in to mint a fresh card.", reason: "signin" }, { status: 401 });
     const who = userId ? `u:${userId}` : clientId(request.headers);
     // Bot check before anything that costs quota (anonymous only: Clerk's sign-up already ran one). The token is spent here, so queue retries ride on the cookie.
-    if (!userId && turnstileOn() && !hasHumanCookie(request.headers)) {
+    if (!userId && !persona && turnstileOn() && !hasHumanCookie(request.headers)) {
       const token = request.headers.get("x-turnstile") ?? "";
       if (!(await verifyTurnstile(token, clientIp(request.headers)))) {
-        void bumpDaily("denied_bot");
+        later(bumpDaily("denied_bot"));
         return Response.json({ error: "Quick check first.", reason: "verify" }, { status: 403 });
       }
       setCookie = humanCookie();
@@ -161,7 +205,7 @@ export async function POST(request: Request) {
     // Fresh runs only (not replays, not joins): they cost Qloo and LLM calls.
     const release = flights.size >= MAX_FLIGHTS ? null : await acquireSlot("agent", RUN_SLOTS, SLOT_TTL_MS);
     if (!release) {
-      void bumpDaily("denied_busy");
+      later(bumpDaily("denied_busy"));
       return reply({ ...BUSY, reason: "slots" }, { status: 503, headers: { "retry-after": String(12 + Math.floor(Math.random() * 10)) } });
     }
     // Counted only once a slot is granted, so waiting in line doesn't use up the allowance.
@@ -171,8 +215,13 @@ export async function POST(request: Request) {
     }
     if ((await bumpDaily("runs")) > DAILY_RUNS_MAX) {
       await release();
-      void bumpDaily("denied_daily");
+      later(bumpDaily("denied_daily"));
       return reply({ ...BUSY, reason: "daily" }, { status: 503, headers: { "retry-after": "600" } });
+    }
+    // One run per request across instances. Lost the race: someone else just started it.
+    if (!(await takeLease(key))) {
+      await release();
+      return running();
     }
     // Credits last, after every free gate, so being turned away never costs one. Idempotent per run id (the client reuses it across retries).
     let minter: Minter | undefined = userId && !persona ? { userId } : undefined;
@@ -182,6 +231,7 @@ export async function POST(request: Request) {
       const spent = await spendCredit(minter.userId, runId);
       if (spent !== "spent" && spent !== "dup") {
         await release();
+        await dropLease(key);
         if (spent === "empty") return reply({ error: "You're out of readings. The shop has more.", reason: "credits" }, { status: 402 });
         if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
         return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
@@ -189,6 +239,8 @@ export async function POST(request: Request) {
       minter = { ...minter, runId };
     }
     flight = startFlight(key, fallbackKey, body, release, minter);
+    // The run outlives this response if the client drops: it finishes, caches its result and releases its slot.
+    later(flight.drained);
   }
 
   const enc = new TextEncoder();
@@ -234,9 +286,10 @@ export async function POST(request: Request) {
       for (const e of f.events) send(e); // joined a shared run: catch up on what it already emitted
       const listener = (e: TraceEvent) => send(e);
       f.listeners.add(listener);
+      // A client that leaves only unsubscribes: the run keeps going (under after()) and caches its result, so a
+      // reconnect replays it instead of paying for it twice. RUN_DEADLINE_MS bounds it.
       detach = () => {
         f.listeners.delete(listener);
-        if (!f.listeners.size) f.ac.abort(); // nobody is listening any more: stop the work
       };
       try {
         const result = await f.done;
@@ -247,7 +300,14 @@ export async function POST(request: Request) {
           if (fallback) {
             send({ type: "thought", text: "This run failed, so here is the last good reading for exactly this request." });
             send({ type: "result", result: { ...fallback.result, cached: true } });
-          } else send({ type: "error", message: (err as Error)?.message || "Agent failed" });
+          } else {
+            const reason = (err as { reason?: unknown })?.reason;
+            send({
+              type: "error",
+              message: (err as Error)?.message || "Agent failed",
+              ...(reason === "upstream" || reason === "deadline" ? { reason } : {}),
+            });
+          }
         }
       }
       f.listeners.delete(listener);

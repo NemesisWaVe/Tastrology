@@ -161,7 +161,7 @@ export type TraceEvent =
   | { type: "thought"; text: string }
   | { type: "tool"; name: string; args: string; calls: QlooCallLog[]; summary: string }
   | { type: "result"; result: StyleResult }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; reason?: "upstream" | "deadline" };
 
 export interface AgentRequest {
   seeds: { id: string; name: string; kind: EntityKind }[];
