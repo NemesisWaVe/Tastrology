@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { signInForRun } from "./authBridge";
 import { turnstileToken } from "./turnstile";
 import type { AgentRequest, StyleResult, TraceEvent } from "./types";
 
@@ -9,6 +10,9 @@ function friendly(status: number | null, raw: string | undefined, retryAfterS: n
   const wait = retryAfterS ? ` Give it about ${retryAfterS} second${retryAfterS === 1 ? "" : "s"}, then try again.` : " Give it a minute, then try again.";
   if (status === 429 || /rate.?limit|too many|429|quota/i.test(raw ?? "")) return `The stars are crowded right now.${wait} A demo persona opens instantly.`;
   if (status === 503) return "Tastrology is full right now, so new readings are on hold for a bit. The demo personas on the home page still open instantly.";
+  if (status === 401) return "Fresh readings need an account. Sign in and try again; the demo personas open without one.";
+  if (status === 402) return raw || "You're out of readings. The shop has more.";
+  if (status === 409) return "That reading already ran. Start a new one.";
   if (status === 403) return "We couldn't confirm you're a person, so this reading didn't start. Refresh and try again.";
   if (status === 413) return "That request was too big. Try fewer or shorter picks.";
   if (status === 400 && raw) return raw;
@@ -20,6 +24,16 @@ function friendly(status: number | null, raw: string | undefined, retryAfterS: n
 }
 
 const QUEUE_MARK = "Queue:";
+const SIGNIN_MARK = "Sign-in:";
+
+/** One id per reading, reused across its retries, so the server charges a credit at most once for it. */
+function newRunId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
 const MAX_QUEUE_TRIES = 4;
 
 function parseRetryAfter(h: string | null): number | null {
@@ -68,9 +82,18 @@ export function useAgentRun() {
       const wait = cooldown.current - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       if (id !== seq.current) return null;
+      const runId = newRunId();
       const post = (extra: Record<string, string> = {}) =>
-        fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json", ...extra }, body: JSON.stringify(req), signal: ac.signal });
+        fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json", "x-run-id": runId, ...extra }, body: JSON.stringify(req), signal: ac.signal });
       let res = await post();
+      // Fresh readings need an account (when accounts are on): open sign-in, then retry once signed in.
+      if (res.status === 401 && ((await res.clone().json().catch(() => ({}))) as { reason?: string }).reason === "signin") {
+        setEvents((prev) => [...prev, { type: "thought", text: `${SIGNIN_MARK} Sign in and your reading starts right here.` }]);
+        const ok = await signInForRun(req, ac.signal);
+        if (id !== seq.current) return null;
+        setEvents((prev) => prev.filter((e) => !(e.type === "thought" && e.text.startsWith(SIGNIN_MARK))));
+        if (ok) res = await post();
+      }
       // Bot check requested (fresh runs only): get a Turnstile token once, then the server's cookie covers retries.
       if (res.status === 403 && ((await res.clone().json().catch(() => ({}))) as { reason?: string }).reason === "verify") {
         const token = await turnstileToken().catch(() => "");

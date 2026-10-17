@@ -109,6 +109,6 @@ describe("demo personas stay out of decks", () => {
     const p = personaRequest(PERSONAS[0]);
     expect(isPersonaRequest(p)).toBe(true);
     expect(isPersonaRequest({ ...p, seeds: p.seeds.map((s, i) => ({ ...s, id: `id-${i}` })) })).toBe(false);
-    expect(isPersonaRequest({ seeds: [{ name: "Daft Punk", kind: "artist" }, { name: "Dune", kind: "movie" }] })).toBe(false);
+    expect(isPersonaRequest({ seeds: [{ id: "", name: "Daft Punk", kind: "artist" }, { id: "", name: "Dune", kind: "movie" }] })).toBe(false);
   });
 });
