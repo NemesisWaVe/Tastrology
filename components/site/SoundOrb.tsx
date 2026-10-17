@@ -42,7 +42,7 @@ export function SoundOrb() {
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? "Turn sound off" : "Turn sound on"}
-      className={`group fixed bottom-5 right-5 z-[60] flex items-center gap-3 rounded-full border backdrop-blur-md transition-all duration-500 ${
+      className={`group fixed right-4 top-16 z-[60] md:right-6 md:top-[72px] flex items-center gap-3 rounded-full border backdrop-blur-md transition-all duration-500 ${
         on && !locked ? "border-accent/30 bg-black/40 p-2.5" : "border-accent/50 bg-black/55 py-2.5 pl-3 pr-5 shadow-[0_0_40px_rgba(198,255,61,0.18)]"
       }`}
     >

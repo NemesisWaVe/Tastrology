@@ -292,3 +292,13 @@ export function installClickPops(): void {
 export function soundLocked(): boolean {
   return soundOn() && (!ctx || ctx.state !== "running");
 }
+
+/** Whether this browser lets the page play sound right now, without a click (some allow it for familiar sites). */
+export function audioAllowed(): boolean {
+  try {
+    const c = ensure();
+    return !!c && c.state === "running";
+  } catch {
+    return false;
+  }
+}
