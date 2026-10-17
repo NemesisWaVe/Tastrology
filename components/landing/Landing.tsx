@@ -100,7 +100,7 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
       <div className={s.grain} aria-hidden />
       <Nav onPick={() => go("pick")} hidden={introOn} />
       <Intro onActive={setIntroOn} />
-      <SoundOrb />
+      {introOn && <SoundOrb />}
 
       <main>
         <Hero

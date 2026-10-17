@@ -52,7 +52,7 @@ export function SkyBackdrop({ dim = 0.55, focus = [0.5, 0.42] }: { dim?: number;
           // cover, a little oversized so the parallax never shows an edge
           const s = Math.max(w / img.naturalWidth, h / img.naturalHeight) * 1.12;
           const iw = img.naturalWidth * s, ih = img.naturalHeight * s;
-          const ox = w / 2 - fx * iw - par.x * 18, oy = h / 2 - fy * ih - par.y * 12;
+          const ox = Math.min(0, Math.max(w - iw, w / 2 - fx * iw - par.x * 18)), oy = Math.min(0, Math.max(h - ih, h / 2 - fy * ih - par.y * 12)); // always cover the screen
           ctx.globalAlpha = dim;
           ctx.drawImage(img, ox, oy, iw, ih);
           ctx.globalCompositeOperation = "lighter";
