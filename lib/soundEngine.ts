@@ -18,7 +18,7 @@ let noiseBuf: AudioBuffer | null = null;
 let on = false;
 let loaded = false;
 const last: Partial<Record<Sfx, number>> = {};
-const MIN_GAP: Partial<Record<Sfx, number>> = { tick: 40, tap: 60, ripple: 50, drop: 120 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120 };
 
 function load() {
   if (loaded) return;
@@ -192,6 +192,25 @@ function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
       noise(c, t, 0.7, 0.25 * gv, { f0: 3000, f1: 150, attack: 0.01, send: 0.5 });
       tone(c, t + 0.05, hz(329.63, 7), 1.2, 0.08 * gv, { send: 0.7 });
       break;
+    case "pop": // bubbly button pop: quick upward blip + tiny click
+      tone(c, t, 420 + Math.random() * 60, 0.07, 0.32 * gv, { to: 980, send: 0.12, attack: 0.002 });
+      noise(c, t, 0.015, 0.08 * gv, { type: "bandpass", f0: 3200, q: 1.4, send: 0.03 });
+      break;
+    case "print": // thermal print head: a short burst of dry ticks over a soft motor
+      for (let k = 0; k < 6; k++) noise(c, t + k * 0.022, 0.012, 0.09 * gv, { type: "bandpass", f0: 2800 + Math.random() * 900, q: 2, send: 0.03 });
+      tone(c, t, 140, 0.14, 0.05 * gv, { type: "sawtooth", lp: 600, to: 170, send: 0.02 });
+      break;
+    case "beep": // checkout scanner
+      tone(c, t, 1860, 0.09, 0.12 * gv, { type: "square", lp: 4000, send: 0.08 });
+      break;
+    case "stamp": // rubber stamp: dull thunk + paper slap
+      tone(c, t, 120, 0.22, 0.45 * gv, { to: 45, send: 0.1 });
+      noise(c, t, 0.06, 0.2 * gv, { f0: 1200, f1: 300, send: 0.05 });
+      break;
+    case "tear": // paper rip: a run of fibre snaps under a tearing hiss
+      noise(c, t, 0.32, 0.28 * gv, { type: "bandpass", f0: 900, f1: 3600, q: 0.9, attack: 0.02, send: 0.1 });
+      for (let k = 0; k < 10; k++) noise(c, t + k * 0.028 + Math.random() * 0.01, 0.014, (0.08 + Math.random() * 0.08) * gv, { type: "bandpass", f0: 2000 + Math.random() * 2500, q: 2.5, send: 0.04, pan: (Math.random() - 0.5) * 0.5 });
+      break;
     case "whoosh": // airy sweep up, quick settle
       noise(c, t, 0.35, 0.2 * gv, { type: "bandpass", f0: 400, f1: 2400, q: 0.8, attack: 0.12, send: 0.3, pan: 0.15 });
       break;
@@ -242,4 +261,18 @@ export function armSound(): void {
   };
   window.addEventListener("pointerdown", unlock);
   window.addEventListener("keydown", unlock);
+}
+
+let popsOn = false;
+/** Every button and link pops, unless that click already played its own sound. Installed once. */
+export function installClickPops(): void {
+  if (popsOn || typeof document === "undefined") return;
+  popsOn = true;
+  document.addEventListener("click", (e) => {
+    const el = (e.target as Element | null)?.closest?.("button, a, [role=button], summary, label");
+    if (!el || el.closest("[data-nopop]")) return;
+    const now = performance.now();
+    if (["tap", "flip", "whoosh", "reveal", "ripple", "drop", "tear", "burn", "collide"].some((n) => now - (last[n as Sfx] ?? -1e9) < 120)) return;
+    play("pop");
+  });
 }

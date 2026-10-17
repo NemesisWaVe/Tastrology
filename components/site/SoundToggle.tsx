@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { sfx } from "@/lib/sound";
-import { armSound, enableSound, soundOn } from "@/lib/soundEngine";
+import { armSound, enableSound, installClickPops, soundOn } from "@/lib/soundEngine";
 
 /** Quiet sound switch: mono label + a three-bar equalizer that breathes while sound is on. */
 export function SoundToggle({ className = "" }: { className?: string }) {
@@ -10,6 +10,7 @@ export function SoundToggle({ className = "" }: { className?: string }) {
 
   useEffect(() => {
     setOn(soundOn());
+    installClickPops();
     armSound();
   }, []);
 
