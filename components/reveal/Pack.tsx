@@ -53,6 +53,9 @@ function useViewport() {
  */
 export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: number; reduce: boolean; onDone: () => void }) {
   const { w, h } = useViewport();
+  // phones: a still sky behind the pack and no live blur, so the tear and the pull get the whole GPU
+  const [phone, setPhone] = useState(false);
+  useEffect(() => setPhone(window.matchMedia("(pointer: coarse)").matches), []);
   const cardW = Math.round(Math.max(220, Math.min(340, w - 64, (h - 270) * (63 / 88))));
   const packW = Math.round(Math.min(cardW + 18, ((h - 230) / 1.5) | 0));
   const packH = Math.round(packW * 1.5);
@@ -436,7 +439,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
         f={revealed ? sky : sealedSky}
         nameless={!revealed}
         anchor={stageRef}
-        reduce={reduce}
+        reduce={reduce || phone}
         drawn
         dim={stage === "sealed" ? 0.45 : stage === "charging" ? 1.15 : stage === "revealed" ? 0.85 : 0.6}
       />
@@ -623,7 +626,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                 <div
                   ref={glowEl}
                   className="pointer-events-none absolute -inset-6 rounded-[28px]"
-                  style={{ background: `radial-gradient(closest-side, ${glow}, transparent)`, filter: "blur(22px)", opacity: stage === "revealed" ? (big ? 0.55 : 0.25) : 0.18, transition: stage === "revealed" ? "opacity .6s" : "none" }}
+                  style={{ background: `radial-gradient(closest-side, ${glow}, transparent)`, filter: phone ? undefined : "blur(22px)", opacity: stage === "revealed" ? (big ? 0.55 : 0.25) : 0.18, transition: stage === "revealed" ? "opacity .6s" : "none" }}
                 />
 
                 {/* seed posters orbiting the face-down card; they spiral in as you hold */}
