@@ -226,7 +226,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion() ?? false;
   return (
     // overflow-x-clip: the entering cards start off-screen and must not widen the mobile viewport.
-    <div className="min-h-screen w-full overflow-x-clip">
+    <div className="relative isolate min-h-screen w-full overflow-x-clip">
       <Sky f={OPEN_SKY} reduce={reduce} fixed quiet drawn dim={0.7} />
       <main className="mx-auto w-full max-w-[600px] px-4 pb-16">
         <nav className="flex items-center justify-between py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
