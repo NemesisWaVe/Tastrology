@@ -21,10 +21,15 @@ export default function ShopPage() {
         Your card is worked out from what you love, so nothing here is a re-roll. Change the inputs and the stars change with them.
       </p>
       {!paid && (
-        <p className="mt-6 inline-flex items-center gap-2.5 rounded-full border border-accent/40 bg-accent-soft px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          Beta: everything&apos;s on the house
-        </p>
+        <div className="mt-6 max-w-xl rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4">
+          <p className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            Concept shop · nothing is for sale
+          </p>
+          <p className="mt-2 text-sm text-ink-2">
+            {BRAND.name} is a student hackathon project and every reading is free during the beta. Prices show what a future version might cost.
+          </p>
+        </div>
       )}
 
       <ul className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -66,7 +71,10 @@ function ProductCard({ p, paid, soon, i }: { p: Product; paid: boolean; soon: bo
         <p className="mt-2 max-w-sm font-serif text-lg italic leading-snug text-ink-2">{p.blurb}</p>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <p className={`font-display text-xl font-semibold ${paid ? "text-ink" : "text-ink-3 line-through decoration-ink-3/60"}`}>{formatPaise(p.pricePaise)}</p>
+        <p className={`font-display text-xl font-semibold ${paid ? "text-ink" : "text-ink-3"}`}>
+          {formatPaise(p.pricePaise)}
+          {!paid && <span className="ml-2 align-middle font-mono text-[10px] font-normal uppercase tracking-[0.18em]">concept</span>}
+        </p>
         {soon ? (
           <span className="rounded-full border border-line px-5 py-2 text-sm text-ink-3">Not yet</span>
         ) : paid ? (
