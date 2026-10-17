@@ -19,7 +19,7 @@ const SPARK = "M50 4 L53.2 10.8 L60 14 L53.2 17.2 L50 24 L46.8 17.2 L40 14 L46.8
 export function Mark({ size = 30, className = "", color = "var(--accent, #c6ff3d)" }: { size?: number; className?: string; color?: string }) {
   const id = useId();
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden>
+    <svg width={size} height={size} viewBox="-2.5 -3.3 67 67" className={className} aria-hidden>
       <g transform="translate(0.5 -3.5) rotate(-7 30 36)">
         <mask id={id} maskUnits="userSpaceOnUse" x="-10" y="-10" width="84" height="84">
           <rect x="-10" y="-10" width="84" height="84" fill="#fff" />
