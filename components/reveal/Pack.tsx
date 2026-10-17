@@ -282,9 +282,11 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     }
     await animate(rotY, 90, { duration: 0.18, ease: "easeIn" });
     setFace("front");
-    sfx("ding"); // done, like a microwave; the celebration follows a beat later
-    const g = card.rarity === "secret" ? 1.3 : card.rarity === "holo" ? 1.1 : card.rarity === "rare" ? 0.9 : 0.8;
-    setTimeout(() => sfx(card.rarity === "common" ? "flip" : "reveal", { gain: g }), 260);
+    // the flip swish, the "done" ding, then the celebration for every card (louder the rarer it is)
+    sfx("flip");
+    sfx("ding");
+    const g = card.rarity === "secret" ? 1.3 : card.rarity === "holo" ? 1.1 : card.rarity === "rare" ? 0.95 : 0.8;
+    setTimeout(() => sfx("reveal", { gain: g }), 450);
     rotY.set(-90);
     animate(rotY, 0, { type: "spring", stiffness: 260, damping: 18 });
     setStage("revealed");
