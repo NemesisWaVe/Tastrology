@@ -1,5 +1,6 @@
 import { RARITY_CUTS, type Rarity } from "./card";
-import { ddbGet, ddbGetStatus, ddbTransact, type Flat, type TxOp } from "./ddb";
+import { ddbGet, ddbGetStatus, ddbQuery, ddbTransact, type Flat, type TxOp } from "./ddb";
+import { REGRET_TTL_MS } from "./ledger";
 import { purgeFighter } from "./fighters";
 import { dustFor, dustOn, earnedThisWeek, isoWeek, WEEKLY_DUST_CAP, type Funding } from "./stardust";
 import { purgeTwin } from "./twins";
@@ -16,7 +17,29 @@ export type DustReason = "off" | "uncharged" | "burned-before" | "cap";
 
 export type BurnResult =
   | { status: "burned" | "dup"; code: string; tier: Rarity; dust: number; capped: boolean; reason?: DustReason; balance: number | null }
+  | { status: "regretted"; code: string; tier: Rarity; kind: "credit" | "dust"; dust: number; regretsLeft: number; balance: number | null }
+  | { status: "not-eligible"; why: RegretWhy }
   | { status: "not-owner" | "not-minted" | "error" };
+
+/** Regret burns (docs/design/regret-burn.md): two per account, ever, on your newest own mint within 72 hours. */
+export const REGRETS_MAX = 2;
+/** Regret burns need credits on (there's nothing to give back without them). REGRET_BURN=0 switches them off. */
+export const regretOn = () => dustOn() && process.env.REGRET_BURN !== "0";
+export const REGRET_WINDOW_MS = 72 * 3600 * 1000;
+/** The second regret pays this much Stardust; the first pays a regret credit (one new card). */
+export const REGRET_DUST = 50;
+export type RegretWhy = "used-up" | "too-old" | "not-newest" | "uncharged";
+
+/** Whether a deck item can be regretted, given the account's other mints and how many regrets it has used. */
+export function regretWhy(item: Flat, newestAddedAt: number, used: number, charged: boolean, now = Date.now()): RegretWhy | null {
+  if (used >= REGRETS_MAX) return "used-up";
+  if (!charged) return "uncharged";
+  const at = Number(item.addedAt) || 0;
+  if (now - at > REGRET_WINDOW_MS) return "too-old";
+  if (at < newestAddedAt) return "not-newest";
+  return null;
+}
+const REGRET_FUNDING = new Set(["free", "paid", "regret"]);
 
 const CCF = "ConditionalCheckFailed";
 const RARITIES: Rarity[] = ["common", "rare", "holo", "secret"];
@@ -50,7 +73,7 @@ function fromPrior(code: string, prior: Flat, bal: number | null): BurnResult {
   return { status: "dup", code, tier, dust: Number(prior.lastDust) || 0, capped: prior.lastCapped === 1, balance: bal };
 }
 
-export async function burnCard(userId: string, code: string, now = Date.now()): Promise<BurnResult> {
+export async function burnCard(userId: string, code: string, now = Date.now(), regret = false): Promise<BurnResult> {
   const U = `USER#${userId}`;
   for (let attempt = 0; attempt < 3; attempt++) {
     const own = await ddbGetStatus(`OWNER#${userId}`, `CARD#${code}`);
@@ -71,7 +94,40 @@ export async function burnCard(userId: string, code: string, now = Date.now()): 
 
     let reason: DustReason | undefined;
     let want = 0;
-    if (!dustOn()) reason = "off";
+    // A regret pays a credit or REGRET_DUST instead of burn dust, never both, and skips the weekly cap.
+    let regretOps: TxOp[] = [];
+    let regretKind: "credit" | "dust" = "credit";
+    let regretsLeft = 0;
+    if (regret) {
+      const funding = String(item.funding ?? "");
+      const runId = String(item.runId ?? "");
+      const [prof, mine] = await Promise.all([ddbGet(U, "PROFILE"), ddbQuery(`OWNER#${userId}`, "CARD#", 50, undefined, ["minted", "addedAt"])]);
+      if (!mine) return { status: "error" };
+      const charged = REGRET_FUNDING.has(funding) && Boolean(runId) && Boolean(await ddbGet(U, `LEDGER#run#${runId}`));
+      const newest = Math.max(0, ...mine.items.filter((x) => Number(x.minted) === 1).map((x) => Number(x.addedAt) || 0));
+      const used = Number(prof?.regretUsed) || 0;
+      const why = regretWhy(item, newest, used, charged, now);
+      if (why) return { status: "not-eligible", why };
+      regretKind = used === 0 ? "credit" : "dust";
+      regretsLeft = REGRETS_MAX - used - 1;
+      regretOps = [
+        used === 0
+          ? { update: { PK: U, SK: "PROFILE" }, set: "ADD regretUsed :one", condition: "attribute_not_exists(regretUsed)", values: { ":one": 1 } }
+          : { update: { PK: U, SK: "PROFILE" }, set: "ADD regretUsed :one", condition: "regretUsed = :n", values: { ":one": 1, ":n": used } },
+        { put: { PK: U, SK: `REGRET#${code}`, n: used + 1, kind: regretKind, tier, at: now, pick: String(item.pick ?? "") }, condition: "attribute_not_exists(PK)" },
+        regretKind === "credit"
+          ? {
+              update: { PK: U, SK: "WALLET" },
+              set: "SET regret = :one, regretExp = :exp, regretPick = :pick",
+              condition: "attribute_exists(PK)",
+              values: { ":one": 1, ":exp": now + REGRET_TTL_MS, ":pick": String(item.pick ?? "") },
+            }
+          : { update: { PK: U, SK: "WALLET" }, set: "SET dustAt = :now ADD dust :d", condition: "attribute_exists(PK)", values: { ":now": now, ":d": REGRET_DUST } },
+        { put: { PK: U, SK: `LEDGER#regret#${code}`, delta: regretKind === "credit" ? 1 : REGRET_DUST, unit: regretKind, reason: "regret", ref: code, at: now }, condition: "attribute_not_exists(PK)" },
+      ];
+    }
+    if (regret) reason = "off";
+    else if (!dustOn()) reason = "off";
     else if (burnedBefore) reason = "burned-before";
     else {
       const funding = asFunding(item.funding);
@@ -112,6 +168,7 @@ export async function burnCard(userId: string, code: string, now = Date.now()): 
         { put: { PK: U, SK: `LEDGER#burn#${code}`, delta: dust, unit: "dust", reason: "burn", ref: code, at: now }, condition: "attribute_not_exists(PK)" },
       );
     }
+    ops.push(...regretOps);
     // The first burn of a code claims the tombstone (that's what makes the dust once-only across accounts too).
     ops.push(
       tomb.status === "found"
@@ -126,6 +183,7 @@ export async function burnCard(userId: string, code: string, now = Date.now()): 
       continue; // someone moved first (another tab, another burner, the cap): read again and rebuild
     }
     await Promise.race([Promise.allSettled([purgeTwin(code), purgeFighter(code)]), new Promise((res) => setTimeout(res, 3000))]);
+    if (regret) return { status: "regretted", code, tier, kind: regretKind, dust: regretKind === "dust" ? REGRET_DUST : 0, regretsLeft, balance: await balance(userId) };
     return { status: "burned", code, tier, dust, capped, reason, balance: await balance(userId) };
   }
   return { status: "error" };

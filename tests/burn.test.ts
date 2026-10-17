@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { burnCard, tierOf } from "@/lib/burn";
 import { cardCode, type CardData, type Rarity } from "@/lib/card";
 import { ddbGet, ddbPutIfAbsent } from "@/lib/ddb";
-import { spendCredit } from "@/lib/ledger";
+import { heldRegret, spendCredit, spendRegret } from "@/lib/ledger";
 import { DUST_RATES, dustFor, isoWeek, PAID_FLAT_DUST, READING_DUST, spendDust, WEEKLY_DUST_CAP } from "@/lib/stardust";
 import { burnedAt, getTwinStatus, registerTwin } from "@/lib/twins";
 import { GET as cardGET } from "@/app/api/card/route";
@@ -18,7 +18,7 @@ const NOW = Date.UTC(2026, 9, 17, 12);
 const nextCode = () => `${String(1000 + ++seq).slice(-4)}-B${"CDEFGH"[seq % 6]}${"JKMNPQ"[seq % 6]}${"RSTVWX"[seq % 6]}`;
 
 /** An own mint in `user`'s deck. `charged` spends a real credit first, as /api/agent does. */
-async function mint(user: string, code: string, rarity: Rarity, opts: { charged?: boolean; funding?: "free" | "paid"; minted?: 0 | 1 } = {}) {
+async function mint(user: string, code: string, rarity: Rarity, opts: { charged?: boolean; funding?: "free" | "paid"; minted?: 0 | 1; addedAt?: number } = {}) {
   const runId = `run-${code}-${user}`.replace(/[^A-Za-z0-9_-]/g, "");
   if (opts.charged !== false) expect(await spendCredit(user, runId)).toBe("spent");
   await ddbPutIfAbsent({
@@ -27,7 +27,7 @@ async function mint(user: string, code: string, rarity: Rarity, opts: { charged?
     code,
     card: JSON.stringify({ rarity }),
     rarityScore: 50,
-    addedAt: 1,
+    addedAt: opts.addedAt ?? 1,
     minted: opts.minted ?? 1,
     source: "mint",
     ...(opts.charged !== false ? { runId, funding: opts.funding ?? "free" } : {}),
@@ -184,5 +184,44 @@ describe("spending dust", () => {
     expect(await spendDust("s", "run-dust-0001")).toBe("spent");
     expect(await spendDust("s", "run-dust-0001")).toBe("dup");
     expect(await dust("s")).toBe(30);
+  });
+});
+
+describe("regret burns", () => {
+  const H = 3600 * 1000;
+
+  it("first regret gives a card back, second gives 50 dust, third is refused", async () => {
+    const u = "regretter";
+    const [a, b, c] = [nextCode(), nextCode(), nextCode()];
+    await mint(u, a, "common", { addedAt: NOW - H });
+    const r1 = await burnCard(u, a, NOW, true);
+    expect(r1).toMatchObject({ status: "regretted", kind: "credit", regretsLeft: 1 });
+    expect(await heldRegret(u, NOW)).not.toBeNull();
+    expect(await spendRegret(u, "run-regret-0001", NOW)).toBe("spent");
+    expect(await heldRegret(u, NOW)).toBeNull();
+
+    await mint(u, b, "rare", { addedAt: NOW - H });
+    const before = await dust(u);
+    expect(await burnCard(u, b, NOW, true)).toMatchObject({ status: "regretted", kind: "dust", dust: 50, regretsLeft: 0 });
+    expect((await dust(u)) - before).toBe(50);
+
+    await mint(u, c, "rare", { addedAt: NOW - H });
+    expect(await burnCard(u, c, NOW, true)).toEqual({ status: "not-eligible", why: "used-up" });
+  });
+
+  it("only the newest card, only within 72 hours", async () => {
+    const u = "regret-window";
+    const [old, newer] = [nextCode(), nextCode()];
+    await mint(u, old, "common", { addedAt: NOW - 2 * H });
+    await mint(u, newer, "common", { addedAt: NOW - H });
+    expect(await burnCard(u, old, NOW, true)).toEqual({ status: "not-eligible", why: "not-newest" });
+    expect(await burnCard(u, newer, NOW + 80 * H, true)).toEqual({ status: "not-eligible", why: "too-old" });
+  });
+
+  it("an uncharged card can't be regretted", async () => {
+    const u = "regret-free";
+    const code = nextCode();
+    await mint(u, code, "secret", { charged: false, addedAt: NOW - H });
+    expect(await burnCard(u, code, NOW, true)).toEqual({ status: "not-eligible", why: "uncharged" });
   });
 });

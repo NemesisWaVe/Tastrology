@@ -11,6 +11,8 @@ export interface DeckEntry {
   minted?: boolean;
   /** Dust a burn would earn before the weekly cap (only when Stardust is on and this is your own mint). */
   earns?: number;
+  /** This card can still be regretted (docs/design/regret-burn.md). */
+  regret?: boolean;
 }
 
 /** Burn state for the deck (docs/design/burn.md). `on` only for signed-in accounts; `dustOn` only with credits on. */
@@ -19,11 +21,16 @@ export interface DeckBurn {
   dustOn: boolean;
   dust: number | null;
   weekLeft: number | null;
+  /** Regret burns left on this account (0..2). */
+  regretsLeft?: number;
 }
 
 export interface BurnReply {
   ok?: boolean;
-  status?: "burned" | "dup";
+  status?: "burned" | "dup" | "regretted";
+  /** Regret burns: what came back (a credit for one new card, or Stardust) and how many regrets are left. */
+  kind?: "credit" | "dust";
+  regretsLeft?: number;
   dust?: number;
   balance?: number | null;
   capped?: boolean;
@@ -33,9 +40,9 @@ export interface BurnReply {
 }
 
 /** Burns one of your own mints. Never throws. */
-export async function burnFromDeck(code: string): Promise<BurnReply & { httpOk: boolean }> {
+export async function burnFromDeck(code: string, regret = false): Promise<BurnReply & { httpOk: boolean }> {
   try {
-    const res = await fetch(`/api/deck/${encodeURIComponent(code)}/burn`, { method: "POST" });
+    const res = await fetch(`/api/deck/${encodeURIComponent(code)}/burn`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ regret }) });
     const j = (await res.json().catch(() => ({}))) as BurnReply;
     return { ...j, httpOk: res.ok };
   } catch {

@@ -10,6 +10,7 @@ import type { AgentRequest, StyleResult, TraceEvent } from "./types";
 function friendly(status: number | null, raw: string | undefined, retryAfterS: number | null, reason?: string): string {
   if (reason === "upstream") return "Qloo is having a moment. Try a demo persona or come back in a minute.";
   if (reason === "deadline") return "That reading ran long and timed out. Try again; what it already fetched is saved, so the next go is quicker.";
+  if (reason === "samepicks") return raw || "Change at least one pick.";
   if (reason === "deckfull") return raw || "Your deck is full. Retire a card to make room.";
   if (reason === "running") return "Your reading is still going on our side. Give it a minute and try again; it won't charge you twice.";
   const wait = retryAfterS ? ` Give it about ${retryAfterS} second${retryAfterS === 1 ? "" : "s"}, then try again.` : " Give it a minute, then try again.";

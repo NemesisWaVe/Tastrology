@@ -136,6 +136,46 @@ export async function spendCredit(userId: string, runId: string, device?: string
   return "empty";
 }
 
+/** How long a regret credit (docs/design/regret-burn.md) can wait before it lapses. */
+export const REGRET_TTL_MS = 30 * DAY;
+
+/**
+ * Pays for a reading with the regret credit, if one is held and unexpired. Unlike spendCredit it does not restart the
+ * refill clock: a regret neither delays nor brings forward the monthly card.
+ */
+export async function spendRegret(userId: string, runId: string, now = Date.now()): Promise<Spend> {
+  if (!RUN_ID_RE.test(runId)) return "error";
+  const r = await ddbTransact([
+    { update: key(userId, "WALLET"), set: "SET regret = regret - :one, v = v + :one", condition: "regret >= :one AND regretExp >= :now", values: { ":one": 1, ":now": now } },
+    { put: { ...key(userId, `LEDGER#run#${runId}`), delta: -1, reason: "regret", ref: runId, at: now }, condition: "attribute_not_exists(PK)" },
+  ]);
+  if (!r) return "error";
+  if (r.ok) return "spent";
+  if (r.reasons[1] === CCF) return (await ddbGet(pk(userId), `LEDGER#refund#${runId}`)) ? "used" : "dup";
+  return r.reasons[0] === CCF ? "empty" : "error";
+}
+
+/** The regret credit held right now (and the picks it can't be spent on), or null. */
+export async function heldRegret(userId: string, now = Date.now()): Promise<{ pick: string } | null> {
+  const w = await ddbGet(pk(userId), "WALLET");
+  return w && Number(w.regret) >= 1 && Number(w.regretExp) >= now ? { pick: String(w.regretPick ?? "") } : null;
+}
+
+/** Gives a failed regret-paid run its regret credit back (write-once per run id, like refundCredit). */
+export async function refundRegret(userId: string, runId: string): Promise<"refunded" | "dup" | "none" | "error"> {
+  if (!RUN_ID_RE.test(runId)) return "error";
+  const r = await ddbTransact([
+    { update: key(userId, "WALLET"), set: "SET regret = :one, v = v + :one", condition: "attribute_exists(PK)", values: ONE },
+    { put: { ...key(userId, `LEDGER#refund#${runId}`), delta: 1, reason: "refund", ref: runId, at: Date.now() }, condition: "attribute_not_exists(PK)" },
+    { check: key(userId, `LEDGER#run#${runId}`), condition: "attribute_exists(PK)" },
+  ]);
+  if (!r) return "error";
+  if (r.ok) return "refunded";
+  if (r.reasons[1] === CCF) return "dup";
+  if (r.reasons[2] === CCF) return "none";
+  return "error";
+}
+
 /** Gives back the credit a failed run took. Write-once per run id, and only when that run was actually charged. */
 export async function refundCredit(userId: string, runId: string): Promise<"refunded" | "dup" | "none" | "error"> {
   if (!RUN_ID_RE.test(runId)) return "error";
@@ -161,6 +201,8 @@ export async function wallet(userId: string, device?: string | null): Promise<{ 
   }
   let credits = Math.max(0, Number(w.credits) || 0);
   if (credits === 0 && (await grantRefill(userId)) === "granted") credits = 1;
+  // A held regret credit is a card in hand too.
+  if (Number(w.regret) >= 1 && Number(w.regretExp) >= Date.now()) credits += 1;
   const refillAt = credits === 0 ? await nextRefillAt(userId) : null;
   // No purchases yet, so every credit is a free one. Once the shop sells credits, track paid vs free on the wallet.
   return { credits, freeLeft: Math.min(credits, freeMints()), refillAt };

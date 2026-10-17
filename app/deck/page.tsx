@@ -111,14 +111,18 @@ export default function DeckPage() {
     [reduce],
   );
 
+  /** Whether the armed card is being retired or regretted. */
+  const [regretting, setRegretting] = useState(false);
+
   const doBurn = async (entry: DeckEntry) => {
+    const regret = regretting;
     const { code, card } = entry;
     setBurning(code);
     if (!reduce) playBurnSound();
     const el = cardEls.current.get(code);
     const colors = [...card.types.flatMap((t) => [t.a, t.b]), RARITY_GLOW[card.rarity], RARITY_GLOW[card.rarity]];
     const fx = el ? dissolve(el, { target: burn?.dustOn ? counterRef.current : null, colors, reduce }) : null;
-    const [res] = await Promise.all([burnFromDeck(code), fx?.done]);
+    const [res] = await Promise.all([burnFromDeck(code, regret), fx?.done]);
     if (!res.httpOk || !res.status) {
       fx?.restore();
       heat(code, 0);
@@ -137,6 +141,14 @@ export default function DeckPage() {
     cardEls.current.delete(code);
     setBurning(null);
     setArmed(null);
+    if (res.status === "regretted") {
+      setBurn((b) => (b ? { ...b, regretsLeft: res.regretsLeft ?? 0, dust: typeof res.balance === "number" ? res.balance : b.dust } : b));
+      // A regret credit is a card in hand: the next-card slot lights up.
+      if (res.kind === "credit") setMe((m) => (m ? { ...m, credits: (m.credits ?? 0) + 1 } : m));
+      setCards((cs) => cs?.map((c) => ({ ...c, regret: false })) ?? cs);
+      setToast(res.kind === "credit" ? "Let go. Your next card is ready: pick different loves." : `Let go. +${res.dust ?? 0} Stardust.`);
+      return;
+    }
     if (burn?.dustOn && typeof res.balance === "number") {
       const bal = res.balance;
       setBurn((b) => (b ? { ...b, dust: bal, weekLeft: b.weekLeft === null ? null : Math.max(0, b.weekLeft - (res.dust ?? 0)) } : b));
@@ -218,18 +230,36 @@ export default function DeckPage() {
                     No. {card.serial} · {card.rarityLabel} · {code}
                   </p>
                   {burnable && armed !== code && (
-                    <button
-                      type="button"
-                      disabled={Boolean(burning)}
-                      onClick={() => setArmed(code)}
-                      className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3 transition hover:text-accent disabled:opacity-40"
-                    >
-                      Retire this card
-                    </button>
+                    <div className="mt-3 flex items-center gap-5">
+                      {entry.regret && (
+                        <button
+                          type="button"
+                          disabled={Boolean(burning)}
+                          onClick={() => {
+                            setRegretting(true);
+                            setArmed(code);
+                          }}
+                          className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-accent transition hover:text-ink disabled:opacity-40"
+                        >
+                          Regret this card
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={Boolean(burning)}
+                        onClick={() => {
+                          setRegretting(false);
+                          setArmed(code);
+                        }}
+                        className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3 transition hover:text-accent disabled:opacity-40"
+                      >
+                        Retire this card
+                      </button>
+                    </div>
                   )}
                   {burnable && burn && armed === code && (
                     <div className="mt-4 flex flex-col items-center gap-3">
-                      <p className="max-w-[260px] text-center font-serif text-base italic leading-snug text-ink-2">{confirmLine(entry, burn)}</p>
+                      <p className="max-w-[260px] text-center font-serif text-base italic leading-snug text-ink-2">{regretting ? regretLine(burn) : confirmLine(entry, burn)}</p>
                       <BurnButton disabled={burning !== null} onProgress={(p) => heat(code, p)} onBurn={() => void doBurn(entry)} />
                       {burning !== code && (
                         <button
@@ -260,6 +290,13 @@ export default function DeckPage() {
       </main>
     </div>
   );
+}
+
+/** What a regret gives back: the first brings a new card, the second 50 Stardust (docs/design/regret-burn.md). */
+function regretLine(burn: DeckBurn): string {
+  const left = burn.regretsLeft ?? 0;
+  if (left >= 2) return "Let it go and make a new card from different loves. You get one more regret after this.";
+  return "Let it go for 50 Stardust. This is your last regret.";
 }
 
 /** The one plain line above the hold button. Never promises dust the burn won't pay. */
