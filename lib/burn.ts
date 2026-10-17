@@ -3,6 +3,7 @@ import { ddbGet, ddbGetStatus, ddbQuery, ddbTransact, type Flat, type TxOp } fro
 import { REGRET_TTL_MS } from "./ledger";
 import { purgeFighter } from "./fighters";
 import { dustFor, dustOn, earnedThisWeek, isoWeek, WEEKLY_DUST_CAP, type Funding } from "./stardust";
+import { dropReceipt } from "./receipt";
 import { purgeTwin } from "./twins";
 
 /**
@@ -182,7 +183,7 @@ export async function burnCard(userId: string, code: string, now = Date.now(), r
       if (!r.reasons.includes(CCF)) return { status: "error" };
       continue; // someone moved first (another tab, another burner, the cap): read again and rebuild
     }
-    await Promise.race([Promise.allSettled([purgeTwin(code), purgeFighter(code)]), new Promise((res) => setTimeout(res, 3000))]);
+    await Promise.race([Promise.allSettled([purgeTwin(code), purgeFighter(code), dropReceipt(code)]), new Promise((res) => setTimeout(res, 3000))]);
     if (regret) return { status: "regretted", code, tier, kind: regretKind, dust: regretKind === "dust" ? REGRET_DUST : 0, regretsLeft, balance: await balance(userId) };
     return { status: "burned", code, tier, dust, capped, reason, balance: await balance(userId) };
   }

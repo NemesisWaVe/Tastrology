@@ -7,6 +7,8 @@ import { creditsOn, heldRegret, nextRefillAt, refundCredit, refundRegret, RUN_ID
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { deviceId } from "@/lib/device";
 import { addToPool } from "@/lib/packs";
+import { getPersonaRun, putPersonaRun } from "@/lib/personaRuns";
+import { putReceipt } from "@/lib/receipt";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache } from "@/lib/cache";
 import { buildCard, SEASON } from "@/lib/card";
@@ -131,6 +133,8 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       if (result.mode !== "mock") {
         const card = buildCard(result);
         const code = await registerTwin(card);
+        // The receipt behind the card, so an old card can still show its brands (docs/design/brand-return-data.md).
+        bg(putReceipt(code, result));
         await registerFighter(code, toSheet(result));
         if (minter) await fileOwnMint(minter, code, card).catch(() => {});
         // Real people's fresh cards stock the Battle Pack pool (personas stay out).
@@ -142,6 +146,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       if (!llmConfigured() || result.planner === "llm") await results.set(key, rec);
       else await results.set(key, rec, AUTOPILOT_TTL_MS);
       await lastGood.set(fallbackKey, rec);
+      if (isPersonaRequest(req)) bg(putPersonaRun(key, rec));
       logRun({ runId: result.runId, planner: result.planner, qlooCalls: result.stats.qlooCalls, ms: Date.now() - t0, cached: false, error: null });
       return result;
     },
@@ -190,7 +195,8 @@ export async function POST(request: Request) {
 
   const key = cacheKey(body);
   const fallbackKey = cacheKey(body, "*");
-  const cached = await results.get(key);
+  // Demo personas are read once and kept for good, so the landing page never spends a Qloo call on them.
+  const cached = (await results.get(key)) ?? (isPersonaRequest(body) ? await getPersonaRun(key).catch(() => null) : null) ?? undefined;
   let flight = cached ? undefined : flights.get(key);
   if (flight?.ac.signal.aborted) flight = undefined; // hit its deadline; start fresh
   /** Set when this request just passed the bot check; rides on whatever response goes back. */

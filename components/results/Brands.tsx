@@ -157,7 +157,7 @@ export function BrandCard({
 }
 
 /** Where a brand card links: only real places. */
-function brandLink(e: QEntity): { href: string; label: string; note: string } {
+export function brandLink(e: Pick<QEntity, "name" | "site" | "instagram">): { href: string; label: string; note: string } {
   if (e.site) {
     const host = (() => {
       try {

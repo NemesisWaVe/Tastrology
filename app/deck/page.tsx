@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BurnButton } from "@/components/card/BurnButton";
 import { dissolve, playBurnSound } from "@/components/card/dissolve";
 import { HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
+import { BrandSheet } from "@/components/deck/BrandSheet";
 import { Collection } from "@/components/deck/Collection";
 import { DailyOpponent } from "@/components/deck/DailyOpponent";
 import { DustCounter } from "@/components/deck/DustCounter";
@@ -34,6 +35,18 @@ function savedCard(): { req?: AgentRequest; mock: boolean; entry: DeckEntry } | 
   }
 }
 
+/** The reading saved in this browser carries the full receipt: hand it to the server once, so the card keeps its brands. */
+function backfillReceipt() {
+  try {
+    if (sessionStorage.getItem("tastrology:receipt-sent")) return;
+    const saved = JSON.parse(localStorage.getItem("tastrology:v1") ?? "null") as { result?: StyleResult } | null;
+    if (!saved?.result || saved.result.mode === "mock") return;
+    const code = cardCode(buildCard(saved.result));
+    sessionStorage.setItem("tastrology:receipt-sent", "1");
+    void fetch(`/api/card/${encodeURIComponent(code)}/receipt`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ result: saved.result }) }).catch(() => {});
+  } catch {}
+}
+
 /**
  * Signed-in visit: move this device's anonymous deck into the account (server, write-once per device),
  * and file the card saved in this browser too. Returns how many device cards moved.
@@ -43,6 +56,7 @@ async function claimOnce(): Promise<number> {
   if (!b?.signedIn()) return 0;
   const moved = await claimDeviceDeck();
   const local = savedCard();
+  backfillReceipt();
   if (local && !local.mock && !isPersonaRequest(local.req)) {
     await fetch("/api/deck", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: local.entry.code }) }).catch(() => {});
   }
@@ -59,6 +73,8 @@ export default function DeckPage() {
   const [burn, setBurn] = useState<DeckBurn | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [hasLocal, setHasLocal] = useState(false);
+  const [sheet, setSheet] = useState<DeckEntry | null>(null);
+  const closeSheet = useCallback(() => setSheet(null), []);
 
   useEffect(() => {
     let off = false;
@@ -226,7 +242,15 @@ export default function DeckPage() {
                       <HoloCard card={card} width={260} idle={false} still={reduce} />
                     </Link>
                   </div>
-                  <p className="mt-4 text-center font-serif text-xl italic leading-tight">{card.archetype}</p>
+                  <button
+                    type="button"
+                    onClick={() => setSheet(entry)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-accent/10 px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent transition hover:bg-accent hover:text-paper"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
+                    What it pulled in
+                  </button>
+                  <p className="mt-3 text-center font-serif text-xl italic leading-tight">{card.archetype}</p>
                   <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
                     No. {card.serial} · {card.rarityLabel} · {code}
                   </p>
@@ -290,6 +314,7 @@ export default function DeckPage() {
         {!!cards?.length && !local && <Timeline cards={cards} />}
         {owner === "user" && <Collection />}
       </main>
+      {sheet && <BrandSheet code={sheet.code} card={sheet.card} open onClose={closeSheet} />}
     </div>
   );
 }

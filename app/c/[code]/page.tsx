@@ -8,6 +8,7 @@ import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { Burned } from "@/components/card/Burned";
 import { Passport } from "@/components/card/Passport";
+import { BrandSheet } from "@/components/deck/BrandSheet";
 import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
@@ -23,6 +24,11 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   /** The owner burned it (410): gone on purpose, so no device fallback either. */
   const [burned, setBurned] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [brands, setBrands] = useState(false);
+  // ?b=1 (from the deck or a share) opens the brand sheet straight away.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("b") === "1") setBrands(true);
+  }, []);
 
   useEffect(() => {
     let off = false;
@@ -125,9 +131,23 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
               No. {card.serial} · Season {SEASON} · {card.rarityLabel} · code {code}
             </p>
             {card.moves.length > 0 && <p className="mt-4 text-sm text-ink-2">Signature brands: {card.moves.map((m) => m.name).join(" · ")}</p>}
+            {source === "server" && (
+              <button
+                type="button"
+                onClick={() => setBrands(true)}
+                className="mt-6 flex w-full items-center justify-between rounded-2xl border border-accent/50 bg-accent/10 px-5 py-4 text-left transition hover:bg-accent/20"
+              >
+                <span>
+                  <span className="block font-serif text-xl italic text-ink">See what your taste pulled in</span>
+                  <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">brands, and why each one</span>
+                </span>
+                <span aria-hidden className="text-2xl text-accent">→</span>
+              </button>
+            )}
             {source === "server" && <Passport code={code} />}
             <CTA />
           </section>
+          <BrandSheet code={code} card={card} open={brands} onClose={() => setBrands(false)} src="share" />
         </>
       )}
     </main>

@@ -90,7 +90,7 @@ export function typeOf(name: string): CardType {
   return { name, glyph: "✧", a: `hsl(${hue} 85% 65%)`, b: `hsl(${(hue + 50) % 360} 80% 45%)` };
 }
 
-const KIND_LABEL: Record<string, string> = {
+export const KIND_LABEL: Record<string, string> = {
   artist: "Artist",
   movie: "Film",
   tv_show: "Series",

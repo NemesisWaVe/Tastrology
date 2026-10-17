@@ -60,7 +60,7 @@ export function Marquee() {
                   >
                     {sym}
                   </span>
-                  <span className="whitespace-nowrap font-display text-[clamp(1.7rem,6vw,3.4rem)] font-semibold leading-none tracking-[-0.035em] text-ink">
+                  <span className="whitespace-nowrap font-display text-[clamp(1.7rem,6vw,3.4rem)] font-semibold leading-[1.25] tracking-[-0.035em] text-ink">
                     <span className="mr-[0.25em] font-serif font-normal italic text-ink-3">{ROLE[sym]}</span>
                     {name}
                   </span>
