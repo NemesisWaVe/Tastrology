@@ -16,12 +16,15 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const code = decodeURIComponent(use(params).code).toUpperCase();
   const [card, setCard] = useState<CardData | null | undefined>(undefined);
   const [source, setSource] = useState<"server" | "device" | null>(null);
+  /** The server couldn't answer (storage blip or offline), so "not found" would be a lie. */
+  const [unavailable, setUnavailable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let off = false;
     (async () => {
-      const res = await fetch(`/api/card?code=${encodeURIComponent(code)}`).catch(() => null);
-      const j = res?.ok ? ((await res.json()) as { card: CardData | null }) : null;
+      const res = await fetch(`/api/card?code=${encodeURIComponent(code)}`, { cache: "no-store" }).catch(() => null);
+      const j = res?.ok ? ((await res.json().catch(() => null)) as { card: CardData | null } | null) : null;
       if (off) return;
       if (j?.card && cardCode(j.card) === code) {
         setCard(j.card);
@@ -38,12 +41,19 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
           return;
         }
       } catch {}
+      setUnavailable(!res || (!res.ok && res.status !== 404 && res.status !== 400));
       setCard(null);
     })();
     return () => {
       off = true;
     };
-  }, [code]);
+  }, [code, attempt]);
+
+  const retry = () => {
+    setCard(undefined);
+    setUnavailable(false);
+    setAttempt((n) => n + 1);
+  };
 
   // The card hangs in its owner's sky: one constellation per love, the one it's named after lit.
   const reduce = Boolean(useReducedMotion());
@@ -55,7 +65,18 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {card === undefined && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Looking up No. {code}…</p>}
 
-      {card === null && (
+      {card === null && unavailable && (
+        <div className="max-w-md text-center">
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-warn">Temporarily unavailable</p>
+          <h1 className="mt-3 font-serif text-5xl italic leading-[0.95]">The vault is stuck for a moment.</h1>
+          <p className="mt-3 text-ink-2">We couldn&apos;t reach the card archive just now, so we can&apos;t say yet whether No. {code} is on file. It&apos;s usually back within seconds.</p>
+          <button type="button" onClick={retry} className="mt-8 rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {card === null && !unavailable && (
         <div className="max-w-md text-center">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-bad">Not found</p>
           <h1 className="mt-3 font-display text-4xl font-bold tracking-tight">No card with code {code}</h1>

@@ -1,5 +1,5 @@
 import { battle, ENGINE_V } from "@/lib/battle";
-import { fromSheet, getFighter, putFighterMemory, type FighterSheet } from "@/lib/fighters";
+import { fromSheet, getFighterStatus, putFighterMemory, type FighterSheet } from "@/lib/fighters";
 import { allow, clientId } from "@/lib/ratelimit";
 import { s3Get, s3PutIfAbsent } from "@/lib/s3";
 import { TWIN_CODE } from "@/lib/twins";
@@ -13,7 +13,11 @@ export async function GET(request: Request) {
   const b = q.get("b")?.toUpperCase() ?? "";
   if (!TWIN_CODE.test(a) || !TWIN_CODE.test(b)) return Response.json({ error: "bad code" }, { status: 400 });
   if (!(await allow(`battle:${clientId(request.headers)}`, 120, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429 });
-  const [fa, fb] = await Promise.all([getFighter(a), getFighter(b)]);
+  const [la, lb] = await Promise.all([getFighterStatus(a), getFighterStatus(b)]);
+  const fa = la.sheet;
+  const fb = lb.sheet;
+  if ((!fa && la.status === "error") || (!fb && lb.status === "error"))
+    return Response.json({ error: "unavailable" }, { status: 503, headers: { "cache-control": "no-store", "retry-after": "5" } });
   if (!fa || !fb) return Response.json({ error: "unknown fighter" }, { status: 404, headers: { "cache-control": "public, max-age=30, s-maxage=30" } });
   const out = battle(fromSheet(fa), fromSheet(fb));
   const [x, y] = [a, b].sort();

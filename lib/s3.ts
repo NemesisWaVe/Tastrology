@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import type { Lookup } from "./lookup";
 
 /**
  * Minimal S3 client: GET and write-once PUT, signed with SigV4 by hand (no AWS SDK).
@@ -52,17 +53,27 @@ export function signS3(c: S3Config, method: string, key: string, extra: Record<s
 
 const now = () => new Date().toISOString().replace(/[-:]|\.\d{3}/g, "");
 
-/** Object body as text, or null when missing, unconfigured or unreachable. */
-export async function s3Get(key: string): Promise<string | null> {
+/**
+ * One GET, tri-state: "missing" when S3 answered 404 (or 403, which is what a missing key returns without
+ * s3:ListBucket), "error" on a timeout, network failure or 5xx, "off" when unconfigured.
+ */
+export async function s3GetStatus(key: string, timeoutMs = 2500): Promise<Lookup<string>> {
   const c = s3Config();
-  if (!c) return null;
+  if (!c) return { status: "off" };
   try {
     const { url, headers } = signS3(c, "GET", key, {}, EMPTY_SHA256, now());
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(2500), cache: "no-store" });
-    return res.ok ? await res.text() : null;
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+    if (res.ok) return { status: "found", value: await res.text() };
+    return res.status === 404 || res.status === 403 ? { status: "missing" } : { status: "error" };
   } catch {
-    return null;
+    return { status: "error" };
   }
+}
+
+/** Object body as text, or null when missing, unconfigured or unreachable. */
+export async function s3Get(key: string): Promise<string | null> {
+  const r = await s3GetStatus(key);
+  return r.status === "found" ? r.value : null;
 }
 
 /** Write-once PUT (If-None-Match: *): an existing object is never overwritten. */

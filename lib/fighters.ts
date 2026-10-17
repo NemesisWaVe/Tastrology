@@ -1,5 +1,6 @@
-import { sharedCache, upstash, upstashConfigured } from "./cache";
-import { s3Get, s3PutIfAbsent } from "./s3";
+import { sharedCache, upstash, upstashConfigured, upstashGetStatus } from "./cache";
+import type { Lookup } from "./lookup";
+import { s3GetStatus, s3PutIfAbsent } from "./s3";
 import { TWIN_CODE } from "./twins";
 import type { BrandMatch, EntityKind, QEntity, StyleResult } from "./types";
 
@@ -109,8 +110,11 @@ export async function registerFighter(code: string, sheet: FighterSheet): Promis
   } catch {}
 }
 
-export async function getFighter(code: string): Promise<FighterSheet | null> {
-  if (!TWIN_CODE.test(code)) return null;
+export type FighterLookup = { status: "found"; sheet: FighterSheet } | { status: "missing" | "error"; sheet: null };
+
+/** Memory, then S3, then Upstash. "error": nothing found and a backend couldn't answer (see getTwinStatus). */
+export async function getFighterStatus(code: string): Promise<FighterLookup> {
+  if (!TWIN_CODE.test(code)) return { status: "missing", sheet: null };
   const parse = (raw: string | null | undefined): FighterSheet | null => {
     if (!raw) return null;
     try {
@@ -121,12 +125,22 @@ export async function getFighter(code: string): Promise<FighterSheet | null> {
     }
   };
   const hit = parse(mem.get(code));
-  if (hit) return hit;
-  const found =
-    parse(await s3Get(`fighters/v1/${code}.json`)) ??
-    parse(upstashConfigured() ? (((await upstash([["GET", rkey(code)]])) ?? [])[0] as string | null) : null);
-  if (found) mem.set(code, JSON.stringify(found), TTL_MS);
-  return found;
+  if (hit) return { status: "found", sheet: hit };
+  const seen: Lookup<unknown>["status"][] = [];
+  for (const read of [() => s3GetStatus(`fighters/v1/${code}.json`), () => upstashGetStatus(rkey(code))]) {
+    const r = await read();
+    seen.push(r.status);
+    const found = parse(r.status === "found" ? r.value : null);
+    if (found) {
+      mem.set(code, JSON.stringify(found), TTL_MS);
+      return { status: "found", sheet: found };
+    }
+  }
+  return { status: seen.includes("error") ? "error" : "missing", sheet: null };
+}
+
+export async function getFighter(code: string): Promise<FighterSheet | null> {
+  return (await getFighterStatus(code)).sheet;
 }
 
 /** Dev only (QLOO_MODE=mock): seed memory directly so /api/battle can be exercised without a live run. */

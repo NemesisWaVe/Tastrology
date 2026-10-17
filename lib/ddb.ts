@@ -1,3 +1,4 @@
+import type { Lookup } from "./lookup";
 import { amzNow, sha256hex, signV4, type AwsCreds } from "./sigv4";
 
 /**
@@ -73,12 +74,12 @@ export function ddbRequest(c: DdbConfig, action: string, payload: unknown, amzDa
 type DdbResult = { ok: true; json: Record<string, unknown> } | { ok: false; type: string; json: Record<string, unknown> };
 
 /** One signed call. `table: false` for actions with no top-level TableName (TransactWriteItems). */
-async function call(action: string, payload: Record<string, unknown>, table = true): Promise<DdbResult | null> {
+async function call(action: string, payload: Record<string, unknown>, table = true, timeoutMs = 2500): Promise<DdbResult | null> {
   const c = ddbConfig();
   if (!c) return null;
   try {
     const { url, headers, body } = ddbRequest(c, action, table ? { TableName: c.table, ...payload } : payload);
-    const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(2500), cache: "no-store" });
+    const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (res.ok) return { ok: true, json };
     return { ok: false, type: String(json.__type ?? res.status).split("#").pop()!, json };
@@ -95,10 +96,18 @@ export async function ddbPutIfAbsent(item: Flat & { PK: string; SK: string }): P
   return r.type === "ConditionalCheckFailedException" ? "exists" : "error";
 }
 
+/** GetItem, tri-state: "missing" when DynamoDB answered with no item, "error" when it couldn't answer, "off" when unconfigured. */
+export async function ddbGetStatus(PK: string, SK: string, timeoutMs = 2500): Promise<Lookup<Flat>> {
+  if (!ddbConfigured()) return { status: "off" };
+  const r = await call("GetItem", { Key: marshal({ PK, SK }) }, true, timeoutMs);
+  if (!r?.ok) return { status: "error" };
+  if (!r.json.Item) return { status: "missing" };
+  return { status: "found", value: unmarshal(r.json.Item as Record<string, { S?: string; N?: string }>) };
+}
+
 export async function ddbGet(PK: string, SK: string): Promise<Flat | null> {
-  const r = await call("GetItem", { Key: marshal({ PK, SK }) });
-  if (!r?.ok || !r.json.Item) return null;
-  return unmarshal(r.json.Item as Record<string, { S?: string; N?: string }>);
+  const r = await ddbGetStatus(PK, SK);
+  return r.status === "found" ? r.value : null;
 }
 
 /** Items under one partition whose sort key starts with `prefix`, in sort-key order. `cursor` pages on. */
