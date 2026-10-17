@@ -1,0 +1,101 @@
+/* Landing intro: "The Mirror". The track pins a full-screen stage; its last screen overlaps the Hero. */
+
+.track {
+  position: relative;
+  z-index: 30;
+  height: 320vh;
+  margin-bottom: -100svh;
+}
+@media (max-width: 767px) {
+  .track { height: 240vh; }
+}
+.track.still { height: 200svh; }
+
+.stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.bg { position: absolute; inset: 0; background: #020204; }
+.gl, .fx { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.caps {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: max(10svh, 56px);
+  height: 1.6em;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--ink-2);
+  text-align: center;
+}
+@media (max-width: 767px) {
+  .caps { font-size: 11.5px; bottom: max(8svh, 44px); }
+}
+.cap {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+.skip {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  padding: 8px 14px;
+  border: 1px solid rgba(243, 241, 236, 0.16);
+  border-radius: 999px;
+  background: rgba(7, 7, 10, 0.45);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: var(--ink-2);
+  transition: color 0.2s, border-color 0.2s;
+}
+.skip:hover, .skip:focus-visible { color: var(--ink); border-color: rgba(198, 255, 61, 0.6); }
+@media (min-width: 768px) {
+  .skip { top: 22px; right: 24px; }
+}
+
+.cue {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--ink-3);
+}
+.cue i {
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--accent));
+  animation: cue 1.8s ease-in-out infinite;
+  transform-origin: top;
+}
+@keyframes cue {
+  0% { transform: scaleY(0); opacity: 1; }
+  60% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cue i { animation: none; }
+}

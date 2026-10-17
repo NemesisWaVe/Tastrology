@@ -13,9 +13,19 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
   const ref = useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const textY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : -120]);
+  // ≤480px the card sits above the headline: opposite parallax would slide them into each other
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width: 480px)");
+    const f = () => setNarrow(m.matches);
+    f();
+    m.addEventListener("change", f);
+    return () => m.removeEventListener("change", f);
+  }, []);
+  const still = reduce || narrow;
+  const textY = useTransform(scrollYProgress, [0, 1], [0, still ? 0 : -120]);
   const textO = useTransform(scrollYProgress, [0, 0.8], [1, reduce ? 1 : 0.15]);
-  const cardY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 90]);
+  const cardY = useTransform(scrollYProgress, [0, 1], [0, still ? 0 : 90]);
 
   const [wi, setWi] = useState(0);
   useEffect(() => {
@@ -33,7 +43,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
   return (
     <section ref={ref} className={`${s.hero} relative min-h-[100svh] pt-24 max-[480px]:pt-20 sm:pt-28`}>
       <div className="mx-auto grid max-w-[1320px] items-center gap-10 px-4 max-[480px]:gap-0 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:gap-8 lg:px-12">
-        <motion.div style={{ y: textY, opacity: textO }} className="relative z-20 min-w-0 max-[480px]:-mt-14">
+        <motion.div style={{ y: textY, opacity: textO }} className="relative z-20 min-w-0 max-[480px]:mt-6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -124,9 +134,10 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
           </motion.p>
         </motion.div>
 
-        <motion.div style={{ y: cardY }} className="relative z-10 pb-16 max-[480px]:order-first max-[480px]:pb-0 lg:pb-0">
+        <motion.div id="hero-card" style={{ y: cardY }} className="relative z-10 pb-16 max-[480px]:order-first max-[480px]:pb-0 lg:pb-0">
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.2, ease: EASE, delay: 0.35 }}>
-            {specimen}
+            {/* The intro's star card docks here; --intro-dock fades the real card in under it. */}
+            <div className={s.dock} data-dock>{specimen}</div>
           </motion.div>
         </motion.div>
       </div>

@@ -298,3 +298,6 @@
     transform: none !important;
   }
 }
+
+/* ---------- intro dock: the hero card fades in as the intro's star card lands on it ---------- */
+.dock { opacity: var(--intro-dock, 1); }

@@ -9,6 +9,7 @@ import { buildCard } from "@/lib/card";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import type { AgentRequest } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
+import { Intro } from "@/components/intro/Intro";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { BringYourOwn } from "./BringYourOwn";
@@ -44,6 +45,7 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
   const [specKey, setSpecKey] = useState(SPECIMEN_DEFAULT);
   const [retried, setRetried] = useState(false);
   const lenis = useLenis();
+  const [introOn, setIntroOn] = useState(true);
 
   useEffect(() => {
     const p = PERSONAS.find((x) => x.key === specKey) ?? PERSONAS[0];
@@ -94,7 +96,8 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
     <div className={`${s.root} relative isolate min-h-screen text-ink`}>
       <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.45} />
       <div className={s.grain} aria-hidden />
-      <Nav onPick={() => go("pick")} />
+      <Nav onPick={() => go("pick")} hidden={introOn} />
+      <Intro onActive={setIntroOn} />
 
       <main>
         <Hero
@@ -125,7 +128,7 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
   );
 }
 
-function Nav({ onPick }: { onPick: () => void }) {
+function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
   const { scrollY } = useScroll();
   const [solid, setSolid] = useState(false);
   useMotionValueEvent(scrollY, "change", (y) => setSolid(y > 40));
@@ -133,9 +136,10 @@ function Nav({ onPick }: { onPick: () => void }) {
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-      className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-4"
+      animate={hidden ? { y: -20, opacity: 0 } : { y: 0, opacity: 1 }}
+      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: hidden ? 0 : 0.1 }}
+      className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-4 ${hidden ? "pointer-events-none" : ""}`}
+      inert={hidden}
     >
       <div
         className={`mx-auto flex h-12 max-w-[1320px] items-center justify-between rounded-full border px-4 transition-all duration-500 sm:h-14 sm:px-5 ${
