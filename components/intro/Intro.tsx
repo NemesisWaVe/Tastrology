@@ -139,6 +139,10 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
   const choose = useCallback(
     (withSound: boolean) => {
       closeGate();
+      if (withSound) {
+        enableSound(true);
+        setTimeout(() => sfx("drop"), 60); // the scene is already playing: answer the click with a drop
+      }
       startRef.current?.(withSound);
     },
     [closeGate],
@@ -165,6 +169,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     // ---- visitor ripples on the water ----
     const touches: Touch[] = [];
     const parT = { x: 0, y: 0 }, par = { x: 0, y: 0 };
+    const taps: { x: number; y: number; t: number }[] = []; // the visitor's own constellations
     let loveI = 0, autoDrops = 0, userDropped = false;
     // six shader slots: cursor ripples give way before named drops
     const trim = () => {
@@ -176,23 +181,31 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     };
     let lastT = { x: -999, y: -999, t: 0 };
     const clock = () => performance.now() / 1000;
-    const onPointer = (e: PointerEvent) => {
+    let lastTap = -1;
+    const onPointer = (e: PointerEvent | MouseEvent) => {
       if (!w) return;
       const r = st.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       parT.x = (x / w - 0.5) * 2;
       parT.y = (y / h - 0.5) * 2;
       if (y < viewAt(scrollYProgress.get(), w, h).hz * h + 6) return;
-      const now = clock(), down = e.type === "pointerdown";
+      const now = clock(), down = e.type === "pointerdown" || e.type === "click";
       if (!down && (Math.hypot(x - lastT.x, y - lastT.y) < 70 || now - lastT.t < 0.22)) return;
       lastT = { x, y, t: now };
-      if (down) userDropped = true;
+      if (down) {
+        if (now - lastTap < 0.3) return; // pointerdown and click are the same tap
+        lastTap = now;
+        userDropped = true;
+        taps.push({ x, y, t: now });
+        if (taps.length > 6) taps.shift();
+      }
       touches.unshift(down ? { x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length], user: true } : { x, y, t: now, amp: 0.6 });
       trim();
       if (down) sfx("ripple", { i: (touches.length * 2) % 7, gain: 0.6 });
     };
     st.addEventListener("pointermove", onPointer, { passive: true });
     st.addEventListener("pointerdown", onPointer, { passive: true });
+    st.addEventListener("click", onPointer, { passive: true });
 
     // ---- timeline ----
     let started = -1; // clock() when the drop started
@@ -244,7 +257,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         fade: 1 - sst(0.95, 1, p),
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
-      drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p));
+      while (taps.length && now - taps[0].t > 5.2) taps.shift();
+      drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
       root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.95, 1, p).toFixed(3));
     };
     const paintNow = () => {
@@ -311,6 +325,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       window.removeEventListener("resize", resize);
       st.removeEventListener("pointermove", onPointer);
       st.removeEventListener("pointerdown", onPointer);
+      st.removeEventListener("click", onPointer);
       mirror?.dispose();
       vid.pause();
       root.style.removeProperty("--intro-dock");
@@ -337,7 +352,11 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     // a reload leaves audio locked until a click/tap/key (a wheel scroll doesn't count), so anyone who wants sound
     // gets the gate again: one click enters and unlocks. Quiet returners skip it.
     if (returning && !soundOn()) start(false);
-    else if (window.scrollY < 10) setGate("open");
+    else if (window.scrollY < 10) {
+      // never a wall: the scene plays behind the invitation from the first frame
+      start(false);
+      setGate("open");
+    }
     else start(false);
     const stopAuto = () => {
       if (!auto) return;
