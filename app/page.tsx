@@ -385,7 +385,7 @@ export default function Home() {
       {sky && <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.4} />}
       <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-3 py-3 backdrop-blur-md sm:px-6">
         <button onClick={reset} className="flex items-center gap-2 font-display text-base sm:text-lg font-bold tracking-tight">
-          <Mark size={20} />
+          <Mark size={28} />
           {BRAND.name}
         </button>
         <span className="flex items-center gap-2 sm:gap-4">
