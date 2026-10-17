@@ -1,4 +1,4 @@
-import { clerkOn, currentUserId } from "@/lib/auth";
+import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
 import { creditsOn, wallet } from "@/lib/ledger";
 
 export const runtime = "nodejs";
@@ -18,6 +18,7 @@ export async function GET() {
     {
       accounts: true,
       signedIn: true,
+      admin: await isAdmin(userId),
       creditsOn: on,
       credits: w?.credits ?? null,
       freeLeft: w?.freeLeft ?? null,
