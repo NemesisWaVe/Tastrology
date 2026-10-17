@@ -110,6 +110,11 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
   const startRef = useRef<((withSound: boolean) => void) | null>(null);
   const reduce = Boolean(useReducedMotion());
   const [gate, setGate] = useState<"hidden" | "open" | "closing">("hidden");
+  const gateOpen = useRef(false);
+  useEffect(() => {
+    gateOpen.current = gate === "open";
+    document.documentElement.toggleAttribute("data-gate", gate === "open"); // the sound orb steps aside while the gate asks
+  }, [gate]);
   const lenis = useLenis();
   const lenisRef = useRef(lenis);
   const activeRef = useRef(onActive);
@@ -290,7 +295,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         el.style.opacity = c[i].toFixed(3);
         el.style.transform = `translateY(${((1 - c[i]) * 6).toFixed(2)}px)`;
       });
-      if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 ? "0" : String(sst(IMPACT + 0.2, IMPACT + 0.8, since) * (1 - sst(0.06, 0.12, p)));
+      if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 || gateOpen.current ? "0" : String(sst(IMPACT + 0.2, IMPACT + 0.8, since) * (1 - sst(0.06, 0.12, p)));
       if (cueRef.current) cueRef.current.style.opacity = auto || reduce || since < 0 ? "0" : String(sst(2.4, 3, since) * (1 - sst(0.01, 0.04, p)));
       const end = reduce ? 0.6 : 0.94;
       if (skipRef.current) {

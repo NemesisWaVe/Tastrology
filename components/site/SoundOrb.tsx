@@ -25,6 +25,7 @@ export function SoundOrb() {
     <button
       type="button"
       data-nopop
+      data-orb
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? "Turn sound off" : "Turn sound on"}
