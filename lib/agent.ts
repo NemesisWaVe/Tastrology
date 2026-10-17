@@ -4,7 +4,7 @@ import { BRAND } from "./brand";
 import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
 import { displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
-import { findTags, insights, lookupEntities, qlooMode, searchEntities } from "./qloo";
+import { findTags, insights, isUpstreamError, lookupEntities, qlooMode, searchEntities, withQlooSignal } from "./qloo";
 import type {
   AgentRequest,
   BrandMatch,
@@ -146,6 +146,7 @@ async function logged<T>(st: RunState, name: string, args: string, fn: (log: Qlo
 
 async function resolveSeeds(st: RunState) {
   st.emit({ type: "step", id: "resolve", label: `Resolving ${st.req.seeds.length} taste seeds in Qloo`, status: "run" });
+  let upstreamFails = 0;
   const resolved = await logged(st, "search_entities", st.req.seeds.map((s) => s.name).join(", "), async (log) => {
     const out = await Promise.all(
       st.req.seeds.map(async (s) => {
@@ -154,6 +155,8 @@ async function resolveSeeds(st: RunState) {
         // instead of failing the whole reading.
         const q = s.name.split(/\s+\/\s+/)[0].slice(0, 60).trim();
         const dropped = (err: unknown) => {
+          if (st.signal?.aborted) throw err;
+          if (isUpstreamError(err)) upstreamFails++;
           console.warn(JSON.stringify({ evt: "seed_drop", kind: s.kind, error: String((err as Error)?.message ?? err) }));
           return [];
         };
@@ -172,6 +175,8 @@ async function resolveSeeds(st: RunState) {
     const ok = out.filter(Boolean) as QEntity[];
     return { value: ok, summary: `${ok.length}/${st.req.seeds.length} seeds matched to Qloo entity IDs` };
   });
+  // Every search failed on Qloo's side (network, timeout, 429, 5xx): say so, rather than blaming the picks.
+  if (!resolved.length && upstreamFails >= st.req.seeds.length) throw new UpstreamError();
   st.seeds = resolved.filter((s, i) => resolved.findIndex((x) => x.id === s.id) === i);
   st.ledger.record(st.seeds);
   st.emit({ type: "data", data: { kind: "seeds", seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind, image: s.image })) } });
@@ -812,7 +817,20 @@ function keptLine(st: RunState, shown: number, moon: number): string {
 
 /* --------------------------------------------------------------- entry */
 
-export async function runAgent(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<StyleResult> {
+/** Qloo itself is unreachable or overloaded. Carries `reason: "upstream"` to the client. */
+export class UpstreamError extends Error {
+  readonly reason = "upstream";
+  constructor() {
+    super("Qloo isn't answering right now.");
+  }
+}
+
+export function runAgent(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<StyleResult> {
+  // Every Qloo call in the run inherits the signal, so an abort (or the route's deadline) also empties the queue.
+  return withQlooSignal(signal, () => runAgentInner(req, emit, signal));
+}
+
+async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<StyleResult> {
   const t0 = Date.now();
   const st = new RunState(req, emit);
   st.signal = signal;
