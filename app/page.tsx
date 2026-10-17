@@ -11,6 +11,8 @@ import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode } from "@/lib/card";
+import { addToDeck } from "@/lib/deck";
+import { isPersonaRequest } from "@/lib/personas";
 import { slim, trimResult } from "@/lib/saved";
 import { TWIN_CODE } from "@/lib/twins";
 import type { AgentRequest, BrandMatch, StyleResult } from "@/lib/types";
@@ -106,6 +108,12 @@ export default function Home() {
       localStorage.setItem(STORE, JSON.stringify({ req, result: trim(result), votes, pinned: trimPins(pinned) } satisfies Saved));
     } catch {}
   }, [stage, req, result, votes, pinned]);
+
+  // File each live card into this device's deck (server-side, write-once). Demo personas stay out.
+  useEffect(() => {
+    if (stage !== "result" || !result || result.mode === "mock" || isPersonaRequest(req)) return;
+    addToDeck(cardCode(buildCard(result)));
+  }, [stage, result, req]);
 
   // Browser Back/Forward: Back from reveal/result returns to the landing page; the saved sign stays available.
   useEffect(() => {
@@ -309,9 +317,14 @@ export default function Home() {
         <button onClick={reset} className="font-display text-lg font-bold tracking-tight">
           {BRAND.name}
         </button>
-        <button onClick={reset} className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink">
-          New sign
-        </button>
+        <span className="flex items-center gap-4">
+          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
+            My deck
+          </a>
+          <button onClick={reset} className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink">
+            New sign
+          </button>
+        </span>
       </nav>
 
       {returning && (

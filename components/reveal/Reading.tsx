@@ -104,6 +104,8 @@ export function Reading({
     [f, m.seeds],
   );
   const wellRef = useRef<HTMLDivElement>(null);
+  // Waiting for a free reader (the run hook retries on its own): say so plainly while nothing else is happening.
+  const queued = !done && !error && !m.beats.length ? events.findLast((e) => e.type === "thought" && e.text.startsWith("Queue:")) : undefined;
 
   return (
     <motion.div
@@ -142,6 +144,7 @@ export function Reading({
       <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col items-center justify-center px-5 pb-16 pt-2 sm:px-8">
         <div className="flex flex-col items-center">
           <p className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.28em] text-ink-3">reading your taste</p>
+          {queued?.type === "thought" && <p className="mb-2 font-mono text-[11.5px] text-ink-2">{queued.text.replace(/^Queue:s*/, "")}</p>}
           {well ? (
             <>
               <div ref={wellRef}>

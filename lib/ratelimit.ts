@@ -82,3 +82,53 @@ export function peekDaily(name: string): number {
   }
   return n ?? 0;
 }
+
+/* ------------------------------------------------------------ global run slots */
+
+const localSlots = sharedCache<number>("slots", 50);
+
+/**
+ * Takes one of `max` global slots for up to `ttlMs` (a lease that expires on its own if the instance dies).
+ * Upstash: a sorted set of lease tokens scored by expiry, shared by every instance. Memory fallback: a per-instance count.
+ * Returns a release function, or null when every slot is taken.
+ */
+export async function acquireSlot(name: string, max: number, ttlMs: number): Promise<(() => Promise<void>) | null> {
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  if (upstashConfigured()) {
+    const k = `tm:slots:${name}`;
+    const now = Date.now();
+    const out = await upstash([
+      ["ZREMRANGEBYSCORE", k, "-inf", now],
+      ["ZADD", k, now + ttlMs, token],
+      ["ZCARD", k],
+      ["PEXPIRE", k, ttlMs * 2],
+    ]);
+    if (out && typeof out[2] === "number") {
+      if (out[2] > max) {
+        await upstash([["ZREM", k, token]]);
+        return null;
+      }
+      return async () => {
+        await upstash([["ZREM", k, token]]);
+      };
+    }
+    // Redis unreachable: fall back to this instance's count.
+  }
+  const n = localSlots.get(name) ?? 0;
+  if (n >= max) return null;
+  localSlots.set(name, n + 1, ttlMs);
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    localSlots.set(name, Math.max(0, (localSlots.get(name) ?? 1) - 1), ttlMs);
+  };
+}
+
+/** Today's shared count (Upstash), else this instance's. For the health endpoint. */
+export async function readDaily(name: string): Promise<number> {
+  const k = `${name}:${day()}`;
+  const out = await upstash([["GET", `tm:${k}`]]);
+  const v = Number(out?.[0]);
+  return Number.isFinite(v) && v > 0 ? v : (counts.get(k) ?? 0);
+}

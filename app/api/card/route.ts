@@ -9,6 +9,6 @@ export async function GET(request: Request) {
   if (!TWIN_CODE.test(code)) return Response.json({ error: "bad code" }, { status: 400 });
   if (!(await allow(`twin:${clientId(request.headers)}`, 120, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429 });
   const card = await getTwin(code);
-  if (!card) return Response.json({ card: null }, { status: 404, headers: { "cache-control": "public, max-age=60" } });
-  return Response.json({ card }, { headers: { "cache-control": "public, max-age=31536000, immutable" } });
+  if (!card) return Response.json({ card: null }, { status: 404, headers: { "cache-control": "public, max-age=60, s-maxage=60" } });
+  return Response.json({ card }, { headers: { "cache-control": "public, max-age=31536000, s-maxage=31536000, immutable" } });
 }

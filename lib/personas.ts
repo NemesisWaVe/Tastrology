@@ -55,3 +55,10 @@ export const PERSONAS: Persona[] = [
 export function personaRequest(p: Persona): AgentRequest {
   return { seeds: p.seeds.map((s) => ({ id: "", ...s })), budget: p.budget };
 }
+
+/** True when a request is one of the demo personas (their seeds carry names, not Qloo ids). Demo cards stay out of decks. */
+export function isPersonaRequest(req: AgentRequest | null | undefined): boolean {
+  if (!req || req.seeds.some((s) => s.id)) return false;
+  const names = req.seeds.map((s) => s.name.toLowerCase()).sort().join("|");
+  return PERSONAS.some((p) => p.seeds.map((s) => s.name.toLowerCase()).sort().join("|") === names);
+}

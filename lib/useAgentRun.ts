@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { turnstileToken } from "./turnstile";
 import type { AgentRequest, StyleResult, TraceEvent } from "./types";
 
 /** Turn transport / agent failures into something a person can act on. Never surface raw status text. */
 function friendly(status: number | null, raw: string | undefined, retryAfterS: number | null): string {
   const wait = retryAfterS ? ` Give it about ${retryAfterS} second${retryAfterS === 1 ? "" : "s"}, then try again.` : " Give it a minute, then try again.";
   if (status === 429 || /rate.?limit|too many|429|quota/i.test(raw ?? "")) return `The stars are crowded right now.${wait} A demo persona opens instantly.`;
-  if (status === 503) return "Tastrology is slammed right now and new readings are on hold for a bit. The demo personas on the home page still open instantly.";
+  if (status === 503) return "Tastrology is full right now, so new readings are on hold for a bit. The demo personas on the home page still open instantly.";
+  if (status === 403) return "We couldn't confirm you're a person, so this reading didn't start. Refresh and try again.";
   if (status === 413) return "That request was too big. Try fewer or shorter picks.";
   if (status === 400 && raw) return raw;
   if (raw && /at least 2 seeds/i.test(raw)) return "Qloo couldn't find enough of those picks. Try the full name, or pick a suggestion from the list.";
@@ -16,6 +18,9 @@ function friendly(status: number | null, raw: string | undefined, retryAfterS: n
   if (raw && /stopped without an answer/i.test(raw)) return "The reading ended before it found an answer. Try again.";
   return "Something went sideways while reading your taste. Try again in a moment.";
 }
+
+const QUEUE_MARK = "Queue:";
+const MAX_QUEUE_TRIES = 4;
 
 function parseRetryAfter(h: string | null): number | null {
   if (!h) return null;
@@ -63,7 +68,29 @@ export function useAgentRun() {
       const wait = cooldown.current - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       if (id !== seq.current) return null;
-      const res = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req), signal: ac.signal });
+      const post = (extra: Record<string, string> = {}) =>
+        fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json", ...extra }, body: JSON.stringify(req), signal: ac.signal });
+      let res = await post();
+      // Bot check requested (fresh runs only): get a Turnstile token once, then the server's cookie covers retries.
+      if (res.status === 403 && ((await res.clone().json().catch(() => ({}))) as { reason?: string }).reason === "verify") {
+        const token = await turnstileToken().catch(() => "");
+        if (id !== seq.current) return null;
+        res = await post({ "x-turnstile": token });
+      }
+      // Every reader busy: wait in line (honest countdown in the trace), retrying a few times before giving up.
+      for (let tries = 0; res.status === 503 && tries < MAX_QUEUE_TRIES; tries++) {
+        const j = (await res.clone().json().catch(() => ({}))) as { reason?: string };
+        if (j.reason !== "slots") break;
+        const ra = parseRetryAfter(res.headers.get("retry-after")) ?? 15;
+        for (let left = ra; left > 0; left -= 5) {
+          if (id !== seq.current) return null;
+          setEvents((prev) => [...prev.filter((e) => !(e.type === "thought" && e.text.startsWith(QUEUE_MARK))), { type: "thought", text: `${QUEUE_MARK} Every reader is busy. You're in line; next try in ${left}s.` }]);
+          await new Promise((r) => setTimeout(r, Math.min(5, left) * 1000));
+        }
+        if (id !== seq.current) return null;
+        res = await post();
+      }
+      if (res.ok) setEvents((prev) => prev.filter((e) => !(e.type === "thought" && e.text.startsWith(QUEUE_MARK))));
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
         const ra = parseRetryAfter(res.headers.get("retry-after"));

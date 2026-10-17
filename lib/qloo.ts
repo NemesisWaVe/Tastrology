@@ -1,6 +1,7 @@
 import "server-only";
-import { kvCache } from "./cache";
+import { kvCache, sharedCache, MAX_TTL_MS } from "./cache";
 import { mockQloo } from "./mock/server";
+import { bumpDaily } from "./ratelimit";
 import type { EntityKind, InsightsParams, QEntity, QlooCallLog, QTag } from "./types";
 
 export const qlooMode = (): "live" | "mock" =>
@@ -71,30 +72,67 @@ function normEntity(raw: Record<string, unknown>): QEntity {
   };
 }
 
-// In memory, plus Upstash when configured. TTL is capped at 6h; nothing is ever written to disk.
-const cache = kvCache<Record<string, unknown>>("qloo", 2000);
+// Seed-level calls (search, tags, entity lookups, one-entity insights) are what different people share, so they go to
+// memory plus Upstash. Combination and ablation calls are unique to one reading: memory only, which keeps Upstash
+// commands per reading low. TTL is capped at 6h either way; nothing is ever written to disk.
+const shared = kvCache<Record<string, unknown>>("qloo", 2000);
+const local = sharedCache<Record<string, unknown>>("qloo-local", 2000);
+const isShared = (path: string, params: Record<string, string>) =>
+  path !== "/v2/insights" || (!params["signal.interests.entities"]?.includes(",") && !params["filter.exclude.entities"]);
+
+/** Identical requests already on the wire share one fetch. */
+const inflight = new Map<string, Promise<Record<string, unknown>>>();
+
+/** At most QLOO_CONCURRENCY live requests per instance; the rest wait in line (bursts are what trip Qloo 429s). */
+const QLOO_CONCURRENCY = Number(process.env.QLOO_CONCURRENCY) || 4;
+let active = 0;
+const waiting: (() => void)[] = [];
+async function gate<T>(fn: () => Promise<T>): Promise<T> {
+  if (active >= QLOO_CONCURRENCY) await new Promise<void>((r) => waiting.push(r));
+  active++;
+  try {
+    return await fn();
+  } finally {
+    active--;
+    waiting.shift()?.();
+  }
+}
 
 const QLOO_TIMEOUT_MS = 8000;
 const QLOO_ATTEMPTS = 4;
 
-/** Every Qloo request goes through here: cache, timing, up to 3 backed-off retries on 429/5xx/network, mock switch. */
+/** Every Qloo request goes through here: cache (shared or local), in-flight dedupe, timing. */
 async function qget(path: string, params: Record<string, string>, log?: QlooCallLog[]): Promise<Record<string, unknown>> {
   const qs = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
   const mode = qlooMode();
   const key = `${mode}:${path}?${qs}`;
   const t0 = Date.now();
-  const hit = await cache.get(key);
+  const share = isShared(path, params);
+  const hit = share ? await shared.get(key) : local.get(key);
   if (hit) {
     log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: true, count: countOf(hit) });
     return hit;
   }
+  let p = inflight.get(key);
+  if (!p) {
+    p = fetchQloo(path, qs, mode).finally(() => inflight.delete(key));
+    inflight.set(key, p);
+  }
+  const json = await p;
+  if (share) await shared.set(key, json);
+  else local.set(key, json, MAX_TTL_MS);
+  log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: false, count: countOf(json) });
+  return json;
+}
 
-  let json: Record<string, unknown>;
+/** One Qloo request: mock switch, or a gated live fetch with up to 3 backed-off retries on 429/5xx/network. */
+async function fetchQloo(path: string, qs: URLSearchParams, mode: "live" | "mock"): Promise<Record<string, unknown>> {
   if (mode === "mock") {
     // Simulated network latency so the mock trace streams like a live run.
     await new Promise((r) => setTimeout(r, 140 + Math.random() * 260));
-    json = mockQloo(path, qs) as Record<string, unknown>;
-  } else {
+    return mockQloo(path, qs) as Record<string, unknown>;
+  }
+  return gate(async () => {
     let res: Response | undefined;
     let netErr: unknown;
     for (let attempt = 0; attempt < QLOO_ATTEMPTS; attempt++) {
@@ -116,16 +154,15 @@ async function qget(path: string, params: Record<string, string>, log?: QlooCall
         if (attempt >= 1) break;
         continue;
       }
+      if (res.status === 429) void bumpDaily("qloo_429");
       if (res.status !== 429 && res.status < 500) break;
     }
     if (!res) throw new Error(`Qloo ${path}: ${(netErr as Error)?.name === "TimeoutError" ? "timed out" : "network error"}`);
     if (!res.ok) throw new Error(`Qloo ${path} → HTTP ${res.status}`);
-    json = (await res.json()) as Record<string, unknown>;
-  }
-  if (json.success === false) throw new Error(`Qloo ${path}: ${String(json.error ?? "request failed")}`);
-  await cache.set(key, json);
-  log?.push({ endpoint: path, params, ms: Date.now() - t0, cached: false, count: countOf(json) });
-  return json;
+    const json = (await res.json()) as Record<string, unknown>;
+    if (json.success === false) throw new Error(`Qloo ${path}: ${String(json.error ?? "request failed")}`);
+    return json;
+  });
 }
 
 function countOf(json: Record<string, unknown>): number {

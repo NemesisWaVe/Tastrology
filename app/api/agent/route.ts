@@ -1,16 +1,19 @@
 import { runAgent } from "@/lib/agent";
 import { kvCache } from "@/lib/cache";
-import { buildCard } from "@/lib/card";
+import { buildCard, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
 import { PERSONAS } from "@/lib/personas";
-import { allow, bumpDaily, clientId } from "@/lib/ratelimit";
+import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
+import { acquireSlot, allow, bumpDaily, clientId, clientIp } from "@/lib/ratelimit";
 import { registerFighter, toSheet } from "@/lib/fighters";
+import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Hobby allows 300s; readings take 20–60s, and Qloo backoff can stretch one.
+export const maxDuration = 150;
 
 type Recorded = { events: TraceEvent[]; result: StyleResult };
 
@@ -32,7 +35,12 @@ const flights = (g.__tmFlights ??= new Map<string, Flight>());
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const FRESH_LIMIT = 10;
-const DAILY_RUNS_MAX = 400;
+/** Fresh readings per UTC day across every instance. Size it from the monthly budget (Qloo, Bedrock, Vercel GB-hours) ÷ 30. */
+const DAILY_RUNS_MAX = Number(process.env.DAILY_RUNS_MAX) || 400;
+/** Fresh readings running at once across every instance (Upstash leases), so a spike queues instead of tripping Qloo. */
+const RUN_SLOTS = Number(process.env.RUN_SLOTS) || 12;
+const SLOT_TTL_MS = 150_000;
+/** Per-instance ceiling, in case Upstash is down and slots fall back to local counts. */
 const MAX_FLIGHTS = 16;
 const BUSY = { error: "busy", hint: "Try one of the demo personas" };
 const RATE_MSG = `You've started a lot of readings in the last few minutes. Wait a bit, or try a demo persona like ${PERSONAS[1]?.name ?? "the ones on the home page"}; those load instantly.`;
@@ -41,7 +49,7 @@ function logRun(x: { runId: string | null; planner: string | null; qlooCalls: nu
   console.log(JSON.stringify({ evt: "agent_run", ...x }));
 }
 
-function startFlight(key: string, fallbackKey: string, req: AgentRequest): Flight {
+function startFlight(key: string, fallbackKey: string, req: AgentRequest, release: () => Promise<void>): Flight {
   const t0 = Date.now();
   const ac = new AbortController();
   const f = { events: [], listeners: new Set(), ac } as unknown as Flight;
@@ -57,8 +65,10 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest): Fligh
       const rec = { events: f.events, result };
       // Register the card's twin server-side, before the result is returned or cached. (Stage C: also write the fighter sheet here.)
       if (result.mode !== "mock") {
-        const code = await registerTwin(buildCard(result));
+        const card = buildCard(result);
+        const code = await registerTwin(card);
         await registerFighter(code, toSheet(result));
+        void recordMint(code, SEASON, card.rarityScore).catch(() => {});
       }
       // Don't pin a fallback run: next time the LLM may be back (Qloo calls are cached either way).
       if (!llmConfigured() || result.planner === "llm") await results.set(key, rec);
@@ -73,6 +83,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest): Fligh
   );
   f.done = run.finally(() => {
     if (flights.get(key) === f) flights.delete(key);
+    void release();
   });
   f.done.catch(() => {});
   flights.set(key, f);
@@ -96,14 +107,42 @@ export async function POST(request: Request) {
   const cached = await results.get(key);
   let flight = cached ? undefined : flights.get(key);
   if (flight?.ac.signal.aborted) flight = undefined; // its last listener left; start fresh
+  /** Set when this request just passed the bot check; rides on whatever response goes back. */
+  let setCookie: string | undefined;
+  const reply = (body: unknown, init: ResponseInit) => {
+    const r = Response.json(body, init);
+    if (setCookie) r.headers.append("set-cookie", setCookie);
+    return r;
+  };
   if (!cached && !flight) {
     const who = clientId(request.headers);
-    if (!(await allow(`agent:${who}`, RATE_LIMIT, RATE_WINDOW_MS))) return Response.json({ error: RATE_MSG }, { status: 429 });
+    // Bot check before anything that costs quota. The token is spent here, so queue retries ride on the cookie.
+    if (turnstileOn() && !hasHumanCookie(request.headers)) {
+      const token = request.headers.get("x-turnstile") ?? "";
+      if (!(await verifyTurnstile(token, clientIp(request.headers)))) {
+        void bumpDaily("denied_bot");
+        return Response.json({ error: "Quick check first.", reason: "verify" }, { status: 403 });
+      }
+      setCookie = humanCookie();
+    }
+    if (!(await allow(`agent:${who}`, RATE_LIMIT, RATE_WINDOW_MS))) return reply({ error: RATE_MSG }, { status: 429 });
     // Fresh runs only (not replays, not joins): they cost Qloo and LLM calls.
-    if (flights.size >= MAX_FLIGHTS) return Response.json(BUSY, { status: 503, headers: { "retry-after": "30" } });
-    if (!(await allow(`fresh:${who}`, FRESH_LIMIT, RATE_WINDOW_MS))) return Response.json({ error: RATE_MSG }, { status: 429 });
-    if ((await bumpDaily("runs")) > DAILY_RUNS_MAX) return Response.json(BUSY, { status: 503, headers: { "retry-after": "600" } });
-    flight = startFlight(key, fallbackKey, body);
+    const release = flights.size >= MAX_FLIGHTS ? null : await acquireSlot("agent", RUN_SLOTS, SLOT_TTL_MS);
+    if (!release) {
+      void bumpDaily("denied_busy");
+      return reply({ ...BUSY, reason: "slots" }, { status: 503, headers: { "retry-after": String(12 + Math.floor(Math.random() * 10)) } });
+    }
+    // Counted only once a slot is granted, so waiting in line doesn't use up the allowance.
+    if (!(await allow(`fresh:${who}`, FRESH_LIMIT, RATE_WINDOW_MS))) {
+      await release();
+      return reply({ error: RATE_MSG }, { status: 429 });
+    }
+    if ((await bumpDaily("runs")) > DAILY_RUNS_MAX) {
+      await release();
+      void bumpDaily("denied_daily");
+      return reply({ ...BUSY, reason: "daily" }, { status: 503, headers: { "retry-after": "600" } });
+    }
+    flight = startFlight(key, fallbackKey, body, release);
   }
 
   const enc = new TextEncoder();
@@ -173,5 +212,7 @@ export async function POST(request: Request) {
       detach();
     },
   });
-  return new Response(stream, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+  const headers = new Headers({ "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" });
+  if (setCookie) headers.append("set-cookie", setCookie);
+  return new Response(stream, { headers });
 }
