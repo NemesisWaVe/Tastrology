@@ -1,7 +1,7 @@
 "use client";
 
 import { useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { ShareSheet } from "@/components/card/ShareSheet";
@@ -253,6 +253,28 @@ export default function Home() {
     setReturning(false);
     goHome();
   };
+
+  // A returning sign that was burned (here or on another device) is gone: drop it and land on the home page.
+  const resetRef = useRef(reset);
+  resetRef.current = reset;
+  useEffect(() => {
+    if (!returning || !saved?.result) return;
+    let code: string;
+    try {
+      code = cardCode(buildCard(saved.result));
+    } catch {
+      return;
+    }
+    let off = false;
+    fetch(`/api/card?code=${encodeURIComponent(code)}`, { cache: "no-store" })
+      .then((r) => {
+        if (!off && r.status === 410) resetRef.current();
+      })
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [returning, saved]);
 
   const vote = (id: string, v: Vote | null) =>
     setVotes((prev) => {
