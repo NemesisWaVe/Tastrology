@@ -4,6 +4,7 @@ const LINKS = [
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },
   { href: "/cookies", label: "Cookies" },
+  { href: "/privacy#contact", label: "Grievances" },
 ];
 
 export function LegalLinks({ className = "" }: { className?: string }) {
