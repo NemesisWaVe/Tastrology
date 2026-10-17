@@ -372,20 +372,21 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
   ctx.globalCompositeOperation = "lighter";
   const ring = (d: Drop) => {
     const age = now - d.t;
-    return { age, rx: age * 260, ry: (age * 260) / 2.6, a: sst(0, 0.35, age) * (1 - sst(1.4, 2.3, age)) * fade };
+    return { age, rx: age * 260, ry: (age * 260) / 2.6, a: sst(0, 0.35, age) * (1 - sst(1.1, 1.8, age)) * fade };
   };
   // where two rings meet, a line of light joins their centres
-  for (let i = 0; i < named.length; i++)
-    for (let j = i + 1; j < named.length; j++) {
+  // each drop joins only the one before it: a single thread, not a mesh
+  for (let i = 0; i + 1 < named.length; i++)
+    for (let j = i + 1; j <= i + 1; j++) {
       const A = named[i], B = named[j], ra = ring(A), rb = ring(B);
       if (Math.hypot(B.x - A.x, (B.y - A.y) * 2.6) > ra.rx + rb.rx) continue;
       const a = Math.min(ra.a, rb.a);
       const gr = ctx.createLinearGradient(A.x, A.y, B.x, B.y);
       gr.addColorStop(0, "rgba(198,255,61,0.9)");
       gr.addColorStop(1, "rgba(216,117,255,0.9)");
-      ctx.globalAlpha = a * 0.7;
+      ctx.globalAlpha = a * 0.4;
       ctx.strokeStyle = gr;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.7;
       ctx.shadowColor = "rgba(198,255,61,0.8)";
       ctx.shadowBlur = 8;
       ctx.beginPath();
