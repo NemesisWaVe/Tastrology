@@ -1,3 +1,4 @@
+import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { clerkOn } from "@/lib/auth";
 import { previewDust } from "@/lib/burn";
 import { ddbConfigured, ddbPutIfAbsent, ddbQuery } from "@/lib/ddb";
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
     if (!deviceIdsOn()) return Response.json({ enabled: false }, { headers: NO_STORE });
     ({ id, cookie } = newDevice());
   }
+  if (await deckFull(id)) return Response.json({ error: DECK_FULL_MSG, reason: "deckfull" }, { status: 409, headers: NO_STORE });
   const extra: Record<string, string | number> = kind === "user" ? { minted: 0, source: "collect" } : {};
   const out = await ddbPutIfAbsent({ PK: `OWNER#${id}`, SK: `CARD#${code}`, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), ...extra });
   const res = Response.json({ enabled: true, added: out === "created", code }, { status: out === "error" ? 503 : 200, headers: NO_STORE });

@@ -3,8 +3,10 @@ import { after } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
 import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
-import { creditsOn, refundCredit, RUN_ID_RE, spendCredit } from "@/lib/ledger";
-import { dustOn, READING_DUST, refundDust, spendDust } from "@/lib/stardust";
+import { creditsOn, nextRefillAt, refundCredit, RUN_ID_RE, spendCredit } from "@/lib/ledger";
+import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
+import { deviceId } from "@/lib/device";
+import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache } from "@/lib/cache";
 import { buildCard, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
@@ -237,13 +239,18 @@ export async function POST(request: Request) {
     }
     // Credits last, after every free gate, so being turned away never costs one. Idempotent per run id (the client reuses it across retries).
     let minter: Minter | undefined = userId && !persona ? { userId } : undefined;
+    if (minter && !admin && (await deckFull(minter.userId))) {
+      await release();
+      await dropLease(key);
+      return reply({ error: DECK_FULL_MSG, reason: "deckfull" }, { status: 409 });
+    }
     if (minter && creditsOn() && !admin) {
       const hdr = request.headers.get("x-run-id") ?? "";
       const runId = RUN_ID_RE.test(hdr) ? hdr : randomUUID();
-      let spent = await spendCredit(minter.userId, runId);
+      let spent = await spendCredit(minter.userId, runId, deviceId(request.headers));
       let paidWith: Minter["paidWith"] = "credit";
-      // Out of credits: a reading costs READING_DUST Stardust instead, if there's enough (burn.md §3).
-      if (spent === "empty" && dustOn()) {
+      // Out of credits: Stardust buys a reading only if DUST_BUYS_READING=1. Off by default: burning never frees a card (identity-limits.md).
+      if (spent === "empty" && dustOn() && process.env.DUST_BUYS_READING === "1") {
         const d = await spendDust(minter.userId, runId);
         if (d === "spent" || d === "dup" || d === "used") {
           spent = d;
@@ -253,8 +260,12 @@ export async function POST(request: Request) {
       if (spent !== "spent" && spent !== "dup") {
         await release();
         await dropLease(key);
-        if (spent === "empty")
-          return reply({ error: dustOn() ? `You're out of readings. Burn cards for Stardust: ${READING_DUST} buys one.` : "You're out of readings. The shop has more.", reason: "credits" }, { status: 402 });
+        if (spent === "empty") {
+          const at = await nextRefillAt(minter.userId).catch(() => null);
+          const days = at ? Math.max(1, Math.ceil((at - Date.now()) / 86_400_000)) : null;
+          const when = days ? `Your next card comes at the new moon, in ${days} day${days === 1 ? "" : "s"}.` : "Your next card comes at the new moon.";
+          return reply({ error: `${when} Fight someone while you wait.`, reason: "credits", refillAt: at }, { status: 402 });
+        }
         if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
         return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
       }

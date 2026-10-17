@@ -10,6 +10,7 @@ import type { AgentRequest, StyleResult, TraceEvent } from "./types";
 function friendly(status: number | null, raw: string | undefined, retryAfterS: number | null, reason?: string): string {
   if (reason === "upstream") return "Qloo is having a moment. Try a demo persona or come back in a minute.";
   if (reason === "deadline") return "That reading ran long and timed out. Try again; what it already fetched is saved, so the next go is quicker.";
+  if (reason === "deckfull") return raw || "Your deck is full. Retire a card to make room.";
   if (reason === "running") return "Your reading is still going on our side. Give it a minute and try again; it won't charge you twice.";
   const wait = retryAfterS ? ` Give it about ${retryAfterS} second${retryAfterS === 1 ? "" : "s"}, then try again.` : " Give it a minute, then try again.";
   if (status === 429 || /rate.?limit|too many|429|quota/i.test(raw ?? "")) return `The stars are crowded right now.${wait} A demo persona opens instantly.`;
@@ -81,6 +82,8 @@ export function useAgentRun() {
   const [result, setResult] = useState<StyleResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Why the server turned the reading away, when it did ("credits" = waiting for the refill, "deckfull"). */
+  const [errorReason, setErrorReason] = useState<string | null>(null);
   const seq = useRef(0);
   const inflight = useRef(false);
   const ctrl = useRef<AbortController | null>(null);
@@ -98,6 +101,7 @@ export function useAgentRun() {
     inflight.current = false;
     setRunning(false);
     setError(null);
+    setErrorReason(null);
   }, []);
 
   const run = useCallback(async (req: AgentRequest): Promise<StyleResult | null> => {
@@ -108,6 +112,7 @@ export function useAgentRun() {
     ctrl.current = ac;
     setRunning(true);
     setError(null);
+    setErrorReason(null);
     setEvents([]);
     try {
       const wait = cooldown.current - Date.now();
@@ -227,6 +232,7 @@ export function useAgentRun() {
         const e = err as Error & { status?: number; retryAfter?: number | null; reason?: string };
         // The last good result stays in state; only the error is recorded.
         setError(friendly(e.status ?? null, e.message, e.retryAfter ?? null, e.reason));
+        setErrorReason(e.reason ?? null);
       }
       return null;
     } finally {
@@ -238,5 +244,5 @@ export function useAgentRun() {
     }
   }, []);
 
-  return { events, result, running, error, run, setResult, busy, cancel };
+  return { events, result, running, error, errorReason, run, setResult, busy, cancel };
 }

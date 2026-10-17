@@ -73,7 +73,7 @@ function savedResultOk(r: unknown): r is StyleResult {
 }
 
 export default function Home() {
-  const { events, result, running, error, run, setResult, busy, cancel } = useAgentRun();
+  const { events, result, running, error, errorReason, run, setResult, busy, cancel } = useAgentRun();
   const [stage, setStage] = useState<Stage>("home");
   const [req, setReq] = useState<AgentRequest | undefined>();
   const [votes, setVotes] = useState<Record<string, Vote>>({});
@@ -408,7 +408,15 @@ export default function Home() {
           Welcome back. Your sign and your feedback are where you left them.
         </p>
       )}
-      {error && !replanning && <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">{error}</p>}
+      {error && !replanning && (errorReason === "credits" || errorReason === "deckfull" ? (
+        <div className="mx-auto mt-6 flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-3 px-4 sm:px-6">
+          <p className="font-serif text-[19px] italic text-ink-2">{error}</p>
+          <a href="/vs" className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper">Find a fight</a>
+          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 hover:text-ink">Your deck</a>
+        </div>
+      ) : (
+        <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">{error}</p>
+      ))}
 
       {shown && (
         <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
