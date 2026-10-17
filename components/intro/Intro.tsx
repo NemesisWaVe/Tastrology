@@ -429,12 +429,21 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       st.style.visibility = gone ? "hidden" : "visible";
       if (gone) root.style.setProperty("--intro-dock", "1");
     };
-    hideAt(scrollYProgress.get());
-    const offHide = scrollYProgress.on("change", hideAt);
+    // native scroll events fire even when animation frames are throttled (iOS momentum, background tabs)
+    const nativeP = () => {
+      const el = track.current;
+      if (!el) return 0;
+      const r = el.getBoundingClientRect();
+      return Math.min(1, Math.max(0, -r.top / Math.max(1, r.height - window.innerHeight)));
+    };
+    const onScrollHide = () => hideAt(nativeP());
+    onScrollHide();
+    window.addEventListener("scroll", onScrollHide, { passive: true });
+    const offHide = () => window.removeEventListener("scroll", onScrollHide);
     const io = new IntersectionObserver(([e]) => {
       visible = e.isIntersecting;
       if (!visible) st.style.visibility = "hidden";
-      else hideAt(scrollYProgress.get());
+      else hideAt(nativeP());
       if (!visible) vid.pause();
       run();
     });
