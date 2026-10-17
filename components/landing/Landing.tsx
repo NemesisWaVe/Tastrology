@@ -175,7 +175,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         <div className="flex items-center gap-3 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
           <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">Shop</a>
-          <a href="/deck" className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink"><span className="hidden sm:inline">My </span>Deck</a>
+          <a href="/deck" className="whitespace-nowrap py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink"><span className="hidden sm:inline">My </span>Deck</a>
           <SoundToggle />
           <AuthNav />
           <button

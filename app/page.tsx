@@ -382,20 +382,20 @@ export default function Home() {
     // isolate: the quiet sky (-z-10) stacks inside this root, above the body background and behind the content
     <div className="relative isolate min-h-screen">
       {sky && <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.4} />}
-      <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-4 py-3 backdrop-blur-md sm:px-6">
-        <button onClick={reset} className="font-display text-lg font-bold tracking-tight">
+      <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-3 py-3 backdrop-blur-md sm:px-6">
+        <button onClick={reset} className="font-display text-base sm:text-lg font-bold tracking-tight">
           {BRAND.name}
         </button>
-        <span className="flex items-center gap-3 sm:gap-4">
+        <span className="flex items-center gap-2 sm:gap-4">
           <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
             Shop
           </a>
-          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink whitespace-nowrap">
+          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink whitespace-nowrap py-2">
             <span className="hidden sm:inline">My </span>Deck
           </a>
           <SoundToggle />
           <AuthNav />
-          <button onClick={reset} className="shrink-0 whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:px-4">
+          <button onClick={reset} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-1.5 text-[13px] sm:text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:px-4">
             New sign
           </button>
         </span>
