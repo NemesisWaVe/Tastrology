@@ -265,11 +265,9 @@ export function armSound(): void {
   const unlock = () => {
     const c = ensure();
     if (c && c.state !== "running") void c.resume().catch(() => {});
-    window.removeEventListener("pointerdown", unlock);
-    window.removeEventListener("keydown", unlock);
+    ["pointerdown", "keydown", "touchend"].forEach((e) => window.removeEventListener(e, unlock));
   };
-  window.addEventListener("pointerdown", unlock);
-  window.addEventListener("keydown", unlock);
+  ["pointerdown", "keydown", "touchend"].forEach((e) => window.addEventListener(e, unlock));
 }
 
 let popsOn = false;
