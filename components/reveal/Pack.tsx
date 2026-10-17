@@ -206,8 +206,8 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     settledIn.current = true;
     if (reduce) return cardY.set(peekY);
     // settle in from a little lower, but never so low that the card's bottom pokes out under the pack
-    cardY.set(Math.min(peekY + 70, packH / 2 - cardH / 2 - 8));
-    const c = animate(cardY, peekY, { type: "spring", stiffness: 200, damping: 20 });
+    cardY.set(Math.min(peekY + 26, packH / 2 - cardH / 2 - 8));
+    const c = animate(cardY, peekY, { type: "spring", stiffness: 260, damping: 30 }); // no overshoot below the lip
     return () => c.stop();
   }, [stage, peekY, reduce, cardY, packH, cardH]);
 
@@ -243,7 +243,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     if (pl.v > 0.7 && pl.r > PULL * 0.33) return takeCard();
     pull.current = null;
     setPulling(false);
-    animate(cardY, peekY, { type: "spring", stiffness: 260, damping: 20 }); // not far enough: slides back in
+    animate(cardY, peekY, { type: "spring", stiffness: 260, damping: 30 }); // not far enough: slides back in, never past the lip
   };
 
   /* ---------------------------------------------------------------- hold to mint + flip */
@@ -282,7 +282,9 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     }
     await animate(rotY, 90, { duration: 0.18, ease: "easeIn" });
     setFace("front");
-    sfx(card.rarity === "common" ? "flip" : "reveal", { gain: card.rarity === "secret" ? 1.3 : card.rarity === "holo" ? 1.1 : card.rarity === "rare" ? 0.9 : 0.8 });
+    sfx("ding"); // done, like a microwave; the celebration follows a beat later
+    const g = card.rarity === "secret" ? 1.3 : card.rarity === "holo" ? 1.1 : card.rarity === "rare" ? 0.9 : 0.8;
+    setTimeout(() => sfx(card.rarity === "common" ? "flip" : "reveal", { gain: g }), 260);
     rotY.set(-90);
     animate(rotY, 0, { type: "spring", stiffness: 260, damping: 18 });
     setStage("revealed");

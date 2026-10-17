@@ -21,7 +21,8 @@ export type Sfx =
   | "print" // receipt print head chatter
   | "beep" // checkout scan
   | "stamp" // rubber stamp thunk
-  | "tear"; // paper tearing off
+  | "tear" // paper tearing off
+  | "ding"; // microwave-style bell: the card is done
 
 export type SfxOpts = { i?: number; gain?: number };
 

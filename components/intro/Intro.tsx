@@ -340,8 +340,14 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       auto = false;
       skip();
     };
-    const inputs = ["wheel", "touchstart", "keydown"] as const;
-    inputs.forEach((e) => window.addEventListener(e, stopAuto, { passive: true }));
+    // scroll sounds only after the visitor actually scrolls (a restored scroll position on reload is not a gesture)
+    let moved = false;
+    const onInput = () => {
+      moved = true;
+      stopAuto();
+    };
+    const inputs = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    inputs.forEach((e) => window.addEventListener(e, onInput, { passive: true }));
 
     let raf = 0, visible = true, idle = false, playedImpact = false, prevP = -1;
     const tick = () => {
@@ -365,7 +371,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         playedImpact = true;
         sfx("drop");
       }
-      if (prevP >= 0 && p > prevP && p - prevP < 0.08) {
+      if (moved && prevP >= 0 && p > prevP && p - prevP < 0.08) {
         const cross = (x: number) => prevP < x && p >= x;
         if (cross(0.3)) sfx("shimmer");
         if (cross(0.45)) sfx("ripple", { i: 0 });
@@ -402,7 +408,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       cancelAnimationFrame(raf);
       io.disconnect();
       document.removeEventListener("visibilitychange", run);
-      inputs.forEach((e) => window.removeEventListener(e, stopAuto));
+      inputs.forEach((e) => window.removeEventListener(e, onInput));
       cleanup();
     };
   }, [reduce, scrollYProgress, skip, closeGate]);
