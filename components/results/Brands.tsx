@@ -86,13 +86,13 @@ export function BrandCard({
             <p className={`mt-2 font-serif italic leading-snug text-ink-2 ${hero ? "text-[17px] sm:text-[19px]" : "line-clamp-3 text-[15px]"}`}>{e.subtitle || b.why}</p>
           )}
         </div>
-        {hero && lead && <PullChart b={b} drivers={drivers} big />}
+        {hero && lead && <span className="hidden sm:block"><PullChart b={b} drivers={drivers} big /></span>}
       </div>
 
       {/* the pull: who sent this brand to you */}
       {lead && (
         <div className="relative mt-4 flex items-center gap-3">
-          {!hero && <PullChart b={b} drivers={drivers} />}
+          {hero ? <span className="sm:hidden"><PullChart b={b} drivers={drivers} /></span> : <PullChart b={b} drivers={drivers} />}
           <p className="min-w-0 text-[13.5px] leading-snug text-ink-2">
             <b className="font-display text-[22px] font-semibold text-ink tabular-nums">{share}%</b> of the pull from{" "}
             <span className="text-ink">{displayName(lead.s!.name)}</span>
