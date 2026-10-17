@@ -11,7 +11,7 @@ import { getPersonaRun, putPersonaRun } from "@/lib/personaRuns";
 import { putReceipt } from "@/lib/receipt";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache, upstash } from "@/lib/cache";
-import { buildCard, SEASON } from "@/lib/card";
+import { buildCard, redrawCap, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
 import { isPersonaRequest, PERSONAS } from "@/lib/personas";
 import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
@@ -95,6 +95,8 @@ interface Minter {
   pick?: string;
   /** Paid by a regret: the new card can't outrank this tier, and is marked as a second draw. */
   cap?: "common" | "rare" | "holo" | "secret";
+  /** The tier of the card a regret replaced (the cap may sit one step above it). */
+  from?: "common" | "rare" | "holo" | "secret";
 }
 
 /** Files the account's own fresh mint in its deck as minted:1 (upgrading a card it had only claimed or collected). */
@@ -136,8 +138,9 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         result.redraw = { cap: minter.cap };
         // Tier jumps on second draws, for spotting rarity farming: counted, and logged without user ids.
         const natural = buildCard({ ...result, redraw: undefined }).rarity;
-        console.log(JSON.stringify({ event: "redraw", from: minter.cap, natural }));
-        bg(upstash([["HINCRBY", "tm:redraw", `${minter.cap}>${natural}`, 1]]));
+        const from = minter.from ?? minter.cap;
+        console.log(JSON.stringify({ event: "redraw", from, cap: minter.cap, natural }));
+        bg(upstash([["HINCRBY", "tm:redraw", `${from}>${natural}`, 1]]));
       }
       if (result.mode !== "mock") {
         const card = buildCard(result);
@@ -301,7 +304,7 @@ export async function POST(request: Request) {
         if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
         return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
       }
-      minter = { ...minter, runId, paidWith, ...(paidWith === "regret" && regret ? { cap: regret.tier } : {}) };
+      minter = { ...minter, runId, paidWith, ...(paidWith === "regret" && regret ? { cap: redrawCap(regret.tier), from: regret.tier } : {}) };
     }
     flight = startFlight(key, fallbackKey, body, release, minter);
     // The run outlives this response if the client drops: it finishes, caches its result and releases its slot.

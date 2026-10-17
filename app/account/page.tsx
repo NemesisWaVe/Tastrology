@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { authOn, whenAuthReady, type Bridge } from "@/lib/authBridge";
+import { StardustTable } from "@/components/shop/StardustTable";
+import type { Economy } from "@/lib/economy";
 
 interface Me {
   accounts: boolean;
@@ -18,6 +20,7 @@ interface Me {
     dust: number | null;
     weekLeft: number | null;
     rates: { common: number; rare: number; holo: number; secret: number; paidFlat: number; reading: number; weeklyCap: number };
+    economy?: Economy;
   } | null;
 }
 
@@ -150,12 +153,6 @@ export default function AccountPage() {
 /** Stardust balance and the published rates (docs/design/burn.md §3; legal "Burn rewards"). */
 function StardustPanel({ s }: { s: NonNullable<Me["stardust"]> }) {
   const r = s.rates;
-  const tiers: [string, number][] = [
-    ["Common", r.common],
-    ["Rare", r.rare],
-    ["Holo Rare", r.holo],
-    ["Secret Rare", r.secret],
-  ];
   return (
     <section className="rounded-3xl border border-accent/25 bg-card p-6 sm:col-span-2">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -167,25 +164,14 @@ function StardustPanel({ s }: { s: NonNullable<Me["stardust"]> }) {
           </p>
         </div>
         <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
-          {s.weekLeft ?? "–"} of {r.weeklyCap} left to earn this week · {r.reading} dust = 1 reading
+          {s.weekLeft ?? "–"} of {r.weeklyCap} left to earn this week
         </p>
       </div>
-      <dl className="mt-6 grid grid-cols-2 gap-3 border-y border-line py-4 sm:grid-cols-4">
-        {tiers.map(([k, v]) => (
-          <div key={k}>
-            <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">{k}</dt>
-            <dd className="mt-1 font-display text-xl font-semibold tabular-nums">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="mt-4 max-w-2xl text-sm text-ink-2">
-        Burn a card you minted with a credit and it turns into dust at these rates. When your credits run out, {r.reading} dust pays for a reading. Burning a
-        code that was burned before earns nothing.
-      </p>
-      <p className="mt-2 max-w-2xl text-[13px] text-ink-3">
-        Stardust only buys readings. It has no cash value and can&apos;t be bought, sold, transferred or refunded. Rate changes get 14 days&apos; notice and never
-        reduce dust you already have.
-      </p>
+      {s.economy && (
+        <div className="mt-6">
+          <StardustTable e={s.economy} weekLeft={s.weekLeft} />
+        </div>
+      )}
     </section>
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import c from "@/components/site/celestial.module.css";
+import type { Economy } from "@/lib/economy";
 
 export interface Me {
   signedIn?: boolean;
@@ -11,6 +12,7 @@ export interface Me {
   refillAt?: number | null;
   refillDays?: number;
   deckMax?: number;
+  stardust?: { dust: number | null; weekLeft: number | null; economy?: Economy } | null;
 }
 
 const DAY = 86_400_000;

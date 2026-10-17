@@ -53,8 +53,8 @@ describe("rates", () => {
   it("paid mints burn flat, free mints by tier, dust-paid mints earn nothing", () => {
     expect(dustFor("secret", "paid")).toBe(PAID_FLAT_DUST);
     expect(dustFor("common", "paid")).toBe(PAID_FLAT_DUST);
-    expect(dustFor("secret", "free")).toBe(60);
-    expect(dustFor("rare", "free")).toBe(20);
+    expect(dustFor("secret", "free")).toBe(90);
+    expect(dustFor("rare", "free")).toBe(35);
     expect(dustFor("secret", "dust")).toBe(0);
     expect(dustFor("secret", undefined)).toBe(0);
   });
@@ -74,12 +74,12 @@ describe("burnCard", () => {
     const code = nextCode();
     await mint("u1", code, "secret");
     const a = await burnCard("u1", code, NOW);
-    expect(a).toMatchObject({ status: "burned", dust: 60, tier: "secret", capped: false, balance: 60 });
+    expect(a).toMatchObject({ status: "burned", dust: 90, tier: "secret", capped: false, balance: 90 });
     const b = await burnCard("u1", code, NOW);
-    expect(b).toMatchObject({ status: "dup", dust: 60, balance: 60 });
-    expect(await dust("u1")).toBe(60);
+    expect(b).toMatchObject({ status: "dup", dust: 90, balance: 90 });
+    expect(await dust("u1")).toBe(90);
     expect(await ddbGet("OWNER#u1", `CARD#${code}`)).toBeNull();
-    expect(await ddbGet("USER#u1", `LEDGER#burn#${code}`)).toMatchObject({ delta: 60, unit: "dust" });
+    expect(await ddbGet("USER#u1", `LEDGER#burn#${code}`)).toMatchObject({ delta: 90, unit: "dust" });
     expect(await ddbGet(`CARD#${code}`, "TOMBSTONE")).toMatchObject({ revived: 0 });
   });
 
@@ -88,8 +88,8 @@ describe("burnCard", () => {
     await mint("u2", c1, "secret", { funding: "paid" });
     await mint("u2", c2, "rare", { funding: "free" });
     expect(await burnCard("u2", c1, NOW)).toMatchObject({ dust: PAID_FLAT_DUST });
-    expect(await burnCard("u2", c2, NOW)).toMatchObject({ dust: 20 });
-    expect(await dust("u2")).toBe(PAID_FLAT_DUST + 20);
+    expect(await burnCard("u2", c2, NOW)).toMatchObject({ dust: 35 });
+    expect(await dust("u2")).toBe(PAID_FLAT_DUST + 35);
   });
 
   it("caps dust at 150 a week, then burns for 0", async () => {
@@ -97,15 +97,15 @@ describe("burnCard", () => {
     for (const c of codes) await mint("u3", c, "secret");
     const out = [];
     for (const c of codes) out.push(await burnCard("u3", c, NOW));
-    expect(out.map((r) => ("dust" in r ? r.dust : -1))).toEqual([60, 60, 30, 0]);
-    expect(out[2]).toMatchObject({ capped: true, reason: "cap" });
+    expect(out.map((r) => ("dust" in r ? r.dust : -1))).toEqual([90, 60, 0, 0]);
+    expect(out[1]).toMatchObject({ capped: true, reason: "cap" });
     expect(out[3]).toMatchObject({ status: "burned", reason: "cap" });
     expect(await dust("u3")).toBe(WEEKLY_DUST_CAP);
     expect(await ddbGet("USER#u3", `DUSTWEEK#${isoWeek(NOW)}`)).toMatchObject({ earned: WEEKLY_DUST_CAP });
     // Next week the cap resets.
     const c5 = nextCode();
     await mint("u3", c5, "common");
-    expect(await burnCard("u3", c5, NOW + 7 * 86_400_000)).toMatchObject({ dust: 10 });
+    expect(await burnCard("u3", c5, NOW + 7 * 86_400_000)).toMatchObject({ dust: 20 });
   });
 
   it("refuses anyone but the owner, and cards that weren't minted by them", async () => {

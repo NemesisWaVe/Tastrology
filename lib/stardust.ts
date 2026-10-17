@@ -15,7 +15,7 @@ import { creditsOn, RUN_ID_RE } from "./ledger";
 export const dustOn = creditsOn;
 
 /** Published rates. Rule 1 (legal): every burn returns less than a reading costs. */
-export const DUST_RATES: Record<Rarity, number> = { common: 10, rare: 20, holo: 35, secret: 60 };
+export const DUST_RATES: Record<Rarity, number> = { common: 20, rare: 35, holo: 60, secret: 90 };
 /** A card minted with a paid credit burns at this flat rate whatever its tier (none exist during the free beta). */
 export const PAID_FLAT_DUST = 10;
 export const READING_DUST = 100;

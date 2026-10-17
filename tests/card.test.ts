@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RARITY_CUTS, ablationLines, buildCard, cardCode } from "@/lib/card";
+import { RARITY_CUTS, ablationLines, buildCard, cardCode, redrawCap } from "@/lib/card";
 import { trimResult } from "@/lib/saved";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
@@ -110,5 +110,12 @@ describe("second draw", () => {
     expect(capped.secondDraw).toBe(true);
     expect(capped.rarityWhy.join(" ")).toMatch(/Second draw/);
     expect(buildCard({ ...r, redraw: { cap: "secret" } }).rarity).toBe(natural.rarity);
+  });
+  it("gives a Common one step of leverage, to Rare, and no more", () => {
+    expect(redrawCap("common")).toBe("rare");
+    expect(redrawCap("rare")).toBe("rare");
+    expect(redrawCap("holo")).toBe("holo");
+    const r = base({ overlap: 0, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.99);
+    expect(["common", "rare"]).toContain(buildCard({ ...r, redraw: { cap: redrawCap("common") } }).rarity);
   });
 });

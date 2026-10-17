@@ -62,6 +62,9 @@ export interface CardData {
 
 /** Score thresholds, calibrated to roughly 55% Common / 30% Rare / 12% Holo / 3% Secret. */
 export const RARITY_CUTS = { rare: 55, holo: 64, secret: 74 };
+
+/** The ceiling for a card paid by a regret: the tier it replaced, except a Common gets one step of leverage, up to Rare. */
+export const redrawCap = (replaced: Rarity): Rarity => (replaced === "common" ? "rare" : replaced);
 /** Qloo popularity is a percentile and real loves cluster at 0.95+, so obscurity is scored over the top 15% only. */
 const OBSCURE_SPAN = 0.15;
 
@@ -163,7 +166,7 @@ export function buildCard(r: StyleResult): CardData {
     ...(r.overlap === undefined ? [] : [`+${pts.pairing} odd pairing: your loves share ${pc(r.overlap)} of their aesthetic tags`]),
     `+${pts.spread} spread: ${domains} ${domains === 1 ? "domain" : "domains"} across ${n} ${n === 1 ? "love" : "loves"}`,
     ...(con ? [`+${pts.tension} tension: ${seedLabel(r, con.a)} and ${seedLabel(r, con.b)} share ${pc(con.overlap)}`] : []),
-    ...(cap ? [`Second draw: held at ${{ common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[cap]}, the tier of the card it replaced`] : []),
+    ...(cap ? [`Second draw: can rank up to ${{ common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[cap]}`] : []),
   ];
   const deepCut = avgPop !== undefined && avgPop < 0.9;
 

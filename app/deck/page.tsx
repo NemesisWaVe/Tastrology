@@ -8,6 +8,7 @@ import { dissolve, playBurnSound } from "@/components/card/dissolve";
 import { HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
 import { BrandSheet } from "@/components/deck/BrandSheet";
 import { Collection } from "@/components/deck/Collection";
+import { StardustTable } from "@/components/shop/StardustTable";
 import { DailyOpponent } from "@/components/deck/DailyOpponent";
 import { DustCounter } from "@/components/deck/DustCounter";
 import { NextCard, type Me } from "@/components/deck/NextCard";
@@ -313,6 +314,13 @@ export default function DeckPage() {
 
         {!!cards?.length && !local && <Timeline cards={cards} />}
         {owner === "user" && <Collection />}
+        {owner === "user" && me?.stardust?.economy && (
+          <section className="mt-20">
+            <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">Stardust</p>
+            <h2 className="mb-8 mt-2 font-serif text-4xl italic leading-tight">What a card is worth</h2>
+            <StardustTable e={me.stardust.economy} dust={burn?.dust ?? me.stardust.dust} weekLeft={burn?.weekLeft ?? me.stardust.weekLeft} />
+          </section>
+        )}
       </main>
       {sheet && <BrandSheet code={sheet.code} card={sheet.card} open onClose={closeSheet} />}
     </div>
@@ -322,7 +330,7 @@ export default function DeckPage() {
 /** What a regret gives back: the first brings a new card, the second 50 Stardust (docs/design/regret-burn.md). */
 function regretLine(burn: DeckBurn, lastCard: boolean, me: Me | null, tier: string): string {
   const left = burn.regretsLeft ?? 0;
-  if (left >= 2) return `Let it go and make a new card from different loves. The new one is marked Second draw and can't rank above ${tier}. One more regret after this.`;
+  if (left >= 2) return `Let it go and make a new card from different loves. The new one is marked Second draw and can rank up to ${tier === "Common" ? "Rare" : tier}${tier === "Common" ? ", one step up" : ""}. One more regret after this.`;
   const days = me?.refillAt ? Math.max(1, Math.ceil((me.refillAt - Date.now()) / 86_400_000)) : null;
   const wait = days ? `Your next card comes at the new moon, in ${days} day${days === 1 ? "" : "s"}.` : "Your next card comes at the new moon.";
   return `Last regret, and it does not give you a new card: you get 50 Stardust instead. ${wait}${lastCard ? " Until then your deck will be empty." : ""}`;

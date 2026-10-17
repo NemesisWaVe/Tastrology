@@ -4,6 +4,7 @@ import { creditsOn, refillDays, wallet } from "@/lib/ledger";
 import { deckMax } from "@/lib/deckCap";
 import { deviceId, deviceIdsOn, newDevice } from "@/lib/device";
 import { dustOn, dustStatus, rates } from "@/lib/stardust";
+import { economy } from "@/lib/economy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       deckMax: deckMax(),
       // Burning (docs/design/burn.md): available to every signed-in account with a deck; dust and its rates only with credits on.
       burnOn: ddbConfigured(),
-      stardust: dOn ? { dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null, rates: rates() } : null,
+      stardust: dOn ? { dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null, rates: rates(), economy: economy() } : null,
       refCode: null,
       refs: { pending: 0, qualified: 0, needed: REFS_NEEDED },
       promo: { eligible: false, claimed: false, slotsLeft: null },
