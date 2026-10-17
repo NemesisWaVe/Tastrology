@@ -82,7 +82,8 @@ export async function deepCheck(): Promise<{ deps: Record<string, DepStatus>; de
             return r.status === "found" || r.status === "missing" || r.status;
           })
         : Promise.resolve(off()),
-    qloo: () => probe((signal) => withQlooSignal(signal, () => searchEntities("Nike", ["brand"], 1)).then(() => true)),
+    // Qloo search is often 1.5–3s cold; a tight timeout would cry wolf.
+    qloo: () => probe((signal) => withQlooSignal(signal, () => searchEntities("Nike", ["brand"], 1)).then(() => true), 6000),
     llm: () => Promise.resolve(llmConfigured() ? (llmPaused() ? { ok: false, ms: 0, note: "paused" } : { ok: true, ms: 0 }) : off()),
   };
   const names = Object.keys(checks);
