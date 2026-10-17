@@ -249,12 +249,12 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       }
       const fade = started > 0 ? sst(0, 0.9, since + 0.3) : 0.35 * sst(0, 1.5, t);
       mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
-      const bgO = String(reduce ? 1 : 1 - sst(0.9, 0.985, p));
+      const bgO = String(reduce ? 1 : 1 - sst(0.86, 0.93, p));
       glc.style.opacity = bgO;
       (st.firstElementChild as HTMLElement | null)?.style.setProperty("opacity", bgO); // the backdrop must clear for the hero
       st.querySelector<HTMLElement>(`.${s.credit}`)?.style.setProperty("opacity", bgO);
       const birth = birthRect(w, h);
-      const k = sst(0.9, 1, p);
+      const k = sst(0.84, 0.93, p);
       const dock = k > 0 ? dockRect(h) : null;
       drawStars(ctx, word, {
         w, h, t, view, mono, phone,
@@ -263,12 +263,12 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         consDim: sst(0.62, 0.76, p),
         frame: sst(0.6, 0.8, p),
         word: sst(0.66, 0.88, p),
-        fade: 1 - sst(0.95, 1, p),
+        fade: 1 - sst(0.89, 0.93, p),
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
       drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
-      root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.95, 1, p).toFixed(3));
+      root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.89, 0.93, p).toFixed(3));
     };
     const paintNow = () => {
       if (w) frame(reduce ? POSTER_P : scrollYProgress.get());
@@ -301,7 +301,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       });
       if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 || gateOpen.current ? "0" : String(sst(IMPACT + 0.2, IMPACT + 0.8, since) * (1 - sst(0.06, 0.12, p)));
       if (cueRef.current) cueRef.current.style.opacity = auto || reduce || since < 0 ? "0" : String(sst(2.4, 3, since) * (1 - sst(0.01, 0.04, p)));
-      const end = reduce ? 0.6 : 0.94;
+      const end = reduce ? 0.6 : 0.92;
       if (skipRef.current) {
         skipRef.current.style.opacity = String(1 - sst(end - 0.05, end, p));
         skipRef.current.style.pointerEvents = p < end ? "auto" : "none";

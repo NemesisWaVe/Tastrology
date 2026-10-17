@@ -262,6 +262,7 @@ export function enableSound(v: boolean): void {
 export function armSound(): void {
   if (typeof window === "undefined" || !soundOn()) return;
   setEngine({ play });
+  const events = ["pointerdown", "keydown", "touchend"];
   const unlock = () => {
     const c = ensure();
     if (c && c.state !== "running")
@@ -269,10 +270,21 @@ export function armSound(): void {
         .resume()
         .then(() => window.dispatchEvent(new Event("tastrology:unlocked")))
         .catch(() => {});
-    ["pointerdown", "keydown", "touchend"].forEach((e) => window.removeEventListener(e, unlock));
+    events.forEach((e) => window.removeEventListener(e, unlock));
   };
-  ["pointerdown", "keydown", "touchend"].forEach((e) => window.addEventListener(e, unlock));
+  const arm = () => {
+    if (!soundOn()) return;
+    events.forEach((e) => window.addEventListener(e, unlock));
+  };
+  arm();
+  if (armed) return;
+  armed = true;
+  // iOS suspends audio whenever you leave the browser: re-arm so the next tap anywhere brings it back
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && ctx && ctx.state !== "running") arm();
+  });
 }
+let armed = false;
 
 let popsOn = false;
 /** Every button and link pops, unless that click already played its own sound. Installed once. */

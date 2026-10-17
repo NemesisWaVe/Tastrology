@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { sfx } from "@/lib/sound";
-import { enableSound, soundLocked, soundOn } from "@/lib/soundEngine";
+import { armSound, enableSound, soundLocked, soundOn } from "@/lib/soundEngine";
 
 /**
  * The landing's sound invitation: while sound is off, a softly pulsing star that says the sky has a sound;
  * once on, it settles into a small breathing equalizer you can tap to mute. Synced with every other switch.
  */
-export function SoundOrb() {
+export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean }) {
   const [on, setOn] = useState<boolean | null>(null);
   const [locked, setLocked] = useState(false);
   useEffect(() => {
@@ -17,6 +17,7 @@ export function SoundOrb() {
       setLocked(soundLocked());
     };
     sync();
+    armSound();
     window.addEventListener("tastrology:sound", sync);
     const iv = setInterval(sync, 600); // notice when a click unlocks audio
     return () => {
@@ -25,6 +26,8 @@ export function SoundOrb() {
     };
   }, []);
   if (on === null) return null;
+  // the global reminder appears only while sound is on but held by the browser; the landing orb leaves that to it
+  if (onlyWhenLocked ? !locked : locked) return null;
   const toggle = () => {
     if (on && locked) {
       enableSound(true); // resume after a reload
