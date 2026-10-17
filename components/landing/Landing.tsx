@@ -150,6 +150,7 @@ function Nav({ onPick }: { onPick: () => void }) {
         </a>
         <div className="flex items-center gap-2 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
+          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">My deck</a>
           <button
             onClick={onPick}
             className="rounded-full bg-ink px-4 py-1.5 text-[13px] font-semibold text-paper transition hover:bg-accent sm:py-2"
