@@ -33,16 +33,31 @@ const SPECIMEN_DEFAULT = "neon";
  */
 export function Landing({ onStart }: { onStart: (req: AgentRequest) => void }) {
   const reduce = useReducedMotion();
+  const touch = useTouch();
   return (
     <MotionConfig reducedMotion="user">
-      <ReactLenis root options={{ lerp: 0.11, smoothWheel: !reduce }}>
-        <LandingBody onStart={onStart} />
-      </ReactLenis>
+      {touch ? (
+        // phones scroll natively: iOS momentum is already smooth, and a JS scroll loop on top of it stutters
+        <LandingBody onStart={onStart} touch />
+      ) : (
+        <ReactLenis root options={{ lerp: 0.11, smoothWheel: !reduce }}>
+          <LandingBody onStart={onStart} />
+        </ReactLenis>
+      )}
     </MotionConfig>
   );
 }
 
-function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
+/** Coarse pointer (phones, tablets): decided once on mount. */
+function useTouch() {
+  const [t, setT] = useState(false);
+  useEffect(() => {
+    setT(window.matchMedia("(pointer: coarse)").matches);
+  }, []);
+  return t;
+}
+
+function LandingBody({ onStart, touch = false }: { onStart: (req: AgentRequest) => void; touch?: boolean }) {
   const { result, events, running, error, run } = useAgentRun();
   const [specKey, setSpecKey] = useState(SPECIMEN_DEFAULT);
   const [retried, setRetried] = useState(false);
@@ -96,7 +111,8 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
 
   return (
     <div className={`${s.root} relative isolate min-h-screen text-ink`}>
-      <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.45} />
+      {/* phones: a still sky (drawn once) so scrolling never fights a full-screen animation */}
+      <Sky f={sky} reduce={reduce || touch} drawn fixed quiet dim={0.45} />
       <div className={s.grain} aria-hidden />
       <Nav onPick={() => go("pick")} hidden={introOn} />
       <Intro onActive={setIntroOn} />
