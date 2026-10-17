@@ -134,3 +134,6 @@ button:disabled {
 img {
   -webkit-user-drag: none;
 }
+
+/* the intro gate already asks about sound */
+html[data-gate] [data-orb] { opacity: 0; pointer-events: none; }
