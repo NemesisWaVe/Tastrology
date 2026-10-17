@@ -7,7 +7,7 @@
  */
 
 export type SkyView = { cx: number; vTop: number; ww: number; wh: number; hz: number };
-export type Touch = { x: number; y: number; t: number; amp: number; name?: string };
+export type Touch = { x: number; y: number; t: number; amp: number; name?: string; user?: boolean };
 
 export const SKY_AR = 1500 / 1167; // sky.webp width / height
 

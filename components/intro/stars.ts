@@ -362,7 +362,7 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
   ctx.globalCompositeOperation = "source-over";
 }
 
-type Drop = { x: number; y: number; t: number; amp: number; name?: string };
+type Drop = { x: number; y: number; t: number; amp: number; name?: string; user?: boolean };
 
 /** The ripples carry taste: each named drop's love rides the near edge of its ring, and rings that meet are joined. */
 export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: number, hz: number, mono: string, phone: boolean, fade: number) {
@@ -396,6 +396,42 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
       star(ctx, A.x, A.y, 26, a, [220, 255, 180], true);
       star(ctx, B.x, B.y, 26, a, [235, 200, 255], true);
     }
+  // a visitor's drop sprouts its own little constellation: 5 stars in a jagged chain, drawn in ~0.35s
+  for (const d of named) {
+    if (!d.user) continue;
+    const age = now - d.t;
+    const a = (1 - sst(2.6, 3.8, age)) * fade;
+    if (a <= 0) continue;
+    let seed = Math.floor(d.t * 1000) % 2147483646 || 1;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const pts: [number, number][] = [[d.x, d.y]];
+    let ang = rnd() * Math.PI * 2;
+    for (let k = 0; k < 4; k++) {
+      ang += (rnd() - 0.5) * 2.4; // sharp turns, like a real asterism
+      const len = (phone ? 26 : 34) + rnd() * (phone ? 22 : 30);
+      const [px, py] = pts[pts.length - 1];
+      pts.push([px + Math.cos(ang) * len, py + Math.sin(ang) * len * 0.55]);
+    }
+    const prog = Math.min(1, age / 0.35) * 4;
+    ctx.globalAlpha = a * 0.75;
+    ctx.strokeStyle = "rgba(205,230,255,1)";
+    ctx.lineWidth = 0.8;
+    ctx.shadowColor = "rgba(198,255,61,0.7)";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let k = 1; k <= Math.min(4, Math.ceil(prog)); k++) {
+      const fr = Math.min(1, prog - (k - 1));
+      ctx.lineTo(pts[k - 1][0] + (pts[k][0] - pts[k - 1][0]) * fr, pts[k - 1][1] + (pts[k][1] - pts[k - 1][1]) * fr);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    pts.forEach(([x, y], k) => {
+      const on = sst(k - 0.2, k + 0.1, prog);
+      const tw = 0.8 + 0.2 * Math.sin(now * (3 + k) + k);
+      star(ctx, x, y, (k === 0 ? 30 : 16 + (k % 2) * 8) * tw, a * on, PAL[(k * 2) % PAL.length], k === 0);
+    });
+  }
   ctx.font = `500 ${phone ? 10 : 11.5}px ${mono}`;
   ctx.textAlign = "center";
   for (const d of named) {

@@ -106,6 +106,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
   const capRef = useRef<(HTMLSpanElement | null)[]>([]);
   const cueRef = useRef<HTMLDivElement>(null);
   const skipRef = useRef<HTMLButtonElement>(null);
+  const hintRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<((withSound: boolean) => void) | null>(null);
   const reduce = Boolean(useReducedMotion());
   const [gate, setGate] = useState<"hidden" | "open" | "closing">("hidden");
@@ -162,7 +163,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     // ---- visitor ripples on the water ----
     const touches: Touch[] = [];
     const parT = { x: 0, y: 0 }, par = { x: 0, y: 0 };
-    let loveI = 0, autoDrops = 0;
+    let loveI = 0, autoDrops = 0, userDropped = false;
     // six shader slots: cursor ripples give way before named drops
     const trim = () => {
       while (touches.length > 6) {
@@ -183,7 +184,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const now = clock(), down = e.type === "pointerdown";
       if (!down && (Math.hypot(x - lastT.x, y - lastT.y) < 70 || now - lastT.t < 0.22)) return;
       lastT = { x, y, t: now };
-      touches.unshift(down ? { x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length] } : { x, y, t: now, amp: 0.6 });
+      if (down) userDropped = true;
+      touches.unshift(down ? { x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length], user: true } : { x, y, t: now, amp: 0.6 });
       trim();
       if (down) sfx("ripple", { i: (touches.length * 2) % 7, gain: 0.6 });
     };
@@ -272,6 +274,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         el.style.opacity = c[i].toFixed(3);
         el.style.transform = `translateY(${((1 - c[i]) * 6).toFixed(2)}px)`;
       });
+      if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 ? "0" : String(sst(IMPACT + 3, IMPACT + 3.8, since) * (1 - sst(0.06, 0.12, p)));
       if (cueRef.current) cueRef.current.style.opacity = auto || reduce || since < 0 ? "0" : String(sst(2.4, 3, since) * (1 - sst(0.01, 0.04, p)));
       const end = reduce ? 0.6 : 0.94;
       if (skipRef.current) {
@@ -417,6 +420,13 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
             </span>
           ))}
         </p>
+        <div ref={hintRef} className={s.hint} aria-hidden>
+          <svg viewBox="0 0 40 40" width="34" height="34">
+            <path d="M8 6 C 14 18, 22 24, 32 30" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeDasharray="2 4" />
+            <path d="M24 31 L32 30 L30 22" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>tap the water · make your own constellation</span>
+        </div>
         <div ref={cueRef} className={s.cue} aria-hidden>
           scroll
           <i />

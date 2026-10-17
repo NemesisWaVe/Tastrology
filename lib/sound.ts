@@ -16,7 +16,12 @@ export type Sfx =
   | "reveal" // rarity reveal
   | "burn" // burn crackle
   | "collide" // VS galaxies collide
-  | "whoosh"; // panel / sheet open
+  | "whoosh" // panel / sheet open
+  | "pop" // any button or link
+  | "print" // receipt print head chatter
+  | "beep" // checkout scan
+  | "stamp" // rubber stamp thunk
+  | "tear"; // paper tearing off
 
 export type SfxOpts = { i?: number; gain?: number };
 

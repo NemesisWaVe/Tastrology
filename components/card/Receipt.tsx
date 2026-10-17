@@ -1,5 +1,6 @@
 "use client";
 
+import { sfx as playSfx } from "@/lib/sound";
 import { motion, useInView, useReducedMotion, type Variants } from "motion/react";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
@@ -365,35 +366,18 @@ function CertStamp() {
   );
 }
 
-/** Tiny synthesized register sounds (WebAudio, no files). Silent until the user turns sound on. */
+/** Register sounds, through the site-wide sound bus (silent unless sound is on). */
 function useRegisterSound() {
-  const on = useRef(false);
-  const ac = useRef<AudioContext | null>(null);
-  const tone = (f: number, dur: number, type: OscillatorType, gain: number, to?: number) => {
-    const a = ac.current;
-    if (!on.current || !a) return;
-    const o = a.createOscillator();
-    const g = a.createGain();
-    const t = a.currentTime;
-    o.type = type;
-    o.frequency.setValueAtTime(f, t);
-    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
-    g.gain.setValueAtTime(gain, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(a.destination);
-    o.start(t);
-    o.stop(t + dur + 0.02);
-  };
   return {
-    enable(v: boolean) {
-      on.current = v;
-      if (v && !ac.current) ac.current = new AudioContext();
+    click: () => playSfx("tick", { gain: 0.6 }),
+    // the print head chatters for as long as the line takes to print
+    whirr: (ms: number) => {
+      for (let t = 0; t < ms; t += 110) setTimeout(() => playSfx("print", { gain: 0.8 }), t);
     },
-    click: () => tone(2600, 0.012, "square", 0.02),
-    whirr: (ms: number) => tone(150, ms / 1000, "sawtooth", 0.01, 190),
-    beep: () => tone(1860, 0.08, "square", 0.022),
-    thunk: () => tone(120, 0.2, "sine", 0.16, 42),
-    cut: () => tone(900, 0.06, "sawtooth", 0.03, 300),
+    beep: () => playSfx("beep"),
+    thunk: () => playSfx("stamp"),
+    cut: () => playSfx("tear"),
+    fibre: () => playSfx("tick", { gain: 0.5 }),
   };
 }
 
@@ -418,7 +402,6 @@ export function ReceiptPrinter({ children, total }: { children: ReactNode; total
   const blade = useRef<HTMLDivElement>(null);
   const inView = useInView(box, { once: true, amount: 0.2 });
   const [phase, setPhase] = useState<"idle" | "printing" | "done" | "torn">("idle");
-  const [sound, setSound] = useState(false);
   const sfx = useRegisterSound();
   const skip = useRef(false);
   const [pull, setPull] = useState(0);
@@ -577,6 +560,7 @@ export function ReceiptPrinter({ children, total }: { children: ReactNode; total
     if (!d) return;
     const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
     setPull(Math.min(1, dist / 80));
+    if (dist > 12) sfx.fibre();
     if (dist > 80) {
       drag.current = null;
       setPull(0);
@@ -652,18 +636,6 @@ export function ReceiptPrinter({ children, total }: { children: ReactNode; total
                   skip
                 </button>
               )}
-              <button
-                type="button"
-                aria-pressed={sound}
-                aria-label={sound ? "Mute printer sounds" : "Play printer sounds"}
-                onClick={() => {
-                  sfx.enable(!sound);
-                  setSound(!sound);
-                }}
-                className="grid h-6 w-6 place-items-center rounded-full text-[12px] text-white/70 hover:bg-white/10"
-              >
-                {sound ? "🔊" : "🔇"}
-              </button>
               <motion.i
                 className="block h-2 w-2 rounded-full"
                 style={{ background: printing ? "#fbbf24" : "#a3e635", boxShadow: `0 0 8px ${printing ? "#fbbf24" : "#a3e635"}` }}
