@@ -372,7 +372,7 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
   ctx.globalCompositeOperation = "lighter";
   const ring = (d: Drop) => {
     const age = now - d.t;
-    return { age, rx: age * 260, ry: (age * 260) / 2.6, a: sst(0, 0.35, age) * (1 - sst(2.4, 3.6, age)) * fade };
+    return { age, rx: age * 260, ry: (age * 260) / 2.6, a: sst(0, 0.35, age) * (1 - sst(1.4, 2.3, age)) * fade };
   };
   // where two rings meet, a line of light joins their centres
   for (let i = 0; i < named.length; i++)
