@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/components/site/Mark";
 import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sky } from "@/components/reveal/Sky";
@@ -383,7 +384,8 @@ export default function Home() {
     <div className="relative isolate min-h-screen">
       {sky && <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.4} />}
       <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-3 py-3 backdrop-blur-md sm:px-6">
-        <button onClick={reset} className="font-display text-base sm:text-lg font-bold tracking-tight">
+        <button onClick={reset} className="flex items-center gap-2 font-display text-base sm:text-lg font-bold tracking-tight">
+          <Mark size={20} />
           {BRAND.name}
         </button>
         <span className="flex items-center gap-2 sm:gap-4">
