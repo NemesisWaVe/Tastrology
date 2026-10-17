@@ -9,7 +9,11 @@ export const HUMAN_COOKIE = "tm_h";
 const HUMAN_TTL_S = 30 * 60;
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
-export const turnstileOn = () => Boolean(process.env.TURNSTILE_SECRET_KEY);
+/**
+ * On only when both halves are set. A secret without the public site key would ask every browser for a token it has
+ * no way to produce, locking out every fresh reading, so a half-configured pair fails open (and /api/health flags it).
+ */
+export const turnstileOn = () => Boolean(process.env.TURNSTILE_SECRET_KEY && process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 const sign = (exp: string) => createHmac("sha256", `human|${process.env.TURNSTILE_SECRET_KEY}`).update(exp).digest("base64url");
 

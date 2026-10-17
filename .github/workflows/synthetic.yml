@@ -1,0 +1,64 @@
+name: synthetic
+
+# Outside-in checks of the live site every 15 minutes. Secrets: SITE_URL (e.g. https://tastrology.vercel.app, no
+# trailing slash) and HEALTH_TOKEN (same value as the Vercel env var). Optional repo variable CARD_CODE: a known
+# minted card code to look up.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synthetic
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE_URL: ${{ secrets.SITE_URL }}
+      HEALTH_TOKEN: ${{ secrets.HEALTH_TOKEN }}
+      CARD_CODE: ${{ vars.CARD_CODE }}
+    steps:
+      - name: Deep health check
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 \
+            -H "authorization: Bearer ${HEALTH_TOKEN}" "${SITE_URL}/api/health?deep=1")
+          cat health.json; echo
+          test "$code" = "200" || { echo "::error::health returned HTTP $code"; exit 1; }
+          jq -e '.ok == true and ((.deps // {}) | length > 0) and ([.deps[] | .ok] | all)' health.json > /dev/null \
+            || { echo "::error::a dependency is not ok"; exit 1; }
+
+      - name: Persona reading streams a result
+        run: |
+          set -euo pipefail
+          # personaRequest(PERSONAS[0]) from lib/personas.ts (The Soft Melancholic). Personas skip sign-in and Turnstile.
+          body='{"seeds":[{"id":"","name":"Phoebe Bridgers","kind":"artist"},{"id":"","name":"Past Lives","kind":"movie"},{"id":"","name":"Norwegian Wood","kind":"book"},{"id":"","name":"Normal People","kind":"tv_show"},{"id":"","name":"Shakespeare and Company","kind":"place"}]}'
+          run_id="synthetic-$(date +%s)"
+          deadline=$(( $(date +%s) + 90 ))
+          while :; do
+            left=$(( deadline - $(date +%s) ))
+            [ "$left" -gt 0 ] || { echo "::error::no result line within 90s"; exit 1; }
+            code=$(curl -sS -N -o agent.ndjson -w '%{http_code}' --max-time "$left" -X POST \
+              -H 'content-type: application/json' -H "x-run-id: ${run_id}" \
+              --data "$body" "${SITE_URL}/api/agent" || true)
+            if [ "$code" = "202" ]; then echo "still running on the server, polling"; sleep 4; continue; fi
+            break
+          done
+          echo "HTTP $code, $(wc -l < agent.ndjson) lines"
+          test "$code" = "200" || { head -c 500 agent.ndjson; echo "::error::agent returned HTTP $code"; exit 1; }
+          if grep -q '"type":"error"' agent.ndjson; then grep '"type":"error"' agent.ndjson | head -c 500; fi
+          grep -q '"type":"result"' agent.ndjson || { tail -c 500 agent.ndjson; echo "::error::no result line"; exit 1; }
+
+      - name: Card lookup
+        if: env.CARD_CODE != ''
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o card.json -w '%{http_code}' --max-time 20 "${SITE_URL}/api/card?code=${CARD_CODE}")
+          test "$code" = "200" || { cat card.json; echo "::error::card lookup returned HTTP $code"; exit 1; }
+          jq -e '.card != null' card.json > /dev/null
