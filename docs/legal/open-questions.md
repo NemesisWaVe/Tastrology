@@ -163,6 +163,39 @@ A free student beta with no payments and no prints is low-risk if the site **say
 - Check the university's IP policy and the hackathon eligibility rules.
 - Form an LLP or Pvt Ltd before the first rupee is taken.
 
+## Burn rewards (2026-10-17)
+
+**Verdict on "a secret-rare burn earns ₹200": don't do it.** Once readings cost credits, cash for an outcome the user can't predict means paying a stake in the hope of winning money. That is an "online money game" under the Online Gaming Act 2025, which bans offering, advertising and payments for it. It also has the chance-plus-stake shape the Public Gambling Act and state laws target. Determinism doesn't help, because users can't predict rarity. Even while readings are free, a ₹ figure gives cards cash value, contradicting Terms §4. Never express rewards in rupees.
+
+**Safe structure: "Stardust"**
+- Stardust is an in-app balance that **only buys Tastrology readings**.
+- **No cash value.** It can't be bought, sold, transferred, gifted, withdrawn or refunded, and it can't be exchanged for credits that can be.
+- **Closed system:** spendable only on our own service, so it stays outside RBI's prepaid-instrument licensing. Never let it pay third parties.
+- **Terms wording (add to Terms §10):** *"Stardust is a free in-app reward that can only be used for Tastrology readings. It has no cash value, is not your property, and can't be bought, sold, transferred, withdrawn or refunded. Unused Stardust expires after [12] months without account activity. We may change how much Stardust a burn earns or a reading costs. We'll give [14] days' notice, and changes won't reduce Stardust you already have."*
+- **Burns are permanent.** Use a plain confirm dialog with no guilt-trip copy (confirm-shaming is a dark pattern). Burning also kills the card's public link.
+
+**Rates and caps**
+- Use fixed, published rates per tier. For example, Common 1, Rare 2, Holo 4, Secret 8 dust, where a reading costs 10 dust.
+- **Rule 1: a burn never returns as much as a reading costs.**
+- **Rule 2:** cap Stardust earned per account at [20] per week. This stops farming with throwaway accounts.
+
+**Once paid credits exist**
+- **Cards minted with paid credits burn at one flat rate, whatever their rarity.** Rarity-scaled dust applies only to cards minted with free credits.
+- Keep Rule 1. Never let dust buy paid products other than readings, prints or anything physical. Never sell dust.
+- Publish the tier distribution (about 55/30/12/3%), so rarity isn't sold as a jackpot.
+- Have counsel check the Online Gaming Act rules before going live.
+
+**Follow-up: dust as a discount on paid packs**
+- **Verdict:** still safe, with structure. A non-cash discount on our own products is ordinary loyalty-points practice. It stays outside RBI's prepaid-instrument rules as long as it's closed-system, can't be cashed and can't be transferred. Gaming risk needs stake + chance + gain. The rates already break that chain: paid mints burn for a flat 10 dust (a tenth of a reading), and rarity-scaled dust comes only from free mints.
+- **Rules to keep:**
+  1. Discount only, never cash, refunds in cash, or transfer. Only on our own digital packs and credits, not prints, shipping or third-party goods.
+  2. A fixed published value (100 dust = ₹[x]), capped at **50% of the order**. It can't make an order free.
+  3. Dust is fungible at one rate. Rarity dust is never worth more per unit than flat dust.
+  4. The weekly cap (150) stays.
+  5. Buying with a dust discount earns no new dust beyond the flat paid-mint rate, so there's no loop.
+  6. Invoices show the discount; GST applies to the net price (ask the CA).
+- **T&C wording:** *"You can use Stardust for a discount of up to 50% on Tastrology packs and credits, at the rate shown at checkout. Stardust is not money. It can't be exchanged for cash, refunded, transferred, or used on prints, shipping or anyone else's products. If you get a refund for an order, the Stardust you used is returned to your balance, not paid out in cash."*
+
 ## E. Sources consulted
 
 Qloo and hackathon
