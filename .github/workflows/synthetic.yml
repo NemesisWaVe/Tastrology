@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      SITE_URL: ${{ secrets.SITE_URL }}
+      SITE_URL: ${{ secrets.SITE_URL || vars.SITE_URL || 'https://tastrology.vercel.app' }}
       HEALTH_TOKEN: ${{ secrets.HEALTH_TOKEN }}
       CARD_CODE: ${{ vars.CARD_CODE }}
     steps:
