@@ -382,7 +382,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         if (cross(0.86)) sfx("form");
       }
       const now = clock();
-      while (touches.length && now - touches[touches.length - 1].t > 4) touches.pop();
+      while (touches.length && now - touches[touches.length - 1].t > (touches[touches.length - 1].user ? 5.2 : 4)) touches.pop();
       const settled = p >= 0.999 && prevP >= 0.999 && touches.length === 0;
       try {
         if (!settled || !idle) frame(p);

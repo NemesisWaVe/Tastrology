@@ -12,6 +12,9 @@ export function SoundToggle({ className = "" }: { className?: string }) {
     setOn(soundOn());
     installClickPops();
     armSound();
+    const sync = () => setOn(soundOn());
+    window.addEventListener("tastrology:sound", sync);
+    return () => window.removeEventListener("tastrology:sound", sync);
   }, []);
 
   const toggle = () => {

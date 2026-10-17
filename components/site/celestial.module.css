@@ -1,0 +1,180 @@
+/* Shop and deck: floating glass panels, celestial product art, starlit ghost slots. */
+
+.panel {
+  position: relative;
+  border-radius: 28px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 30px 80px -40px rgba(0, 0, 0, 0.9);
+  animation: float 7s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s;
+}
+.panel::before {
+  /* holo edge, lit on hover */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--a, 0deg), #c6ff3d, #8fd8ff, #d875ff, #ffd36b, #c6ff3d);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.18;
+  transition: opacity 0.4s;
+  animation: spin 9s linear infinite;
+  pointer-events: none;
+}
+.panel:hover {
+  transform: translateY(-6px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 40px 90px -30px rgba(198, 255, 61, 0.25);
+}
+.panel:hover::before { opacity: 0.9; }
+.panel:hover .art { transform: scale(1.08) rotate(-4deg); filter: brightness(1.25); }
+@property --a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes spin { to { --a: 360deg; } }
+@keyframes float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -7px; }
+}
+
+.art {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.4s;
+}
+
+/* a single bright star */
+.star::before, .star::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+}
+.star::before {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 22%, #e6ffb0 40%, rgba(198, 255, 61, 0.25) 62%, transparent 72%);
+  box-shadow: 0 0 40px 12px rgba(198, 255, 61, 0.35);
+  animation: pulse 3s ease-in-out infinite;
+}
+.star::after {
+  width: 96px;
+  height: 96px;
+  background:
+    linear-gradient(90deg, transparent 0 46%, rgba(255, 255, 255, 0.85) 50%, transparent 54% 100%) center / 100% 2px no-repeat,
+    linear-gradient(0deg, transparent 0 46%, rgba(255, 255, 255, 0.85) 50%, transparent 54% 100%) center / 2px 100% no-repeat;
+  mask: radial-gradient(circle, #000 0 18%, transparent 62%);
+  animation: pulse 3s ease-in-out infinite;
+}
+
+/* an eclipse: dark disc, corona */
+.eclipse::before {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  background: #050508;
+  box-shadow: 0 0 0 2px rgba(255, 245, 220, 0.9), 0 0 24px 6px rgba(255, 220, 150, 0.6), 0 0 60px 18px rgba(216, 117, 255, 0.35);
+  animation: pulse 4s ease-in-out infinite;
+}
+.eclipse::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent, rgba(255, 230, 180, 0.35), transparent 30%, rgba(216, 117, 255, 0.3), transparent 60%);
+  filter: blur(6px);
+  animation: turn 12s linear infinite;
+}
+
+/* a ringed planet */
+.planet::before {
+  content: "";
+  position: absolute;
+  inset: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #e9ffc4, #8fd8ff 38%, #4a3a8f 72%, #140f2a);
+  box-shadow: inset -10px -12px 20px rgba(0, 0, 0, 0.6), 0 0 30px rgba(143, 216, 255, 0.35);
+}
+.planet::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 40px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(214, 255, 140, 0.7);
+  border-top-color: transparent;
+  transform: rotate(-16deg);
+  box-shadow: 0 0 10px rgba(198, 255, 61, 0.4);
+}
+
+/* a holo print, hovering */
+.print::before {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 10px;
+  width: 46px;
+  height: 64px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #c6ff3d, #8fd8ff 40%, #d875ff 70%, #ffd36b);
+  box-shadow: 0 12px 30px rgba(143, 216, 255, 0.35);
+  transform: perspective(200px) rotateY(-24deg) rotateX(8deg);
+  animation: bob 4s ease-in-out infinite;
+}
+.print::after {
+  content: "";
+  position: absolute;
+  left: 22px;
+  bottom: 6px;
+  width: 54px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(rgba(143, 216, 255, 0.5), transparent 70%);
+  animation: shadow 4s ease-in-out infinite;
+}
+
+@keyframes pulse { 50% { opacity: 0.75; scale: 0.94; } }
+@keyframes turn { to { rotate: 360deg; } }
+@keyframes bob { 50% { translate: 0 -6px; } }
+@keyframes shadow { 50% { scale: 0.8; opacity: 0.6; } }
+
+/* deck: ghost slots traced in starlight */
+.slot {
+  position: relative;
+  aspect-ratio: 63 / 88;
+  width: 100%;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 40%, rgba(140, 110, 255, 0.08), transparent 70%);
+}
+.slot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--a, 0deg), rgba(198, 255, 61, 0.9), rgba(143, 216, 255, 0.15), rgba(216, 117, 255, 0.9), rgba(143, 216, 255, 0.15), rgba(198, 255, 61, 0.9));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin 6s linear infinite;
+}
+.slot i {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  translate: -50% -50%;
+  background: radial-gradient(circle, #fff 0 15%, rgba(214, 255, 140, 0.5) 35%, transparent 70%);
+  animation: pulse 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .panel::before, .slot::before, .art::before, .art::after, .slot i { animation: none !important; }
+}

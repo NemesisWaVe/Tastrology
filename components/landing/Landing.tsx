@@ -15,6 +15,7 @@ import { skyState } from "@/components/reveal/traceModel";
 import { BringYourOwn } from "./BringYourOwn";
 import { AuthNav } from "@/components/auth/AuthNav";
 import { SoundToggle } from "@/components/site/SoundToggle";
+import { SoundOrb } from "@/components/site/SoundOrb";
 import { Footer } from "./Footer";
 import { Hero } from "./Hero";
 import { Marquee } from "./Marquee";
@@ -99,6 +100,7 @@ function LandingBody({ onStart }: { onStart: (req: AgentRequest) => void }) {
       <div className={s.grain} aria-hidden />
       <Nav onPick={() => go("pick")} hidden={introOn} />
       <Intro onActive={setIntroOn} />
+      <SoundOrb />
 
       <main>
         <Hero
