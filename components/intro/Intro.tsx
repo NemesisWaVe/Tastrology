@@ -278,14 +278,14 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const cw = st.clientWidth, ch = st.clientHeight;
       if (!cw || !ch) return;
       phone = cw < 768;
-      const cap = Math.min(window.devicePixelRatio || 1, phone ? 2 : 1.75);
+      const cap = Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.75);
       if (cw === w && Math.abs(ch - h) < 2 && fx.width === Math.round(cw * cap)) return;
       w = cw;
       h = ch;
       fx.width = Math.round(w * cap);
       fx.height = Math.round(h * cap);
       ctx.setTransform(cap, 0, 0, cap, 0, 0);
-      mirror?.resize(w, h, Math.min(cap, Math.sqrt(3.2e6 / (w * h))));
+      mirror?.resize(w, h, phone ? 1 : Math.min(cap, Math.sqrt(3.2e6 / (w * h)))); // phones: the water at 1x is plenty
       paintNow();
     };
 
@@ -377,8 +377,15 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     inputs.forEach((e) => window.addEventListener(e, onInput, { passive: true }));
 
     let raf = 0, visible = true, idle = false, playedImpact = false, prevP = -1;
-    const tick = () => {
+    let lastFrame = 0;
+    const tick = (ts: number) => {
       raf = 0;
+      // phones render the intro at ~30fps: half the GPU work, still smooth for water and stars
+      if (phone && ts - lastFrame < 31) {
+        if (visible && !document.hidden) raf = requestAnimationFrame(tick);
+        return;
+      }
+      lastFrame = ts;
       let p = scrollYProgress.get();
       // scrolling past the gate counts as "quietly"
       if (p > 0.01 && started < 0) {

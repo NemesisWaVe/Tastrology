@@ -57,12 +57,13 @@ export function SkyBackdrop({ dim = 0.55, focus = [0.5, 0.42] }: { dim?: number;
           ctx.drawImage(img, ox, oy, iw, ih);
           ctx.globalCompositeOperation = "lighter";
           const t = now / 1000;
-          for (let i = 0; i < stars.length; i++) {
+          const nS = w < 768 ? 160 : stars.length;
+          for (let i = 0; i < nS; i++) {
             const [u, v] = stars[i];
             const x = ox + u * iw, y = oy + v * ih;
             if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
             const tw = Math.pow(0.5 + 0.5 * Math.sin(t * (0.6 + (i % 7) * 0.35) + i * 12.9898), 6);
-            const rank = 1 - i / stars.length;
+            const rank = 1 - i / nS;
             const z = (5 + rank * 8 + tw * 8) * (reduce ? 0.8 : 1);
             ctx.globalAlpha = (0.15 + 0.85 * tw) * (0.3 + 0.7 * rank) * dim * 1.4;
             ctx.drawImage(sprite, x - z / 2, y - z / 2, z, z);

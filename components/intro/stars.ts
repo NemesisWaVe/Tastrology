@@ -198,11 +198,12 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
 
   // ---- the photo's own brightest stars, alive: they scintillate in the sky and glint in the water ----
   const H0 = view.hz * h;
-  for (let i = 0; i < BRIGHT_LIST.length; i++) {
+  const nB = f.phone ? 160 : BRIGHT_LIST.length; // brightest first
+  for (let i = 0; i < nB; i++) {
     const [u, v, r, g, b] = BRIGHT_LIST[i];
     const [x, y] = skyToScreen(view, u, v, w, h);
     if (x < -20 || x > w + 20) continue;
-    const rank = 1 - i / BRIGHT_LIST.length;
+    const rank = 1 - i / nB;
     // scintillation: mostly calm, with quick bright flickers
     const ph = i * 12.9898, sp = 0.6 + (i % 7) * 0.35;
     const tw = Math.pow(0.5 + 0.5 * Math.sin(t * sp + ph), 6) * 0.9 + 0.1 * (0.5 + 0.5 * Math.sin(t * 7.3 + ph * 3));
