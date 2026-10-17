@@ -182,7 +182,7 @@ function Graph({ v }: { v: View }) {
   const by = ys(brands.length);
 
   return (
-    <div ref={ref} className="relative rounded-[28px] border border-line bg-[radial-gradient(80%_70%_at_50%_50%,rgba(198,255,61,0.05),transparent_70%)] p-4 sm:p-6">
+    <div ref={ref} className="relative bg-[radial-gradient(80%_70%_at_50%_50%,rgba(198,255,61,0.05),transparent_70%)] p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-3">
         <span>Your loves</span>
         <span>Brands · affinity</span>
@@ -388,7 +388,7 @@ function Split({ v }: { v: View }) {
   const tb = typeOf(b.tags[0] ?? "Moon");
 
   return (
-    <div ref={ref} className="relative overflow-hidden rounded-[28px] border border-line p-5 sm:p-8">
+    <div ref={ref} className="relative overflow-hidden p-5 sm:p-8">
       <div className="relative mx-auto flex h-[240px] max-w-[520px] items-center justify-center sm:h-[300px]">
         <motion.div
           className="absolute grid aspect-square w-[52%] place-items-center rounded-full mix-blend-screen"
