@@ -30,7 +30,7 @@ export function SoundToggle({ className = "" }: { className?: string }) {
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? "Turn sound off" : "Turn sound on"}
-      className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] transition hover:text-ink ${on ? "text-accent" : "text-ink-2"} ${className}`}
+      className={`inline-flex shrink-0 whitespace-nowrap min-h-11 min-w-11 items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] transition hover:text-ink ${on ? "text-accent" : "text-ink-2"} ${className}`}
     >
       <span aria-hidden className="flex h-3 items-end gap-[2px]">
         {[0, 1, 2].map((k) => (
@@ -44,7 +44,7 @@ export function SoundToggle({ className = "" }: { className?: string }) {
           />
         ))}
       </span>
-      <span>Sound</span>
+      <span className="hidden sm:inline">Sound</span>
       <style>{`@keyframes sound-eq{from{transform:scaleY(.25)}to{transform:scaleY(1)}}@media (prefers-reduced-motion:reduce){[aria-pressed] span[style*="sound-eq"]{animation:none!important}}`}</style>
     </button>
   );

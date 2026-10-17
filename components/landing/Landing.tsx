@@ -154,17 +154,17 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
             <span className="absolute inset-[3px] rounded-full bg-paper" />
             <span className="absolute inset-[6px] rounded-full bg-accent" />
           </span>
-          <span className="font-display text-[17px] font-bold tracking-[-0.03em]">{BRAND.name}</span>
+          <span className="whitespace-nowrap font-display text-[17px] font-bold tracking-[-0.03em]">{BRAND.name}</span>
         </a>
         <div className="flex items-center gap-2 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
           <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">Shop</a>
-          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">My deck</a>
+          <a href="/deck" className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink"><span className="hidden sm:inline">My </span>Deck</a>
           <SoundToggle />
           <AuthNav />
           <button
             onClick={onPick}
-            className="rounded-full bg-ink px-4 py-1.5 text-[13px] font-semibold text-paper transition hover:bg-accent sm:py-2"
+            className="shrink-0 whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-semibold text-paper transition hover:bg-accent sm:px-4 sm:py-2"
           >
             Get your sign
           </button>

@@ -2,6 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { ClerkBridge } from "@/components/auth/ClerkBridge";
+import { SoundOrb } from "@/components/site/SoundOrb";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
@@ -24,7 +25,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   if (!ACCOUNTS) {
     return (
       <html lang="en">
-        <body className={fonts}>{children}</body>
+        <body className={fonts}>
+          {children}
+          <SoundOrb onlyWhenLocked />
+        </body>
       </html>
     );
   }
@@ -33,6 +37,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <html lang="en">
         <body className={fonts}>
           {children}
+          <SoundOrb onlyWhenLocked />
           <ClerkBridge />
         </body>
       </html>
