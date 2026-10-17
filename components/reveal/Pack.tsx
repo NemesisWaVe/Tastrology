@@ -99,6 +99,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
       return;
     }
     pt.set(1);
+    sfx("tear");
     animate(fl, 1, { type: "spring", stiffness: 700, damping: 28 });
     await sleep(120);
     navigator.vibrate?.([34, 18, 70]);
@@ -156,6 +157,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     if (bucket > d.tick) {
       d.tick = bucket;
       navigator.vibrate?.(5 + bucket * 2);
+      sfx("tick", { gain: 0.5 + bucket * 0.15 }); // the foil creaks as it gives
     }
     if (raw >= 1) {
       drag.current = null;

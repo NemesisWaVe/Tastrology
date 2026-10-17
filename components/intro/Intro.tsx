@@ -214,7 +214,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       par.y += (parT.y - par.y) * 0.04;
       const view = viewAt(p, w, h, par);
       // after the first drop, more fall, each one a real love; they stop once we look up
-      const due = [IMPACT + 1.2, IMPACT + 2.1, IMPACT + 3.0, IMPACT + 4.1, IMPACT + 5.3];
+      const due = [IMPACT + 1.8, IMPACT + 2.7, IMPACT + 3.6, IMPACT + 4.7, IMPACT + 5.9];
       if (since > 0 && autoDrops < due.length && since >= due[autoDrops] && p < 0.2) {
         const H = view.hz * h, side = autoDrops % 2 ? 1 : -1;
         const x = w * (0.5 + side * (0.12 + 0.18 * ((autoDrops * 0.37) % 1))), y = H + (h - H) * (0.25 + 0.4 * ((autoDrops * 0.61) % 1));
@@ -274,7 +274,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         el.style.opacity = c[i].toFixed(3);
         el.style.transform = `translateY(${((1 - c[i]) * 6).toFixed(2)}px)`;
       });
-      if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 ? "0" : String(sst(IMPACT + 3, IMPACT + 3.8, since) * (1 - sst(0.06, 0.12, p)));
+      if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 ? "0" : String(sst(IMPACT + 0.2, IMPACT + 0.8, since) * (1 - sst(0.06, 0.12, p)));
       if (cueRef.current) cueRef.current.style.opacity = auto || reduce || since < 0 ? "0" : String(sst(2.4, 3, since) * (1 - sst(0.01, 0.04, p)));
       const end = reduce ? 0.6 : 0.94;
       if (skipRef.current) {
@@ -330,8 +330,9 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     }
 
     // First visit: the gate (sound or quiet). Returning visitors: no gate, the beats auto-advance to the hero.
-    let auto = store.get() && window.scrollY < 10;
-    if (auto) start(soundOn());
+    let auto = false; // never scroll on the visitor's behalf
+    const returning = store.get() && window.scrollY < 10;
+    if (returning) start(soundOn());
     else if (window.scrollY < 10) setGate("open");
     else start(false);
     const stopAuto = () => {
