@@ -238,6 +238,7 @@ export function Sky({
   quiet = false,
   travel = false,
   pulse = 0,
+  nameless = false,
 }: {
   f: Folded;
   anchor?: RefObject<HTMLElement | null>;
@@ -251,10 +252,14 @@ export function Sky({
   travel?: boolean;
   /** Bumped on every real data beat: the flight surges briefly, then settles. */
   pulse?: number;
+  /** Unlabelled star patterns (no captions), e.g. behind the sealed pack so nothing is given away. */
+  nameless?: boolean;
 }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const travelRef = useRef(travel);
   travelRef.current = travel;
+  const namelessRef = useRef(nameless);
+  namelessRef.current = nameless;
   const surgeAt = useRef(-1e9);
   const lastPulse = useRef(pulse);
   if (pulse !== lastPulse.current) {
@@ -615,7 +620,7 @@ export function Sky({
         });
 
         // caption: name set along an arc, with a spaced mono sub-caption carrying only real values
-        if (narrow || quiet) return;
+        if (narrow || quiet || namelessRef.current) return;
         const low = fig.stars.reduce((m, p) => Math.max(m, p.y), 0);
         const fs = Math.round(Math.max(13, size * 0.2));
         ctx.globalAlpha = fig.a * grow * 0.7;

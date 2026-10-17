@@ -163,30 +163,45 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* "Infinity" (Set 01): midnight ink foil, engraved with fine rays from the aperture. Same for every pack. */
   background:
-    radial-gradient(60% 40% at 22% 16%, color-mix(in oklab, var(--a) 85%, white 15%), transparent 65%),
-    radial-gradient(80% 55% at 85% 95%, color-mix(in oklab, var(--m) 85%, transparent), transparent 70%),
-    linear-gradient(165deg, color-mix(in oklab, var(--a) 75%, black 25%) 0%, color-mix(in oklab, var(--b) 70%, black 30%) 50%, color-mix(in oklab, var(--b) 35%, black) 100%);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+    repeating-conic-gradient(from 0deg at 50% 42%, rgb(255 236 200 / 0.05) 0 0.5deg, transparent 0.5deg 2.5deg),
+    linear-gradient(180deg, #0d0a1c 0%, #08061a 45%, #04030b 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(198 255 61 / 0.5),
+    inset 0 0 0 2.5px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 0 50px rgb(0 0 0 / 0.75);
 }
 
-/* Foil: rainbow sheen that sweeps on its own and leans with the pointer. */
+/* Holographic diffraction: fine grating lines whose rainbow shifts with the pointer or phone tilt (--hx, --hy). */
 .foil {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(115deg, rgb(255 255 255 / 0) 0 9px, rgb(255 255 255 / 0.06) 9px 10px),
-    linear-gradient(115deg, transparent 20%, rgb(255 255 255 / 0.55) 42%, transparent 50%, rgb(255 255 255 / 0.25) 58%, transparent 70%),
+    repeating-linear-gradient(118deg, rgb(255 255 255 / 0) 0 3px, rgb(255 255 255 / 0.07) 3px 4px),
+    linear-gradient(118deg, transparent 25%, rgb(255 255 255 / 0.4) 45%, transparent 55%),
     var(--holo);
-  background-size: 100% 100%, 250% 100%, 300% 300%;
+  background-size: 100% 100%, 220% 100%, 260% 260%;
+  background-position:
+    0 0,
+    calc(var(--hx, 0.5) * 160% - 30%) 0,
+    calc(var(--hx, 0.5) * 100%) calc(var(--hy, 0.5) * 100%);
   mix-blend-mode: color-dodge;
-  opacity: 0.2;
-  animation: foil 4.5s ease-in-out infinite;
+  opacity: 0.09;
+  transition: background-position 0.25s linear;
 }
-@keyframes foil {
-  0% { background-position: 0 0, 120% 0, 0% 30%; }
-  50% { background-position: 0 0, -40% 0, 100% 70%; }
-  100% { background-position: 0 0, 120% 0, 0% 30%; }
+
+/* Name engraved in holo foil: the rainbow slides with the pointer. */
+.holoText {
+  background: linear-gradient(100deg, #fff8e8 10%, #ffd59a 25%, #c6ff3d 38%, #83fff7 50%, #a78bfa 62%, #ffd0f0 75%, #fff8e8 90%);
+  background-size: 260% 100%;
+  background-position: calc(var(--hx, 0.5) * 100%) 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 10px rgb(0 0 0 / 0.5));
+  transition: background-position 0.25s linear;
 }
 
 .crimp {
@@ -212,7 +227,7 @@
   height: 3px;
   border-radius: 3px;
   background: white;
-  box-shadow: 0 0 10px 3px white, 0 0 34px 10px var(--a);
+  box-shadow: 0 0 10px 3px white, 0 0 34px 10px var(--leak, var(--a));
 }
 
 .hintSweep {
