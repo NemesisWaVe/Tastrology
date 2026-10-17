@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { battle, ENGINE_V } from "@/lib/battle";
+import { recordBattle } from "@/lib/stamps";
 import { fromSheet, getFighterStatus, putFighterMemory, type FighterSheet } from "@/lib/fighters";
 import { allow, clientId } from "@/lib/ratelimit";
 import { s3Get, s3PutIfAbsent } from "@/lib/s3";
@@ -26,7 +28,13 @@ export async function GET(request: Request) {
   const [x, y] = [a, b].sort();
   // Sides matter in the result, so a swapped order gets its own key.
   const key = `battles/v1/${x}_${y}_${ENGINE_V}${a === x ? "" : "_r"}.json`;
-  if (!(await s3Get(key).catch(() => null))) await s3PutIfAbsent(key, JSON.stringify(out)).catch(() => {});
+  if (!(await s3Get(key).catch(() => null))) {
+    await s3PutIfAbsent(key, JSON.stringify(out)).catch(() => {});
+    // Passport stamps (write-once per pair), after the response so a slow table never delays the fight.
+    try {
+      after(() => recordBattle(a, b, out).catch(() => {}));
+    } catch {}
+  }
   return Response.json({ result: out }, { headers: { "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=60" } });
 }
 

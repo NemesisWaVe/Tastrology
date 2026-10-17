@@ -6,7 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BurnButton } from "@/components/card/BurnButton";
 import { dissolve, playBurnSound } from "@/components/card/dissolve";
 import { HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
+import { DailyOpponent } from "@/components/deck/DailyOpponent";
 import { DustCounter } from "@/components/deck/DustCounter";
+import { NextCard, type Me } from "@/components/deck/NextCard";
+import { Timeline } from "@/components/deck/Timeline";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { CursorArrow } from "@/components/CursorArrow";
@@ -53,6 +56,8 @@ export default function DeckPage() {
   const [owner, setOwner] = useState<"user" | "device">("device");
   const [toast, setToast] = useState<string>();
   const [burn, setBurn] = useState<DeckBurn | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  const [hasLocal, setHasLocal] = useState(false);
 
   useEffect(() => {
     let off = false;
@@ -60,8 +65,10 @@ export default function DeckPage() {
       const moved = await claimOnce();
       if (off) return;
       if (moved > 0) setToast("Cards from this device moved to your account.");
-      const d = await loadDeck();
+      const [d, m] = await Promise.all([loadDeck(), fetch("/api/me", { cache: "no-store" }).then((r) => (r.ok ? (r.json() as Promise<Me>) : null)).catch(() => null)]);
       if (off) return;
+      setMe(m);
+      setHasLocal(savedCard() !== null);
       if (d.owner) setOwner(d.owner);
       if (d.burn?.on) setBurn(d.burn);
       if (d.enabled && !d.error) return setCards(d.cards);
@@ -179,7 +186,7 @@ export default function DeckPage() {
             </div>
             <div className="max-w-md">
             <p className="font-serif text-3xl italic leading-tight text-ink">Your sky is still empty.</p>
-            <p className="mt-2 text-ink-2">Name a few things you love and mint your first card. Every one you make lands here.</p>
+            <p className="mt-2 text-ink-2">Name three to eight things you love and get your card. It&apos;s yours alone, and a new one comes each new moon.</p>
             <Link href="/" className="mt-6 inline-flex items-center gap-3 rounded-full bg-accent py-2 pl-6 pr-2 font-semibold text-paper">
               Get your sign
               <CursorArrow className="h-9 w-9 bg-paper text-accent" />
@@ -187,6 +194,8 @@ export default function DeckPage() {
             </div>
           </div>
         )}
+
+        {!!cards?.length && <DailyOpponent hasCard={hasLocal} />}
 
         {!!cards?.length && (
           <ul className="mt-12 grid grid-cols-1 justify-items-center gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
@@ -215,7 +224,7 @@ export default function DeckPage() {
                       onClick={() => setArmed(code)}
                       className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3 transition hover:text-accent disabled:opacity-40"
                     >
-                      Burn to dust
+                      Retire this card
                     </button>
                   )}
                   {burnable && burn && armed === code && (
@@ -239,8 +248,15 @@ export default function DeckPage() {
                 </li>
               );
             })}
+            {!local && me && (
+              <li className="rise flex flex-col items-center">
+                <NextCard me={me} count={cards.length} />
+              </li>
+            )}
           </ul>
         )}
+
+        {!!cards?.length && !local && <Timeline cards={cards} />}
       </main>
     </div>
   );
@@ -248,7 +264,7 @@ export default function DeckPage() {
 
 /** The one plain line above the hold button. Never promises dust the burn won't pay. */
 function confirmLine(entry: DeckEntry, burn: DeckBurn): string {
-  if (!burn.dustOn) return "Permanent. Its share link stops working.";
+  if (!burn.dustOn) return "Permanent. Its share link stops working, and it doesn't bring your next card sooner.";
   const earns = entry.earns ?? 0;
   const label = entry.card.rarityLabel;
   if (earns <= 0) return `${label} · earns no dust · permanent`;
@@ -258,11 +274,11 @@ function confirmLine(entry: DeckEntry, burn: DeckBurn): string {
 }
 
 function burnToast(res: BurnReply, dustOn: boolean): string {
-  if (!dustOn) return "Burned. Its link is gone.";
+  if (!dustOn) return "Retired. Its link is gone.";
   const d = res.dust ?? 0;
   if (d > 0) return res.capped ? `Ash. +${d} dust. That's the weekly cap.` : `Ash. +${d} dust.`;
   if (res.reason === "cap") return "Burned. Weekly dust cap reached, so no dust this time.";
   if (res.reason === "burned-before") return "Burned. This sign was burned before, so no dust.";
   if (res.reason === "uncharged") return "Burned. This one didn't cost a credit, so no dust.";
-  return "Burned. Its link is gone.";
+  return "Retired. Its link is gone.";
 }

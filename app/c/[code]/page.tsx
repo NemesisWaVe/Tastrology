@@ -7,6 +7,7 @@ import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { Burned } from "@/components/card/Burned";
+import { Passport } from "@/components/card/Passport";
 import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
@@ -124,6 +125,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
               No. {card.serial} · Season {SEASON} · {card.rarityLabel} · code {code}
             </p>
             {card.moves.length > 0 && <p className="mt-4 text-sm text-ink-2">Signature brands: {card.moves.map((m) => m.name).join(" · ")}</p>}
+            {source === "server" && <Passport code={code} />}
             <CTA />
           </section>
         </>

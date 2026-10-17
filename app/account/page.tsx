@@ -12,6 +12,7 @@ interface Me {
   creditsOn?: boolean;
   credits?: number | null;
   freeLeft?: number | null;
+  refillAt?: number | null;
   burnOn?: boolean;
   stardust?: {
     dust: number | null;
@@ -96,6 +97,11 @@ export default function AccountPage() {
                   {me.credits ?? "–"}
                   <span className="ml-2 align-middle text-base font-normal text-ink-3">credits</span>
                 </p>
+                {me.credits === 0 && me.refillAt && (
+                  <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
+                    Next card at the new moon · {Math.max(1, Math.ceil((me.refillAt - Date.now()) / 86_400_000))} days
+                  </p>
+                )}
                 {typeof me.freeLeft === "number" && me.freeLeft > 0 && (
                   <span className="mt-3 inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent" />

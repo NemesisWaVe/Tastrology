@@ -2,6 +2,7 @@
 
 import { Mark } from "@/components/site/Mark";
 import { useReducedMotion } from "motion/react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
@@ -411,8 +412,8 @@ export default function Home() {
       {error && !replanning && (errorReason === "credits" || errorReason === "deckfull" ? (
         <div className="mx-auto mt-6 flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-3 px-4 sm:px-6">
           <p className="font-serif text-[19px] italic text-ink-2">{error}</p>
-          <a href="/vs" className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper">Find a fight</a>
-          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 hover:text-ink">Your deck</a>
+          <Link href="/vs" className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper">Find a fight</Link>
+          <Link href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 hover:text-ink">Your deck</Link>
         </div>
       ) : (
         <p className="mx-auto mt-4 max-w-6xl px-4 text-sm text-bad sm:px-6">{error}</p>
