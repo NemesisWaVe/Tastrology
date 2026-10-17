@@ -5,11 +5,14 @@ import Link from "next/link";
 import {
   AnimatePresence,
   motion,
+  type Easing,
   useAnimate,
   useReducedMotion,
 } from "motion/react";
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import { HoloCard } from "@/components/card/HoloCard";
+import { Sky } from "@/components/reveal/Sky";
+import { skyState } from "@/components/reveal/traceModel";
 import {
   battle,
   type BattleResult,
@@ -21,11 +24,12 @@ import type { StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 import { loadFighter, ME } from "./data";
 import { FightShare } from "./FightShare";
+import { Galaxies, IMPACT_MS, VsLens, type Beat } from "./Galaxies";
 import { ResultPanel } from "./ResultPanel";
 
 const COL: Record<Side, string> = { a: "#c6ff3d", b: "#d875ff" };
 // Timeline (ms): cards in, 4 rounds, the score slam, then the joint-sign reveal.
-const T_INTRO = 1300;
+const T_INTRO = 2600;
 const T_ROUND = 2600;
 const T_SLAM = 1800;
 const PH_SLAM = 5;
@@ -66,6 +70,9 @@ function useCardWidth() {
 }
 
 let fontCSS: Promise<string> | null = null;
+
+/** The shared night sky behind every battle screen, with no figures of its own: the galaxies bring those. */
+const OPEN_SKY = skyState([], "");
 
 export function BattleArena({ a, b }: { a: string; b: string }) {
   const { run, events, error: runError } = useAgentRun();
@@ -148,9 +155,9 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
           className="flex min-h-[70vh] flex-col items-center justify-center gap-5 text-center"
           aria-live="polite"
         >
-          <p className="font-display text-[56px] font-bold leading-none text-accent">
-            VS
-          </p>
+          <div className="relative h-24 w-24">
+            <VsLens size={96} label="VS" />
+          </div>
           <p className="font-serif text-[20px] italic text-ink-2">
             {loading === "a"
               ? "Reading player one's taste…"
@@ -216,9 +223,11 @@ export function BattleStage({ out: raw, a = "a", b = "b", onReplay }: { out: Bat
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const reduce = useReducedMotion() ?? false;
   return (
     // overflow-x-clip: the entering cards start off-screen and must not widen the mobile viewport.
     <div className="min-h-screen w-full overflow-x-clip">
+      <Sky f={OPEN_SKY} reduce={reduce} fixed quiet drawn dim={0.7} />
       <main className="mx-auto w-full max-w-[600px] px-4 pb-16">
         <nav className="flex items-center justify-between py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
           <Link href="/" className="hover:text-ink">
@@ -254,6 +263,14 @@ function Sequence({
   const panel = useRef<HTMLDivElement>(null);
   const revealRef = useRef<HTMLDivElement>(null);
   const [share, setShare] = useState<null | "busy" | "done" | "error">(null);
+  const anchorA = useRef<HTMLDivElement>(null);
+  const anchorB = useRef<HTMLDivElement>(null);
+  const roundWinners = useMemo(() => out.rounds.map((r) => r.winner), [out]);
+  const beat: Beat = { phase, rounds: roundWinners, winner: out.winner };
+  const final = phase >= PH_SLAM;
+  // The lens leans toward whoever took the round in play, then the overall winner.
+  const lensSide = final ? out.winner : phase >= 1 && phase <= 4 ? out.rounds[phase - 1].winner : "tie";
+  const lensColor = lensSide === "tie" ? "#c6ff3d" : COL[lensSide];
 
   const roundIdx = phase >= 1 && phase <= 4 ? phase - 1 : -1;
   const decided = out.rounds.filter(
@@ -331,6 +348,8 @@ function Sequence({
     }
   }, [out]);
 
+  // Each card rides its galaxy in from its own side; they meet at the lens with a small recoil.
+  const hit = IMPACT_MS / 1000;
   const enter = (side: Side) =>
     reduce
       ? {
@@ -343,19 +362,42 @@ function Sequence({
             rotateY: side === "a" ? 50 : -50,
             opacity: 0,
           },
-          animate: { x: 0, rotateY: side === "a" ? 10 : -10, opacity: 1 },
+          animate: {
+            x: side === "a" ? ["-75vw", "1.6vw", "0vw"] : ["75vw", "-1.6vw", "0vw"],
+            rotateY: side === "a" ? 10 : -10,
+            opacity: 1,
+          },
           transition: {
-            type: "spring" as const,
-            stiffness: 70,
-            damping: 15,
-            delay: side === "a" ? 0.1 : 0.3,
+            x: { duration: hit / 0.86, times: [0, 0.86, 1], ease: [[0.3, 0, 0.25, 1], "easeOut"] as Easing[] },
+            rotateY: { duration: hit, ease: [0.2, 0.7, 0.2, 1] as Easing },
+            opacity: { duration: 0.5 },
           },
         };
+  // At the end the winner's card stands tall and the loser's sinks back with its galaxy.
+  const stance = (side: Side) =>
+    !final || out.winner === "tie"
+      ? { scale: 1, opacity: 1 }
+      : out.winner === side
+        ? { scale: 1.04, opacity: 1 }
+        : { scale: 0.93, opacity: 0.72 };
+  const cardH = (w * 88) / 63;
+  const lensSize = w < 180 ? 62 : 78;
+  const bleed = Math.round(cardH * 0.75);
 
   return (
     <Shell>
-      {/* Arena: two cards angled toward each other */}
+      {/* Arena: two galaxies, each carrying its card, meeting at the lens */}
       <section aria-label="The two tastes" className="relative">
+        <Galaxies
+          reduce={reduce}
+          beat={beat}
+          sides={[
+            { card: out.cards.a, side: "a", anchor: anchorA, colour: COL.a },
+            { card: out.cards.b, side: "b", anchor: anchorB, colour: COL.b },
+          ]}
+          className="absolute left-1/2 -z-10 w-screen -translate-x-1/2"
+          style={{ top: -bleed, height: `calc(100% + ${bleed * 2}px)` }}
+        />
         <div
           className="flex items-start justify-between gap-[18px]"
           style={{ perspective: 900 }}
@@ -369,9 +411,15 @@ function Sequence({
                 {...enter(side)}
                 style={{ transformStyle: "preserve-3d" }}
               >
-                <div ref={side === "a" ? scopeA : scopeB}>
-                  <HoloCard card={out.cards[side]} width={w} idle={!reduce} />
-                </div>
+                <motion.div
+                  ref={side === "a" ? anchorA : anchorB}
+                  animate={stance(side)}
+                  transition={{ type: "spring", stiffness: 120, damping: 16 }}
+                >
+                  <div ref={side === "a" ? scopeA : scopeB}>
+                    <HoloCard card={out.cards[side]} width={w} idle={!reduce} />
+                  </div>
+                </motion.div>
               </motion.div>
               <div className="flex w-full flex-col items-center gap-1 text-center">
                 <p className="line-clamp-2 font-display text-[14px] font-semibold leading-tight text-ink">
@@ -379,6 +427,7 @@ function Sequence({
                 </p>
                 <div
                   className="flex gap-1"
+                  role="img"
                   aria-label={`${live[side]} rounds won`}
                 >
                   {[0, 1, 2, 3].map((i) => (
@@ -387,6 +436,7 @@ function Sequence({
                       className="h-1.5 w-5 rounded-full transition-colors duration-500"
                       style={{
                         background: i < live[side] ? COL[side] : "var(--line)",
+                        boxShadow: i < live[side] ? `0 0 8px ${COL[side]}` : undefined,
                       }}
                     />
                   ))}
@@ -395,20 +445,13 @@ function Sequence({
             </div>
           ))}
         </div>
-        <motion.div
-          initial={reduce ? false : { scale: 0, rotate: -20 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{
-            type: "spring",
-            stiffness: 400,
-            damping: 14,
-            delay: reduce ? 0 : 0.9,
-          }}
-          className="pointer-events-none absolute left-1/2 grid h-12 w-12 -translate-x-1/2 place-items-center rounded-full border border-line bg-paper font-display text-[17px] font-extrabold text-ink shadow-[0_0_30px_rgb(0_0_0/0.8)]"
-          style={{ top: (w * 88) / 63 / 2 - 24 }}
-        >
-          VS
-        </motion.div>
+        <VsLens
+          size={lensSize}
+          color={lensColor}
+          delay={reduce ? 0 : IMPACT_MS - 120}
+          className="left-1/2 -translate-x-1/2"
+          style={{ top: cardH / 2 - lensSize / 2 }}
+        />
       </section>
 
       {/* Scoreboard */}
@@ -475,7 +518,7 @@ function Sequence({
                 exit={{ opacity: 0 }}
                 className="pt-16 text-center font-serif text-[22px] italic text-ink-2"
               >
-                Four rounds. Judged on Qloo data. No mercy for the taste.
+                Two skies, four rounds, judged on Qloo data. Every round won steals stars from the other side.
               </motion.p>
             )}
           </AnimatePresence>
@@ -592,7 +635,7 @@ function RoundStage({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -16, transition: { duration: 0.2 } }}
       transition={{ type: "spring", stiffness: 200, damping: 22 }}
-      className="rounded-2xl border border-line bg-card p-4"
+      className="rounded-2xl border border-line bg-card/85 p-4"
     >
       <RoundBody r={r} n={n} out={out} reduce={reduce} big />
     </motion.div>
@@ -699,6 +742,23 @@ function Slam({
       aria-live="polite"
     >
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
+        Final · {out.score.a}–{out.score.b}
+      </p>
+      <p className={`mt-1 max-w-md font-display font-bold leading-tight tracking-tight text-ink ${compact ? "text-[24px]" : "text-[28px]"}`}>
+        {out.winner === "tie" ? (
+          <>
+            Dead even. <span className="font-serif font-normal italic text-ink-2">The two skies merge.</span>
+          </>
+        ) : (
+          <>
+            <span style={{ color: COL[out.winner] }}>{out.names[out.winner]}</span>{" "}
+            <span className="font-serif font-normal italic text-ink-2">pulls</span>{" "}
+            {out.names[out.winner === "a" ? "b" : "a"]}{" "}
+            <span className="font-serif font-normal italic text-ink-2">in.</span>
+          </>
+        )}
+      </p>
+      <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
         Compatibility
       </p>
       <p

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BattleStage } from "@/components/battle/BattleArena";
 import { Burned } from "@/components/card/Burned";
+import { Galaxies } from "@/components/battle/Galaxies";
 import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
@@ -84,8 +85,11 @@ export function VsCode({ code }: { code: string }) {
       {st.kind === "card" && (
         <>
           <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{st.card.archetype} wants a fight</p>
-          <div ref={cardRef} className="relative">
-            <FlipCard card={st.card} width={300} idle flipButton />
+          <div className="relative">
+            <Galaxies reduce={reduce} sides={[{ card: st.card, side: "a", anchor: cardRef, colour: "#c6ff3d" }]} solo className="absolute left-1/2 top-1/2 h-[820px] w-[min(100vw,900px)] -translate-x-1/2 -translate-y-1/2" />
+            <div ref={cardRef} className="relative">
+              <FlipCard card={st.card} width={300} idle flipButton />
+            </div>
           </div>
           <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
           <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>

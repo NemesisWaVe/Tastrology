@@ -1,0 +1,112 @@
+/* The galaxy canvas fades out at its top and bottom so it never shows an edge. */
+.field {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 80%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 80%, transparent);
+}
+
+/* VS as a gravitational lens. Base styles are the final state; animations only run in from it. */
+.lens {
+  position: absolute;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  transition: color 0.6s ease;
+}
+.body {
+  position: absolute;
+  inset: 0;
+  animation: pop 0.75s cubic-bezier(0.2, 1.5, 0.4, 1) var(--d, 0ms) both;
+}
+.glow {
+  position: absolute;
+  inset: -70%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, currentColor 30%, transparent), transparent 70%);
+  animation: breathe 3.2s ease-in-out infinite;
+}
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 200deg, #ff7773, #ffed5f, #a8ff5f, #83fff7, #7894ff, #d875ff, #ff7773);
+  -webkit-mask-image: radial-gradient(closest-side, transparent 62%, #000 70%, #000 80%, transparent 100%);
+  mask-image: radial-gradient(closest-side, transparent 62%, #000 70%, #000 80%, transparent 100%);
+  filter: blur(1.5px);
+  animation: spin 9s linear infinite;
+}
+/* Two lensed images of something behind: bright arcs hugging the ring. */
+.arcs {
+  position: absolute;
+  inset: -10%;
+  border-radius: 50%;
+  background: conic-gradient(from 60deg, #fff 0deg 34deg, transparent 50deg 180deg, currentColor 180deg 220deg, transparent 236deg);
+  -webkit-mask-image: radial-gradient(closest-side, transparent 80%, #000 86%, transparent 94%);
+  mask-image: radial-gradient(closest-side, transparent 80%, #000 86%, transparent 94%);
+  filter: blur(0.8px);
+  opacity: 0.85;
+  animation: spin 14s linear infinite reverse;
+}
+.core {
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 38%, #16161e, #040406 72%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 0 18px 4px rgb(0 0 0 / 0.8);
+}
+/* Anamorphic flare across the impact line. */
+.flare {
+  position: absolute;
+  top: 50%;
+  left: -150%;
+  right: -150%;
+  height: 2px;
+  translate: 0 -50%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 60%, transparent) 30%, #fff 50%, color-mix(in srgb, currentColor 60%, transparent) 70%, transparent);
+  filter: blur(0.6px);
+  opacity: 0.75;
+  animation: flare 1.3s ease-out var(--d, 0ms) both;
+}
+.shock {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgb(255 255 255 / 0.8);
+  opacity: 0;
+  animation: shock 1s cubic-bezier(0.1, 0.7, 0.3, 1) var(--d, 0ms) both;
+}
+.vs {
+  position: relative;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  text-shadow: 0 0 10px currentColor;
+  animation: pop 0.75s cubic-bezier(0.2, 1.5, 0.4, 1) var(--d, 0ms) both;
+}
+
+@keyframes pop {
+  from { transform: scale(0) rotate(-90deg); opacity: 0; }
+}
+@keyframes flare {
+  0% { transform: scaleX(0); opacity: 0; }
+  25% { transform: scaleX(1.7); opacity: 1; }
+}
+@keyframes shock {
+  0% { transform: scale(0.3); opacity: 1; }
+  100% { transform: scale(7); opacity: 0; }
+}
+@keyframes spin {
+  to { rotate: 360deg; }
+}
+@keyframes breathe {
+  50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body, .glow, .ring, .arcs, .flare, .shock, .vs { animation: none; }
+}
+
+.solo {
+  -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent);
+  mask-image: radial-gradient(closest-side, #000 62%, transparent);
+}
