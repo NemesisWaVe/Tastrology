@@ -195,7 +195,7 @@ A card is a pure function of your loves and Qloo data, so the shop never sells r
   4. Credits come only from the webhook, never from the client callback.
 - **Spend:** `Update WALLET SET credits = credits - 1`, with condition `credits >= 1`, plus `Put LEDGER#…#run-<runId>` (not-exists, so idempotent).
   - A failed run writes `LEDGER#…#refund-<runId>` (not-exists) plus `ADD 1`.
-- IAM: add `UpdateItem`, `DeleteItem`, `TransactWriteItems` and `BatchWriteItem`. Each item in `TransactWriteItems` is authorized by its own PutItem/UpdateItem permission.
+- IAM: add `UpdateItem`, `DeleteItem`, `ConditionCheckItem` and `BatchWriteItem` (there is no `TransactWriteItems` IAM action; each op in a transaction is authorized by its own action).
 - `lib/ddb.ts` needs `ddbUpdate`, `ddbDelete`, `ddbTransact` and `ddbBatchDelete`. `TransactItems` has no top-level `TableName`.
 
 ## 6. Data model and routes
