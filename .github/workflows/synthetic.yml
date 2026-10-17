@@ -24,6 +24,16 @@ jobs:
       HEALTH_TOKEN: ${{ secrets.HEALTH_TOKEN }}
       CARD_CODE: ${{ vars.CARD_CODE }}
     steps:
+      - name: Check config
+        run: |
+          site=$(printf '%s' "$SITE_URL" | tr -d '[:space:]"' | sed 's:/*$::')
+          tok=$(printf '%s' "$HEALTH_TOKEN" | tr -d '[:space:]"')
+          [ -n "$site" ] || { echo "::error::secret SITE_URL is empty or missing (Settings > Secrets and variables > Actions > Repository secrets)"; exit 1; }
+          [ -n "$tok" ] || { echo "::error::secret HEALTH_TOKEN is empty or missing"; exit 1; }
+          case "$site" in https://*) ;; *) echo "::error::SITE_URL must start with https://"; exit 1;; esac
+          echo "SITE_URL=$site" >> "$GITHUB_ENV"
+          echo "HEALTH_TOKEN=$tok" >> "$GITHUB_ENV"
+
       - name: Deep health check
         run: |
           set -euo pipefail
