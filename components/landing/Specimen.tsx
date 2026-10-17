@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonaGlyph } from "./PersonaGlyph";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
@@ -147,7 +148,7 @@ export function Specimen({
                 className={`grid h-8 w-8 place-items-center rounded-full text-sm transition ${on ? "text-paper" : "text-ink-2 hover:bg-white/5 hover:text-ink"}`}
                 style={on ? { background: `linear-gradient(135deg, ${look.a}, ${look.b})` } : undefined}
               >
-                {look.glyph}
+                <PersonaGlyph k={p.key} fallback={look.glyph} className="h-[62%] w-[62%]" />
               </button>
             );
           })}

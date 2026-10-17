@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonaGlyph } from "./PersonaGlyph";
 import { CursorArrow } from "@/components/CursorArrow";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -113,7 +114,7 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
             className="relative grid h-full w-full place-items-center rounded-full border border-white/15 font-serif text-paper transition-transform duration-700 ease-[cubic-bezier(.2,.7,.2,1)] group-hover:rotate-[20deg] group-hover:scale-105 text-4xl sm:text-6xl"
             style={{ background: `linear-gradient(135deg, ${look.a}, ${look.b})` }}
           >
-            {look.glyph}
+            <PersonaGlyph k={p.key} fallback={look.glyph} className="h-[58%] w-[58%]" />
           </span>
         </span>
 

@@ -39,7 +39,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     key: "mumbai",
-    name: "The Mumbai Storyteller",
+    name: "The Golden Storyteller",
     emoji: "🪔",
     blurb: "Prateek Kuhad, The Lunchbox, Made in Heaven, Ghibli",
     seeds: [
