@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/SiteShell";
+import { SkyBackdrop } from "@/components/site/SkyBackdrop";
+import c from "@/components/site/celestial.module.css";
 import { BRAND } from "@/lib/brand";
 import { formatPaise, paymentsProvider, printsEnabled, PRODUCTS, type Product } from "@/lib/products";
 
@@ -13,7 +15,8 @@ export default function ShopPage() {
   const prints = printsEnabled();
   return (
     <SiteShell>
-      <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">The shop</p>
+      <SkyBackdrop dim={0.7} focus={[0.6, 0.3]} />
+      <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">The orbital market · est. one galaxy ago</p>
       <h1 className="mt-2 font-serif text-5xl italic leading-[0.95] sm:text-7xl">
         New loves, <span className="text-accent">new sign.</span>
       </h1>
@@ -32,7 +35,7 @@ export default function ShopPage() {
         </div>
       )}
 
-      <ul className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <ul className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2">
         {PRODUCTS.map((p, i) => (
           <ProductCard key={p.id} p={p} paid={paid} soon={Boolean(p.physical) && !prints} i={i} />
         ))}
@@ -49,15 +52,20 @@ export default function ShopPage() {
   );
 }
 
+const ART: Record<Product["id"], string> = { reading: c.star, "shadow-pack": c.eclipse, "domain-deck": c.planet, print: c.print };
+
 function ProductCard({ p, paid, soon, i }: { p: Product; paid: boolean; soon: boolean; i: number }) {
   return (
     <li
-      className={`rise relative flex flex-col justify-between gap-8 overflow-hidden rounded-3xl border border-line bg-card p-6 sm:p-7 ${soon ? "opacity-70" : ""}`}
-      style={{ animationDelay: `${i * 60}ms` }}
+      className={`${c.panel} flex flex-col justify-between gap-8 p-6 sm:p-7 ${soon ? "opacity-80" : ""}`}
+      style={{ animationDelay: `${-i * 1.7}s` }}
     >
       <div>
         <div className="flex items-start justify-between gap-4">
-          <h2 className="font-display text-2xl font-semibold tracking-[-0.03em]">{p.name}</h2>
+          <div className="flex items-center gap-4">
+            <span className={`${c.art} ${ART[p.id]}`} aria-hidden />
+            <h2 className="font-display text-2xl font-semibold tracking-[-0.03em]">{p.name}</h2>
+          </div>
           {soon ? (
             <span className="shrink-0 rounded-full border border-line px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">Coming soon</span>
           ) : (

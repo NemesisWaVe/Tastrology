@@ -10,6 +10,8 @@ import { DustCounter } from "@/components/deck/DustCounter";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { CursorArrow } from "@/components/CursorArrow";
+import { SkyBackdrop } from "@/components/site/SkyBackdrop";
+import c from "@/components/site/celestial.module.css";
 import { SiteNav } from "@/components/site/SiteShell";
 import { whenAuthReady } from "@/lib/authBridge";
 import { buildCard, cardCode, SEASON } from "@/lib/card";
@@ -137,7 +139,7 @@ export default function DeckPage() {
 
   return (
     <div className="relative isolate min-h-screen">
-      {sky && <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.4} />}
+      {sky ? <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.4} /> : <SkyBackdrop dim={0.6} focus={[0.4, 0.5]} />}
       <SiteNav />
       {toast && (
         <div role="status" className="rise fixed inset-x-0 bottom-6 z-50 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-full border border-accent/40 bg-paper/95 px-5 py-2.5 text-sm text-ink shadow-lg backdrop-blur-md">
@@ -164,12 +166,25 @@ export default function DeckPage() {
         )}
 
         {cards?.length === 0 && (
-          <div className="mt-16 max-w-md">
-            <p className="text-ink-2">No cards yet. Name a few things you love and mint your first.</p>
+          <div className="mt-14 flex flex-col items-start gap-10 sm:flex-row sm:items-center">
+            {/* ghost slots: where your cards will live, already traced in starlight */}
+            <div className="relative h-[260px] w-[300px] shrink-0" aria-hidden>
+              {[-12, 0, 12].map((r, k) => (
+                <div key={r} className={c.slot} style={{ position: "absolute", left: 70 + k * 40, top: 10 + Math.abs(r), width: 150, rotate: `${r}deg`, animationDelay: `${k * -2}s` }}>
+                  {[[0, 0], [100, 0], [100, 100], [0, 100], [50, 38]].map(([x, y], j) => (
+                    <i key={j} style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${(j + k) * 0.4}s` }} />
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="max-w-md">
+            <p className="font-serif text-3xl italic leading-tight text-ink">Your sky is still empty.</p>
+            <p className="mt-2 text-ink-2">Name a few things you love and mint your first card. Every one you make lands here.</p>
             <Link href="/" className="mt-6 inline-flex items-center gap-3 rounded-full bg-accent py-2 pl-6 pr-2 font-semibold text-paper">
               Get your sign
               <CursorArrow className="h-9 w-9 bg-paper text-accent" />
             </Link>
+            </div>
           </div>
         )}
 

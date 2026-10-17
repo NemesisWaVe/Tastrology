@@ -401,7 +401,7 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
   for (const d of named) {
     if (!d.user) continue;
     const age = now - d.t;
-    const a = (1 - sst(2.6, 3.8, age)) * fade;
+    const a = (1 - sst(3.6, 5, age)) * fade;
     if (a <= 0) continue;
     let seed = Math.floor(d.t * 1000) % 2147483646 || 1;
     const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -409,16 +409,16 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
     let ang = rnd() * Math.PI * 2;
     for (let k = 0; k < 4; k++) {
       ang += (rnd() - 0.5) * 2.4; // sharp turns, like a real asterism
-      const len = (phone ? 26 : 34) + rnd() * (phone ? 22 : 30);
+      const len = (phone ? 34 : 48) + rnd() * (phone ? 24 : 36);
       const [px, py] = pts[pts.length - 1];
       pts.push([px + Math.cos(ang) * len, py + Math.sin(ang) * len * 0.55]);
     }
     const prog = Math.min(1, age / 0.35) * 4;
-    ctx.globalAlpha = a * 0.75;
-    ctx.strokeStyle = "rgba(205,230,255,1)";
-    ctx.lineWidth = 0.8;
-    ctx.shadowColor = "rgba(198,255,61,0.7)";
-    ctx.shadowBlur = 6;
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = "rgba(225,255,170,1)";
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = "rgba(198,255,61,1)";
+    ctx.shadowBlur = 14;
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (let k = 1; k <= Math.min(4, Math.ceil(prog)); k++) {
@@ -430,7 +430,7 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
     pts.forEach(([x, y], k) => {
       const on = sst(k - 0.2, k + 0.1, prog);
       const tw = 0.8 + 0.2 * Math.sin(now * (3 + k) + k);
-      star(ctx, x, y, (k === 0 ? 30 : 16 + (k % 2) * 8) * tw, a * on, PAL[(k * 2) % PAL.length], k === 0);
+      star(ctx, x, y, (k === 0 ? 52 : 30 + (k % 2) * 12) * tw, a * on, PAL[(k * 2) % PAL.length], true);
     });
   }
   ctx.font = `500 ${phone ? 10 : 11.5}px ${mono}`;

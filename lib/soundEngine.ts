@@ -255,6 +255,7 @@ export function enableSound(v: boolean): void {
       setEngine(null);
     }
   } catch {}
+  window.dispatchEvent(new CustomEvent("tastrology:sound", { detail: v })); // keep every switch in sync
 }
 
 /** On a returning visit sound is remembered, but the context can only start after a gesture. */
