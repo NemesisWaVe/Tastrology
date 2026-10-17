@@ -334,7 +334,9 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     // First visit: the gate (sound or quiet). Returning visitors: no gate, the beats auto-advance to the hero.
     let auto = false; // never scroll on the visitor's behalf
     const returning = store.get() && window.scrollY < 10;
-    if (returning) start(soundOn());
+    // a reload leaves audio locked until a click/tap/key (a wheel scroll doesn't count), so anyone who wants sound
+    // gets the gate again: one click enters and unlocks. Quiet returners skip it.
+    if (returning && !soundOn()) start(false);
     else if (window.scrollY < 10) setGate("open");
     else start(false);
     const stopAuto = () => {
