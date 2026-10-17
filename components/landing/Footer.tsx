@@ -2,6 +2,7 @@
 
 import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
+import { LegalLinks } from "@/components/site/LegalLinks";
 import { Magnetic, Reveal } from "./primitives";
 import s from "./landing.module.css";
 
@@ -35,6 +36,7 @@ export function Footer({ onPick }: { onPick: () => void }) {
           <p>Built for the Qloo Agentic Hackathon</p>
           <p className="text-ink-3/70">{BRAND.cardSet} · {BRAND.tagline}</p>
         </div>
+        <LegalLinks className="-mt-2 pb-8" />
       </div>
 
       <div className="pointer-events-none select-none px-2 text-center" aria-hidden>

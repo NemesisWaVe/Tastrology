@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { runAgent } from "@/lib/agent";
+import { clerkOn, currentUserId } from "@/lib/auth";
+import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
+import { creditsOn, refundCredit, RUN_ID_RE, spendCredit } from "@/lib/ledger";
 import { kvCache } from "@/lib/cache";
 import { buildCard, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
-import { PERSONAS } from "@/lib/personas";
+import { isPersonaRequest, PERSONAS } from "@/lib/personas";
 import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
 import { acquireSlot, allow, bumpDaily, clientId, clientIp } from "@/lib/ratelimit";
 import { registerFighter, toSheet } from "@/lib/fighters";
@@ -49,7 +53,22 @@ function logRun(x: { runId: string | null; planner: string | null; qlooCalls: nu
   console.log(JSON.stringify({ evt: "agent_run", ...x }));
 }
 
-function startFlight(key: string, fallbackKey: string, req: AgentRequest, release: () => Promise<void>): Flight {
+/** Who started a fresh run: their own mint is filed in their deck, and a charged credit is refunded if the run fails. */
+interface Minter {
+  userId: string;
+  /** Set when a credit was taken for this run (CREDITS_ON=1). */
+  runId?: string;
+}
+
+/** Files the account's own fresh mint in its deck as minted:1 (upgrading a card it had only claimed or collected). */
+async function fileOwnMint(userId: string, code: string, card: ReturnType<typeof buildCard>) {
+  const PK = `OWNER#${userId}`;
+  const SK = `CARD#${code}`;
+  const out = await ddbPutIfAbsent({ PK, SK, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), minted: 1, source: "mint" });
+  if (out === "exists") await ddbUpdate(PK, SK, "SET minted = :one, #s = :src", { names: { "#s": "source" }, values: { ":one": 1, ":src": "mint" } });
+}
+
+function startFlight(key: string, fallbackKey: string, req: AgentRequest, release: () => Promise<void>, minter?: Minter): Flight {
   const t0 = Date.now();
   const ac = new AbortController();
   const f = { events: [], listeners: new Set(), ac } as unknown as Flight;
@@ -68,6 +87,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         const card = buildCard(result);
         const code = await registerTwin(card);
         await registerFighter(code, toSheet(result));
+        if (minter) await fileOwnMint(minter.userId, code, card).catch(() => {});
         void recordMint(code, SEASON, card.rarityScore).catch(() => {});
       }
       // Don't pin a fallback run: next time the LLM may be back (Qloo calls are cached either way).
@@ -81,7 +101,15 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       throw err;
     },
   );
-  f.done = run.finally(() => {
+  const charged = minter?.runId ? { userId: minter.userId, runId: minter.runId } : null;
+  const settled = charged
+    ? run.catch((err) => {
+        // The run didn't produce a card: give the credit back (write-once per run id).
+        void refundCredit(charged.userId, charged.runId).catch(() => {});
+        throw err;
+      })
+    : run;
+  f.done = settled.finally(() => {
     if (flights.get(key) === f) flights.delete(key);
     void release();
   });
@@ -115,9 +143,13 @@ export async function POST(request: Request) {
     return r;
   };
   if (!cached && !flight) {
-    const who = clientId(request.headers);
-    // Bot check before anything that costs quota. The token is spent here, so queue retries ride on the cookie.
-    if (turnstileOn() && !hasHumanCookie(request.headers)) {
+    // Mint gate: demo personas stay anonymous; any other fresh reading needs an account when Clerk is on.
+    const persona = isPersonaRequest(body);
+    const userId = clerkOn() ? await currentUserId() : null;
+    if (clerkOn() && !userId && !persona) return Response.json({ error: "Sign in to mint a fresh card.", reason: "signin" }, { status: 401 });
+    const who = userId ? `u:${userId}` : clientId(request.headers);
+    // Bot check before anything that costs quota (anonymous only: Clerk's sign-up already ran one). The token is spent here, so queue retries ride on the cookie.
+    if (!userId && turnstileOn() && !hasHumanCookie(request.headers)) {
       const token = request.headers.get("x-turnstile") ?? "";
       if (!(await verifyTurnstile(token, clientIp(request.headers)))) {
         void bumpDaily("denied_bot");
@@ -142,7 +174,21 @@ export async function POST(request: Request) {
       void bumpDaily("denied_daily");
       return reply({ ...BUSY, reason: "daily" }, { status: 503, headers: { "retry-after": "600" } });
     }
-    flight = startFlight(key, fallbackKey, body, release);
+    // Credits last, after every free gate, so being turned away never costs one. Idempotent per run id (the client reuses it across retries).
+    let minter: Minter | undefined = userId && !persona ? { userId } : undefined;
+    if (minter && creditsOn()) {
+      const hdr = request.headers.get("x-run-id") ?? "";
+      const runId = RUN_ID_RE.test(hdr) ? hdr : randomUUID();
+      const spent = await spendCredit(minter.userId, runId);
+      if (spent !== "spent" && spent !== "dup") {
+        await release();
+        if (spent === "empty") return reply({ error: "You're out of readings. The shop has more.", reason: "credits" }, { status: 402 });
+        if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
+        return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
+      }
+      minter = { ...minter, runId };
+    }
+    flight = startFlight(key, fallbackKey, body, release, minter);
   }
 
   const enc = new TextEncoder();

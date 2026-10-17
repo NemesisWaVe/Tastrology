@@ -5,10 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { ShareSheet } from "@/components/card/ShareSheet";
+import { AuthNav } from "@/components/auth/AuthNav";
 import { Landing } from "@/components/landing/Landing";
 import { ResultsView, type Vote } from "@/components/results/ResultsView";
 import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
+import { takePendingRun } from "@/lib/authBridge";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode } from "@/lib/card";
 import { addToDeck } from "@/lib/deck";
@@ -174,6 +176,17 @@ export default function Home() {
     [run, busy],
   );
 
+  // Back from a sign-in that left the page (e.g. Google): start the reading that was waiting on it.
+  useEffect(() => {
+    let off = false;
+    void takePendingRun().then((r) => {
+      if (r && !off) start(r);
+    });
+    return () => {
+      off = true;
+    };
+  }, [start]);
+
   const toResult = () => {
     setStage("result");
     window.scrollTo({ top: 0 });
@@ -318,9 +331,13 @@ export default function Home() {
           {BRAND.name}
         </button>
         <span className="flex items-center gap-4">
+          <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
+            Shop
+          </a>
           <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
             My deck
           </a>
+          <AuthNav />
           <button onClick={reset} className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink">
             New sign
           </button>

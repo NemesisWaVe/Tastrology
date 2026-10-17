@@ -7,6 +7,9 @@ import { amzNow, sha256hex, signV4, type AwsCreds } from "./sigv4";
  * One table, single-table design. Keys in use:
  *   CARD#<code>   META            the minted card (write-once): permanent home of the digital twin
  *   OWNER#<dev>   CARD#<code>     a card in a device's deck (write-once), with a small summary for listing
+ *   OWNER#<user>  CARD#<code>     a card in an account's deck (+ minted 0/1, source mint/claim/collect)
+ *   DEVICE#<dev>  CLAIM           which account claimed a device's deck (write-once)
+ *   USER#<id>     PROFILE/WALLET/LEDGER#…   credits (lib/ledger.ts)
  * Env: DDB_TABLE, DDB_REGION, DDB_ACCESS_KEY_ID, DDB_SECRET_ACCESS_KEY (falls back to the S3_* keys). Not AWS_*: Vercel reserves those.
  */
 export interface DdbConfig extends AwsCreds {
@@ -67,17 +70,18 @@ export function ddbRequest(c: DdbConfig, action: string, payload: unknown, amzDa
   return { url: `https://${host}/`, headers, body };
 }
 
-type DdbResult = { ok: true; json: Record<string, unknown> } | { ok: false; type: string };
+type DdbResult = { ok: true; json: Record<string, unknown> } | { ok: false; type: string; json: Record<string, unknown> };
 
-async function call(action: string, payload: Record<string, unknown>): Promise<DdbResult | null> {
+/** One signed call. `table: false` for actions with no top-level TableName (TransactWriteItems). */
+async function call(action: string, payload: Record<string, unknown>, table = true): Promise<DdbResult | null> {
   const c = ddbConfig();
   if (!c) return null;
   try {
-    const { url, headers, body } = ddbRequest(c, action, { TableName: c.table, ...payload });
+    const { url, headers, body } = ddbRequest(c, action, table ? { TableName: c.table, ...payload } : payload);
     const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(2500), cache: "no-store" });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (res.ok) return { ok: true, json };
-    return { ok: false, type: String(json.__type ?? res.status).split("#").pop()! };
+    return { ok: false, type: String(json.__type ?? res.status).split("#").pop()!, json };
   } catch {
     return null;
   }
@@ -118,4 +122,68 @@ export async function ddbQuery(PK: string, prefix: string, limit: number, cursor
   const items = ((r.json.Items ?? []) as Record<string, { S?: string; N?: string }>[]).map(unmarshal);
   const last = r.json.LastEvaluatedKey;
   return { items, cursor: last ? Buffer.from(JSON.stringify(last)).toString("base64url") : undefined };
+}
+
+/* ------------------------------------------------------------ updates, deletes, transactions */
+
+export interface Expr {
+  /** e.g. "attribute_exists(PK) AND credits >= :one" */
+  condition?: string;
+  names?: Record<string, string>;
+  values?: Flat;
+}
+
+function exprPayload(e: Expr): Record<string, unknown> {
+  const p: Record<string, unknown> = {};
+  if (e.condition) p.ConditionExpression = e.condition;
+  if (e.names && Object.keys(e.names).length) p.ExpressionAttributeNames = e.names;
+  if (e.values && Object.keys(e.values).length) p.ExpressionAttributeValues = marshal(e.values);
+  return p;
+}
+
+/** UpdateItem. "updated", "failed" (condition false) or "error". */
+export async function ddbUpdate(PK: string, SK: string, update: string, e: Expr = {}): Promise<"updated" | "failed" | "error"> {
+  const r = await call("UpdateItem", { Key: marshal({ PK, SK }), UpdateExpression: update, ...exprPayload(e) });
+  if (!r) return "error";
+  if (r.ok) return "updated";
+  return r.type === "ConditionalCheckFailedException" ? "failed" : "error";
+}
+
+/** DeleteItem (optionally conditional). "deleted" also covers an item that was already gone. */
+export async function ddbDelete(PK: string, SK: string, e: Expr = {}): Promise<"deleted" | "failed" | "error"> {
+  const r = await call("DeleteItem", { Key: marshal({ PK, SK }), ...exprPayload(e) });
+  if (!r) return "error";
+  if (r.ok) return "deleted";
+  return r.type === "ConditionalCheckFailedException" ? "failed" : "error";
+}
+
+export type TxOp =
+  | ({ put: Flat & { PK: string; SK: string } } & Expr)
+  | ({ update: { PK: string; SK: string }; set: string } & Expr)
+  | ({ delete: { PK: string; SK: string } } & Expr)
+  | ({ check: { PK: string; SK: string }; condition: string } & Expr);
+
+/**
+ * TransactWriteItems: all or nothing (max 100 ops; each costs 2x capacity). The table goes on every op, not the top level.
+ * On a cancel, `reasons[i]` is the code for op i ("None", "ConditionalCheckFailed", ...), so callers can tell which condition failed.
+ */
+export async function ddbTransact(ops: TxOp[], token?: string): Promise<{ ok: true } | { ok: false; reasons: string[] } | null> {
+  const c = ddbConfig();
+  if (!c) return null;
+  const TableName = c.table;
+  const TransactItems = ops.map((op) => {
+    const ex = exprPayload(op);
+    if ("put" in op) return { Put: { TableName, Item: marshal(op.put), ...ex } };
+    if ("update" in op) return { Update: { TableName, Key: marshal(op.update), UpdateExpression: op.set, ...ex } };
+    if ("delete" in op) return { Delete: { TableName, Key: marshal(op.delete), ...ex } };
+    return { ConditionCheck: { TableName, Key: marshal(op.check), ...ex } };
+  });
+  const payload: Record<string, unknown> = { TransactItems };
+  if (token) payload.ClientRequestToken = token.slice(0, 36);
+  const r = await call("TransactWriteItems", payload, false);
+  if (!r) return null;
+  if (r.ok) return { ok: true };
+  if (r.type !== "TransactionCanceledException") return null;
+  const reasons = ((r.json.CancellationReasons ?? []) as { Code?: string }[]).map((x) => x.Code ?? "None");
+  return { ok: false, reasons };
 }
