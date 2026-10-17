@@ -2,24 +2,23 @@
 
 import { useLenis } from "lenis/react";
 import { useReducedMotion, useScroll } from "motion/react";
-import { useCallback, useEffect, useRef } from "react";
-import { PERSONAS } from "@/lib/personas";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sfx } from "@/lib/sound";
-import { birthRect, buildScene, buildTargets, draw, ringState, sstep, type Rect, type Scene } from "./scene";
-import { CARD_AR, serifFamily } from "./starText";
-import { createWater, type Water } from "./water";
+import { enableSound, soundOn } from "@/lib/soundEngine";
+import { createMirror, SKY_AR, type Mirror, type SkyView, type Touch } from "./mirror";
+import { buildWord, CARD_AR, drawStars, type Rect, type Word } from "./stars";
 import s from "./intro.module.css";
 
 const KEY = "tastrology:intro";
-const CAPTIONS = ["everything you love leaves a ripple", "…and the sky keeps track.", "…and it writes you a sign."];
-const POSTER_P = 0.83; // reduced motion: the formed card over the sky
+const CAPTIONS = ["everything you love leaves a ripple", "the sky has been keeping track", "…and it writes you a sign"];
+const POSTER_P = 0.86; // reduced motion: the written card over the sky
+const IMPACT = 0.95; // seconds into the drop clip when it hits
 
-/** Real persona loves, interleaved across personas so neighbouring rings differ. */
-const NAMES = (() => {
-  const out: string[] = [];
-  for (let j = 0; j < 5; j++) for (const p of PERSONAS) if (p.seeds[j]) out.push(p.seeds[j].name);
-  return out;
-})();
+const sst = (a: number, b: number, x: number) => {
+  const k = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return k * k * (3 - 2 * k);
+};
+const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 const store = {
   get: () => {
@@ -38,37 +37,69 @@ const store = {
   },
 };
 
+function serifFamily(): string {
+  try {
+    return getComputedStyle(document.body).getPropertyValue("--nf-serif").trim() || "Georgia, serif";
+  } catch {
+    return "Georgia, serif";
+  }
+}
+
+/** Where the camera looks for scroll progress p. Water first, then the horizon slides off and Scorpius fills the frame. */
+function viewAt(p: number, w: number, h: number): SkyView {
+  const phone = w < 768;
+  const look = sst(0.1, 0.5, p);
+  const ww = phone ? 0.27 : Math.min(0.82, 0.62 / ((h / w) * SKY_AR));
+  const wh = ww * (h / w) * SKY_AR;
+  const hz0 = phone ? 0.5 : 0.47;
+  const hz = lerp(hz0, 1.3, look);
+  const vA = 0.6 - hz0 * wh; // the Milky Way's core sits just above the waterline
+  const vB = 0.36 - 0.5 * wh; // Scorpius centred
+  const vTop = Math.min(1 - wh, Math.max(0, lerp(vA, vB, look)));
+  const cx = lerp(0.5, phone ? 0.61 : 0.56, look);
+  return { cx: Math.min(1 - ww / 2, Math.max(ww / 2, cx)), vTop, ww, wh, hz };
+}
+
+function birthRect(w: number, h: number): Rect {
+  const phone = w < 768;
+  let cw = phone ? w * 0.74 : h * 0.62 * CARD_AR;
+  let ch = cw / CARD_AR;
+  if (ch > h * 0.7) {
+    ch = h * 0.7;
+    cw = ch * CARD_AR;
+  }
+  return { x: (w - cw) / 2, y: h * 0.46 - ch / 2, w: cw, h: ch };
+}
+
 /** The hero card's rect, in stage coordinates at the moment the intro ends (p = 1). */
 function dockRect(stageH: number): Rect | null {
   const host = document.getElementById("hero-card");
   const sec = host?.closest("section");
   if (!host || !sec) return null;
-  // Specimen = [status line, card, …]; fall back to the whole column if that ever changes
   const el = host.querySelector<HTMLElement>("[data-dock] > * > :nth-child(2)") ?? host;
   const r = el.getBoundingClientRect(), sr = sec.getBoundingClientRect();
   if (!r.width) return null;
   const h = Math.abs(r.width / r.height - CARD_AR) > 0.08 ? r.width / CARD_AR : r.height;
   return { x: r.left, y: r.top - sr.top + (window.innerHeight - stageH), w: r.width, h };
 }
-
-const lerpRect = (a: Rect, b: Rect, k: number): Rect => ({
-  x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k,
-});
+const lerpRect = (a: Rect, b: Rect, k: number): Rect => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), w: lerp(a.w, b.w, k), h: lerp(a.h, b.h, k) });
 
 /**
- * "The Mirror": a drop hits a dark pond, loves ride the ripples, the reflection resolves into
- * constellations, the camera looks up, and the stars write the card that docks into the Hero.
+ * "The Mirror": a real drop lands in a night lake whose water is the real Milky Way, mirrored;
+ * the camera looks up, the real constellations draw themselves, and the stars write the card that docks into the Hero.
  */
 export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
   const track = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
-  const bgRef = useRef<HTMLDivElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
   const fxRef = useRef<HTMLCanvasElement>(null);
+  const vidRef = useRef<HTMLVideoElement>(null);
   const capRef = useRef<(HTMLSpanElement | null)[]>([]);
   const cueRef = useRef<HTMLDivElement>(null);
   const skipRef = useRef<HTMLButtonElement>(null);
+  const startRef = useRef<((withSound: boolean) => void) | null>(null);
   const reduce = Boolean(useReducedMotion());
+  const [gate, setGate] = useState<"hidden" | "open" | "closing">("hidden");
   const lenis = useLenis();
   const lenisRef = useRef(lenis);
   const activeRef = useRef(onActive);
@@ -89,92 +120,135 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     else window.scrollTo(0, y);
   }, []);
 
+  const closeGate = useCallback(() => {
+    setGate((g) => (g === "open" ? "closing" : g));
+    setTimeout(() => setGate("hidden"), 700);
+  }, []);
+  const choose = useCallback(
+    (withSound: boolean) => {
+      closeGate();
+      startRef.current?.(withSound);
+    },
+    [closeGate],
+  );
+
   useEffect(() => {
-    const st = stage.current, fx = fxRef.current, glc = glRef.current;
+    const st = stage.current, fx = fxRef.current, glc = glRef.current, vid = vidRef.current;
     const ctx = fx?.getContext("2d");
-    if (!st || !fx || !glc || !ctx) return;
+    if (!st || !fx || !glc || !ctx || !vid) return;
     const root = document.documentElement;
-    const water: Water | null = createWater(glc);
-    if (!water) glc.style.display = "none";
     const mono = getComputedStyle(document.body).getPropertyValue("--nf-mono").trim() || "ui-monospace, monospace";
     const serif = serifFamily();
-    let scene: Scene | null = null;
-    let fontsOk = false;
-    let alive = true;
+    let w = 0, h = 0, phone = false, alive = true;
+    let word: Word | null = null;
+    vid.src = window.innerWidth < 768 ? "/intro/drop-480.mp4" : "/intro/drop-720.mp4";
+    const mirror: Mirror | null = createMirror(glc, "/intro/sky.webp", vid);
+    if (!mirror) {
+      // no WebGL: the still sky photo stands in for the lake
+      glc.style.display = "none";
+      const bg = st.firstElementChild as HTMLElement | null;
+      if (bg) bg.style.background = "#020204 url(/intro/sky.webp) center 30% / cover no-repeat";
+    }
+
+    // ---- visitor ripples on the water ----
+    const touches: Touch[] = [];
+    let lastT = { x: -999, y: -999, t: 0 };
+    const clock = () => performance.now() / 1000;
+    const onPointer = (e: PointerEvent) => {
+      if (!w) return;
+      const r = st.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      if (y < viewAt(scrollYProgress.get(), w, h).hz * h + 6) return;
+      const now = clock(), down = e.type === "pointerdown";
+      if (!down && (Math.hypot(x - lastT.x, y - lastT.y) < 70 || now - lastT.t < 0.22)) return;
+      lastT = { x, y, t: now };
+      touches.unshift({ x, y, t: now });
+      touches.length = Math.min(touches.length, 6);
+      if (down) sfx("ripple", { i: (touches.length * 2) % 7, gain: 0.6 });
+    };
+    st.addEventListener("pointermove", onPointer, { passive: true });
+    st.addEventListener("pointerdown", onPointer, { passive: true });
+
+    // ---- timeline ----
+    let started = -1; // clock() when the drop started
+    const t0 = clock();
+    const start = (withSound: boolean) => {
+      if (started > 0) return;
+      if (withSound) enableSound(true);
+      started = clock();
+      try {
+        vid.currentTime = 0;
+      } catch {
+        /* not loaded yet */
+      }
+      void vid.play().catch(() => {});
+    };
+    startRef.current = start;
+
+    const frame = (p: number) => {
+      const now = clock(), t = now - t0, since = started > 0 ? now - started : -1;
+      const view = viewAt(p, w, h);
+      const fade = started > 0 ? sst(0, 0.9, since + 0.3) : 0.35 * sst(0, 1.5, t);
+      mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
+      const bgO = String(reduce ? 1 : 1 - sst(0.9, 0.985, p));
+      glc.style.opacity = bgO;
+      (st.firstElementChild as HTMLElement | null)?.style.setProperty("opacity", bgO); // the backdrop must clear for the hero
+      st.querySelector<HTMLElement>(`.${s.credit}`)?.style.setProperty("opacity", bgO);
+      const birth = birthRect(w, h);
+      const k = sst(0.9, 1, p);
+      const dock = k > 0 ? dockRect(h) : null;
+      drawStars(ctx, word, {
+        w, h, t, view, mono, phone,
+        cons: sst(0.36, 0.66, p),
+        consDim: sst(0.62, 0.76, p),
+        frame: sst(0.6, 0.8, p),
+        word: sst(0.66, 0.88, p),
+        fade: 1 - sst(0.95, 1, p),
+        card: dock ? lerpRect(birth, dock, k) : birth,
+      });
+      root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.95, 1, p).toFixed(3));
+    };
+    const paintNow = () => {
+      if (w) frame(reduce ? POSTER_P : scrollYProgress.get());
+    };
 
     const resize = () => {
-      const w = st.clientWidth, h = st.clientHeight;
-      if (!w || !h) return;
-      const phone = w < 768;
-      const cap = Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 2);
-      // a DPR change (window moved to another monitor) needs new buffers even at the same CSS size
-      if (scene && scene.w === w && Math.abs(scene.h - h) < 2 && fx.width === Math.round(w * cap)) return;
+      const cw = st.clientWidth, ch = st.clientHeight;
+      if (!cw || !ch) return;
+      phone = cw < 768;
+      const cap = Math.min(window.devicePixelRatio || 1, phone ? 2 : 1.75);
+      if (cw === w && Math.abs(ch - h) < 2 && fx.width === Math.round(cw * cap)) return;
+      w = cw;
+      h = ch;
       fx.width = Math.round(w * cap);
       fx.height = Math.round(h * cap);
       ctx.setTransform(cap, 0, 0, cap, 0, 0);
-      // the shader is per-pixel: also keep its pixel count sane on big screens
-      const gcap = Math.min(cap, Math.sqrt(2.6e6 / (w * h)));
-      water?.resize(Math.round(w * gcap), Math.round(h * gcap));
-      scene = buildScene(w, h, NAMES, mono);
-      if (fontsOk) buildTargets(scene, serif);
-      // resizing a canvas clears it: repaint now, rAF may be throttled (hidden pane, emulation switch)
-      if (reduce) paint(POSTER_P, 3, 6);
-      else if (frame.t > 0) paint(frame.p, frame.t, frame.cold);
+      mirror?.resize(w, h, Math.min(cap, Math.sqrt(3.2e6 / (w * h))));
+      paintNow();
     };
 
-    const frame = { p: 0, t: 0, cold: 0, pitch: 0, calm: 0, card: { x: 0, y: 0, w: 0, h: 0 }, gl: !!water, bg: 1, fade: 1 };
-    let lastDock = "";
-    const paint = (p: number, t: number, cold: number) => {
-      const sc = scene;
-      if (!sc) return;
-      const calm = sstep(0.3, 0.45, p);
-      const pitch = sc.p0 + (sc.p1 - sc.p0) * sstep(0.52, 0.72, p);
-      const bg = reduce ? 1 : 1 - sstep(0.91, 0.99, p);
-      const fade = reduce ? 1 : sstep(0, 0.8, cold);
-      const birth = birthRect(sc);
-      // beat 4 holds the centred card from ~0.81 to 0.90, then docks, finishing exactly at the track end
-      const k = sstep(0.9, 1, p);
-      const dock = k > 0 ? dockRect(sc.h) : null;
-      ringState(sc, p, cold, calm);
-      Object.assign(frame, { p, t, cold, pitch, calm, bg, fade, card: dock ? lerpRect(birth, dock, k) : birth });
-      water?.draw({
-        t, pitch, tanH: sc.tanH, fade, calm, gal: sstep(0.3, 0.5, p), look: sstep(0.52, 0.72, p),
-        rings: sc.ringBuf, g1: sc.g1, g2: sc.g2,
-      });
-      draw(ctx, sc, frame);
-      const o = String(bg);
-      glc.style.opacity = o;
-      if (bgRef.current) bgRef.current.style.opacity = o;
-      const d = reduce ? "1" : sstep(0.97, 1, p).toFixed(3);
-      if (d !== lastDock) root.style.setProperty("--intro-dock", (lastDock = d));
-    };
-
-    const setUi = (p: number, t: number, auto: boolean) => {
+    let activeOn: boolean | null = null;
+    const setUi = (p: number, since: number, auto: boolean) => {
       const c = reduce
-        ? [0, 0, 1 - sstep(0.1, 0.4, p)]
-        : [
-            sstep(1, 1.5, t) * (1 - sstep(0.24, 0.3, p)),
-            sstep(0.32, 0.38, p) * (1 - sstep(0.66, 0.72, p)),
-            sstep(0.77, 0.81, p) * (1 - sstep(0.88, 0.91, p)),
-          ];
+        ? [0, 0, 1 - sst(0.1, 0.4, p)]
+        : [sst(IMPACT + 0.6, IMPACT + 1.3, since) * (1 - sst(0.12, 0.2, p)), sst(0.44, 0.5, p) * (1 - sst(0.6, 0.66, p)), sst(0.78, 0.82, p) * (1 - sst(0.88, 0.91, p))];
       capRef.current.forEach((el, i) => {
         if (!el) return;
         el.style.opacity = c[i].toFixed(3);
         el.style.transform = `translateY(${((1 - c[i]) * 6).toFixed(2)}px)`;
       });
-      if (cueRef.current) cueRef.current.style.opacity = auto || reduce ? "0" : String(sstep(1.4, 1.9, t) * (1 - sstep(0.01, 0.04, p)));
+      if (cueRef.current) cueRef.current.style.opacity = auto || reduce || since < 0 ? "0" : String(sst(2.4, 3, since) * (1 - sst(0.01, 0.04, p)));
       const end = reduce ? 0.6 : 0.94;
       if (skipRef.current) {
-        skipRef.current.style.opacity = String(1 - sstep(end - 0.05, end, p));
+        skipRef.current.style.opacity = String(1 - sst(end - 0.05, end, p));
         skipRef.current.style.pointerEvents = p < end ? "auto" : "none";
       }
       st.style.pointerEvents = p < end ? "auto" : "none";
-      if (reduce) st.style.opacity = String(1 - sstep(0.35, 0.95, p));
+      if (reduce) st.style.opacity = String(1 - sst(0.35, 0.95, p));
       const on = p < end;
       if (on !== activeOn) activeRef.current?.((activeOn = on));
       if (p > 0.95) store.set();
     };
-    let activeOn: boolean | null = null;
 
     resize();
     const ro = new ResizeObserver(resize);
@@ -183,32 +257,45 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     root.style.setProperty("--intro-dock", reduce ? "1" : "0");
 
     document.fonts?.ready
-      .then(() => document.fonts.load(`italic 190px ${serif}`))
+      .then(() => document.fonts.load(`italic 200px ${serif}`))
       .catch(() => null)
       .then(() => {
         if (!alive) return;
-        fontsOk = true;
-        if (scene) buildTargets(scene, serif);
-        if (reduce) paint(POSTER_P, 3, 6);
+        word = buildWord(serif, window.innerWidth < 768 ? 90 : 130);
+        paintNow();
       });
+
+    const cleanup = () => {
+      alive = false;
+      ro.disconnect();
+      window.removeEventListener("resize", resize);
+      st.removeEventListener("pointermove", onPointer);
+      st.removeEventListener("pointerdown", onPointer);
+      mirror?.dispose();
+      vid.pause();
+      root.style.removeProperty("--intro-dock");
+    };
 
     // Reduced motion: one still frame; scroll only crossfades it away.
     if (reduce) {
-      paint(POSTER_P, 3, 6);
-      setUi(scrollYProgress.get(), 3, false);
-      const off = scrollYProgress.on("change", (p) => setUi(p, 3, false));
+      started = clock() - 10;
+      setUi(scrollYProgress.get(), 10, false);
+      const off = scrollYProgress.on("change", (p) => setUi(p, 10, false));
+      const iv = setInterval(paintNow, 400); // repaint while the sky texture and font arrive
+      const stop = setTimeout(() => clearInterval(iv), 5000);
       return () => {
-        alive = false;
         off();
-        ro.disconnect();
-      window.removeEventListener("resize", resize);
-        water?.dispose();
-        root.style.removeProperty("--intro-dock");
+        clearInterval(iv);
+        clearTimeout(stop);
+        cleanup();
       };
     }
 
-    // Returning visitors: the cold open plays, then the beats auto-advance (~2.5s) and we land on the hero.
+    // First visit: the gate (sound or quiet). Returning visitors: no gate, the beats auto-advance to the hero.
     let auto = store.get() && window.scrollY < 10;
+    if (auto) start(soundOn());
+    else if (window.scrollY < 10) setGate("open");
+    else start(false);
     const stopAuto = () => {
       if (!auto) return;
       auto = false;
@@ -217,43 +304,47 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     const inputs = ["wheel", "touchstart", "keydown"] as const;
     inputs.forEach((e) => window.addEventListener(e, stopAuto, { passive: true }));
 
-    const start = performance.now();
-    let raf = 0, prevP = -1, prevT = 0, visible = true, idle = false;
-    const tick = (now: number) => {
+    let raf = 0, visible = true, idle = false, playedImpact = false, prevP = -1;
+    const tick = () => {
       raf = 0;
-      const t = (now - start) / 1000;
       let p = scrollYProgress.get();
-      if (auto) {
-        const v = sstep(0, 1, (t - 0.9) / 2.6);
+      // scrolling past the gate counts as "quietly"
+      if (p > 0.01 && started < 0) {
+        closeGate();
+        start(false);
+      }
+      const since = started > 0 ? clock() - started : -1;
+      if (auto && since >= 0) {
+        const v = sst(0, 1, (since - 2.4) / 2.8);
         p = Math.max(p, v);
         if (v >= 1) {
           auto = false;
           skip();
         }
       }
-      const sc = scene;
-      // sound: forward crossings only, and not when skipping across many beats at once
-      if (sc && prevP >= 0 && p > prevP && p - prevP < 0.08) {
-        sc.rings.forEach((g, k) => {
-          if (k === 0) return;
-          if (prevP < g.p && p >= g.p) sfx("drop");
-          if (prevP < g.p + 0.05 && p >= g.p + 0.05) sfx("ripple", { i: k - 1 });
-        });
-        if (prevP < 0.56 && p >= 0.56) sfx("shimmer");
-        if (prevP < 0.8 && p >= 0.8) sfx("form");
+      if (!playedImpact && since >= IMPACT) {
+        playedImpact = true;
+        sfx("drop");
       }
-      if (prevT < 0.95 && t >= 0.95 && p < 0.1) sfx("drop");
-      // once fully docked, nothing moves: stop painting until the visitor scrolls back
-      const settled = p >= 0.999 && prevP >= 0.999;
+      if (prevP >= 0 && p > prevP && p - prevP < 0.08) {
+        const cross = (x: number) => prevP < x && p >= x;
+        if (cross(0.3)) sfx("shimmer");
+        if (cross(0.45)) sfx("ripple", { i: 0 });
+        if (cross(0.55)) sfx("ripple", { i: 2 });
+        [0.7, 0.74, 0.78, 0.82].forEach((x, i) => cross(x) && sfx("ripple", { i: 3 + i }));
+        if (cross(0.86)) sfx("form");
+      }
+      const now = clock();
+      while (touches.length && now - touches[touches.length - 1].t > 3.5) touches.pop();
+      const settled = p >= 0.999 && prevP >= 0.999 && touches.length === 0;
       try {
-        if (!settled || !idle) paint(p, t, t);
+        if (!settled || !idle) frame(p);
       } catch {
         /* one bad frame must never stop the loop */
       }
       idle = settled;
-      setUi(p, t, auto);
+      setUi(p, since, auto);
       prevP = p;
-      prevT = t;
       if (visible && !document.hidden) raf = requestAnimationFrame(tick);
     };
     const run = () => {
@@ -261,6 +352,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     };
     const io = new IntersectionObserver(([e]) => {
       visible = e.isIntersecting;
+      if (!visible) vid.pause();
       run();
     });
     if (track.current) io.observe(track.current);
@@ -268,23 +360,21 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     run();
 
     return () => {
-      alive = false;
       cancelAnimationFrame(raf);
       io.disconnect();
-      ro.disconnect();
       document.removeEventListener("visibilitychange", run);
       inputs.forEach((e) => window.removeEventListener(e, stopAuto));
-      water?.dispose();
-      root.style.removeProperty("--intro-dock");
+      cleanup();
     };
-  }, [reduce, scrollYProgress, skip]);
+  }, [reduce, scrollYProgress, skip, closeGate]);
 
   return (
     <section ref={track} className={`${s.track} ${reduce ? s.still : ""}`} aria-label="Intro">
       <div ref={stage} className={s.stage}>
-        <div ref={bgRef} className={s.bg} aria-hidden />
+        <div className={s.bg} aria-hidden />
         <canvas ref={glRef} className={s.gl} aria-hidden />
         <canvas ref={fxRef} className={s.fx} aria-hidden />
+        <video ref={vidRef} className={s.vid} muted playsInline preload="auto" aria-hidden />
         <p className={s.caps}>
           {CAPTIONS.map((c, i) => (
             <span key={c} ref={(el) => void (capRef.current[i] = el)} className={s.cap}>
@@ -299,6 +389,20 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         <button ref={skipRef} type="button" onClick={skip} className={s.skip}>
           skip intro
         </button>
+        <p className={s.credit}>sky: ESO/S. Brunier</p>
+        {gate !== "hidden" && (
+          <div className={`${s.gate} ${gate === "closing" ? s.gateOut : ""}`}>
+            <p className={s.gateKicker}>best with sound</p>
+            <div className={s.gateRow}>
+              <button type="button" className={s.gateMain} onClick={() => choose(true)}>
+                Enter with sound
+              </button>
+              <button type="button" className={s.gateAlt} onClick={() => choose(false)}>
+                Enter quietly
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
