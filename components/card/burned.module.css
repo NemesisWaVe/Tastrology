@@ -1,0 +1,83 @@
+/* The burned-card screen (components/card/Burned.tsx): a ghost outline, a scorch, and a label that survived. */
+
+.ghost {
+  position: relative;
+  width: min(220px, 58vw);
+  aspect-ratio: 5 / 7;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 60% at 50% 108%, rgb(255 122 48 / 0.2), transparent 62%),
+    radial-gradient(90% 70% at 50% 40%, rgb(198 255 61 / 0.035), transparent 70%),
+    conic-gradient(from 210deg at 50% 45%, rgb(125 211 252 / 0.05), rgb(196 181 253 / 0.06), rgb(252 211 77 / 0.05), rgb(125 211 252 / 0.05));
+  box-shadow:
+    inset 0 0 48px rgb(0 0 0 / 0.85),
+    0 0 42px rgb(198 255 61 / 0.07);
+}
+
+.edge {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Scorch: a low, warm glow under the ghost that breathes like coals. */
+.scorch {
+  position: absolute;
+  left: 50%;
+  bottom: -18%;
+  width: 150%;
+  height: 46%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(255 138 50 / 0.34), rgb(198 255 61 / 0.12) 55%, transparent);
+  filter: blur(14px);
+  pointer-events: none;
+  animation: coals 3.6s ease-in-out infinite;
+}
+
+@keyframes coals {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: translateX(-50%) scaleX(1);
+  }
+  37% {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1.06);
+  }
+  61% {
+    opacity: 0.8;
+  }
+}
+
+/* The label that survived the fire: legible, singed, still warm. */
+.label {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%) rotate(-2deg);
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgb(28 24 18 / 0.92), rgb(16 13 10 / 0.92));
+  box-shadow:
+    0 0 0 1px rgb(255 160 80 / 0.18),
+    0 0 18px rgb(255 120 40 / 0.18);
+  color: #f3e9d2;
+  text-shadow: 0 0 6px rgb(255 140 60 / 0.55);
+  -webkit-mask-image: linear-gradient(100deg, #000 78%, rgb(0 0 0 / 0.35) 92%, transparent);
+  mask-image: linear-gradient(100deg, #000 78%, rgb(0 0 0 / 0.35) 92%, transparent);
+}
+
+.ash {
+  position: absolute;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scorch {
+    animation: none;
+    opacity: 0.85;
+  }
+}
