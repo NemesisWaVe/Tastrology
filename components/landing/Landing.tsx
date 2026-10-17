@@ -167,7 +167,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         }`}
       >
         <a href="#" className="flex items-center gap-2.5" aria-label={`${BRAND.name} home`}>
-          <Mark size={30} />
+          <Mark size={34} />
           <span className="whitespace-nowrap font-display text-[17px] font-bold tracking-[-0.03em]">{BRAND.name}</span>
         </a>
         <div className="flex items-center gap-3 sm:gap-5">
