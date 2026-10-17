@@ -29,5 +29,5 @@ Related app flags (not Clerk, not secret):
 
 ## After adding the keys
 - **Rebuild** (`npm run build`): the CSP and the `NEXT_PUBLIC_` key are baked in at build time. The CSP adds the Clerk Frontend API host (decoded from the publishable key), `img.clerk.com` and `worker-src 'self' blob:`.
-- **IAM**: add `dynamodb:UpdateItem`, `DeleteItem`, `TransactWriteItems` to the table policy (credits and deck claim use them).
+- **IAM**: add `dynamodb:UpdateItem`, `DeleteItem`, `ConditionCheckItem` to the table policy (credits and deck claim use them). There is no `TransactWriteItems` IAM action: each op inside a transaction is checked against its own action.
 - Smoke test: persona demo works signed out; a fresh reading asks you to sign in, then starts; `/deck` shows "Cards from this device moved to your account." once; `/account` shows credits when `CREDITS_ON=1`.
