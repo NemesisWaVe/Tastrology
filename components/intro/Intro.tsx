@@ -356,12 +356,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     const returning = store.get() && window.scrollY < 10;
     // a reload leaves audio locked until a click/tap/key (a wheel scroll doesn't count), so anyone who wants sound
     // gets the gate again: one click enters and unlocks. Quiet returners skip it.
-    if (returning && !soundOn()) start(false);
-    else if (window.scrollY < 10) {
-      // never a wall: the scene plays behind the invitation from the first frame
-      start(false);
-      setGate("open");
-    }
+    if (returning) start(soundOn());
+    else if (window.scrollY < 10) start(soundOn()); // no gate: the corner sound orb invites sound without interrupting
     else start(false);
     const stopAuto = () => {
       if (!auto) return;
