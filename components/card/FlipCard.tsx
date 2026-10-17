@@ -97,7 +97,15 @@ export function FlipCard({
             s.turning = true;
             try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {} // pointer may already be gone
           }
-          rot.set(s.r0 + dx * degPerPx);
+          const next = s.r0 + dx * degPerPx;
+          // a soft rustle every ~20deg of turn, louder the faster it spins
+          const prevStep = Math.floor(rot.get() / 20), step = Math.floor(next / 20);
+          if (step !== prevStep) {
+            const last = s.hist[s.hist.length - 1];
+            const speed = last ? Math.abs(e.clientX - last.x) / Math.max(1, e.timeStamp - last.t) : 0.5;
+            sfx("rustle", { gain: Math.min(1.3, 0.45 + speed * 0.6) });
+          }
+          rot.set(next);
           s.hist.push({ x: e.clientX, t: e.timeStamp });
           if (s.hist.length > 6) s.hist.shift();
         }}
