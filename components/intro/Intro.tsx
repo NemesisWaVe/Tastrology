@@ -239,6 +239,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         const H = view.hz * h, side = autoDrops % 2 ? 1 : -1;
         const x = w * (0.5 + side * (0.12 + 0.18 * ((autoDrops * 0.37) % 1))), y = H + (h - H) * (0.25 + 0.4 * ((autoDrops * 0.61) % 1));
         touches.unshift({ x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length] });
+        taps.push({ x, y, t: now }); // the demo drops show what a tap does
+        if (taps.length > 6) taps.shift();
         trim();
         autoDrops++;
         sfx("ripple", { i: autoDrops % 7, gain: 0.5 });

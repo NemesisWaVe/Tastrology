@@ -283,3 +283,8 @@ export function installClickPops(): void {
     play("pop");
   });
 }
+
+/** True when sound is on but the browser still holds audio locked (a reload needs one click or tap). */
+export function soundLocked(): boolean {
+  return soundOn() && (!ctx || ctx.state !== "running");
+}
