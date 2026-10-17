@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/components/site/Mark";
 import { ReactLenis, useLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { MotionConfig, motion, useMotionValueEvent, useReducedMotion, useScroll } from "motion/react";
@@ -166,10 +167,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         }`}
       >
         <a href="#" className="flex items-center gap-2.5" aria-label={`${BRAND.name} home`}>
-          <span className="relative h-5 w-5 rounded-full" style={{ background: "var(--holo)" }}>
-            <span className="absolute inset-[3px] rounded-full bg-paper" />
-            <span className="absolute inset-[6px] rounded-full bg-accent" />
-          </span>
+          <Mark size={22} />
           <span className="whitespace-nowrap font-display text-[17px] font-bold tracking-[-0.03em]">{BRAND.name}</span>
         </a>
         <div className="flex items-center gap-3 sm:gap-5">
