@@ -117,7 +117,7 @@
 - Never log the address, and never put it in card data or Upstash.
 
 ### Shipping cost
-- The promo is a free print plus about 50% off shipping.
+- **Founder clarification (2026-10-17):** the promo is **50% off the print itself**; shipping is always paid in full and shown up front ("Print ₹X ~~₹2X~~ + shipping ₹Y").
 - Until payments go live, take no money: the order sits at `status:"awaiting_shipping_payment"`.
 - Alternatively, the founder could cover India-only shipping (about ₹50–100 per card via India Post or Shiprocket). That spends cash, so it's the founder's call.
 - Recommendation: **India shipping at launch**, international later as paid-only.
@@ -369,7 +369,7 @@ All first party unless noted.
 | # | Objection | Verdict | Mechanism |
 |---|---|---|---|
 | 1 | "Collect claims, print once funded" (CPA 2019) | **Accept** | No free-print claim button until the founder commits a print budget and a ship-by date. Collect addresses only when a print can actually be made. |
-| 2 | "~50% off shipping" and a late fee | **Accept** | No discount wording. Any future offer says "Free print. Shipping ₹X" on the offer itself, or shipping is free. No fee appears for the first time at checkout. |
+| 2 | "~50% off" claim and a late fee | **Accept, as clarified** | The founder meant 50% off the **print**, never shipping (always full price). A "50% off" claim is lawful only against a genuine reference price: the print must actually be sold at the full price (e.g. ₹499) before or alongside the promo. Show print price, discount and shipping together on the offer; no fee appears for the first time at checkout. |
 | 3 | Same-network referrals | **Accept** | A shared IP or /64 is flagged for manual review, not rejected. Hard-reject only on the same `tm_d` device, the same normalized email, or self-referral. `/account` shows each referral's status and reason, with an appeal by email. |
 | 4 | Shared cards must be deletable | **Accept, different mechanism** | Twins are content-addressed, so a code may belong to several people with the same loves. Delete writes `CARD#<code>/TOMBSTONE`, removes the user's `OWNER#` item, makes `/c/<code>` return 410, and purges the S3 and Upstash copies. Other owners keep their deck copy, which embeds the card JSON. Account deletion asks "also delete my shared cards" (default yes). Twins with no views for 24 months are deleted. |
 | 5 | 18+ at sign-up | **Accept, no DOB** | Clerk's legal-consent checkbox: "I'm 18+ and accept the Terms and Privacy Policy." Self-declared; store the consent timestamp on PROFILE. A one-line DPDP notice before the first mint. |
