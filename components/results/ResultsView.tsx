@@ -240,15 +240,15 @@ export function ResultsView({
           }
           note={
             <>
-              Every brand here came back from Qloo&apos;s insights API: nothing invented. Vote <b className="text-ink">↑</b> or <b className="text-ink">↓</b> and the agent
-              re-plans with your feedback, then shows you exactly what changed.
+              Each one came straight from Qloo, ranked by how strongly your loves pull toward it. Vote <b className="text-ink">↑</b> or <b className="text-ink">↓</b> and
+              your sign re-reads itself.
             </>
           }
           right={nVotes > 0 ? <span className="rounded-full border border-line px-3 py-1.5 font-mono text-[11px] text-ink-2">{nVotes} vote{nVotes === 1 ? "" : "s"}</span> : undefined}
         />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {main.map((b, i) => (
-            <BrandCard key={b.entity.id} b={b} i={i} seeds={result.seeds} vote={votes[b.entity.id]} onVote={onVote} />
+            <BrandCard key={b.entity.id} b={b} i={i} seeds={result.seeds} vote={votes[b.entity.id]} onVote={onVote} hero={i === 0} />
           ))}
         </div>
 

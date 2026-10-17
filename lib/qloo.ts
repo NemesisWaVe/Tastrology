@@ -47,6 +47,12 @@ function normEntity(raw: Record<string, unknown>): QEntity {
   const style = [...strs(props.personal_style), ...strs(props.aesthetic_properties)].filter((s, i, a) => a.indexOf(s) === i).slice(0, 5);
   const priceMin = typeof props.price_range_usd_min === "number" ? props.price_range_usd_min : undefined;
   const liveTier = priceMin === undefined ? undefined : priceMin < 60 ? 1 : priceMin < 250 ? 2 : 3;
+  // Real links only: the brand's own site, else its Instagram handle (shapes seen: {id} or [{id}]).
+  const site = typeof props.official_site === "string" && /^https?:\/\/[^\s]+$/i.test(props.official_site) ? props.official_site : undefined;
+  const ig = (props.external as Record<string, unknown> | undefined)?.instagram;
+  const igId = (Array.isArray(ig) ? ig[0] : ig) as { id?: unknown } | undefined;
+  const instagram = typeof igId?.id === "string" && /^[A-Za-z0-9._]{1,30}$/.test(igId.id) ? igId.id : undefined;
+  const founded = typeof props.founded_year === "string" || typeof props.founded_year === "number" ? String(props.founded_year).slice(0, 4) : undefined;
   return {
     id: String(raw.entity_id ?? raw.id),
     name: String(raw.name),
@@ -59,6 +65,9 @@ function normEntity(raw: Record<string, unknown>): QEntity {
     explain,
     tier: (props.mock_tier as 1 | 2 | 3) ?? liveTier,
     style: style.length ? style : undefined,
+    site,
+    instagram,
+    founded,
   };
 }
 
@@ -124,6 +133,15 @@ function countOf(json: Record<string, unknown>): number {
   if (Array.isArray(r)) return r.length;
   const o = (r ?? {}) as Record<string, unknown[]>;
   return (o.entities ?? o.tags ?? []).length;
+}
+
+/** Batch entity lookup: the full profile Qloo keeps per entity (official site, social handles, founding year). */
+export async function lookupEntities(ids: string[], log?: QlooCallLog[]): Promise<QEntity[]> {
+  if (!ids.length) return [];
+  const json = await qget("/entities", { entity_ids: ids.slice(0, 25).join(",") }, log);
+  const r = json.results as unknown;
+  const list = (Array.isArray(r) ? r : ((r as Record<string, unknown> | undefined)?.entities ?? json.entities ?? [])) as Record<string, unknown>[];
+  return list.map(normEntity);
 }
 
 export async function searchEntities(query: string, kinds: EntityKind[], take = 8, log?: QlooCallLog[]): Promise<QEntity[]> {

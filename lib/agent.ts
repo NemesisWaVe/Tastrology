@@ -4,7 +4,7 @@ import { BRAND } from "./brand";
 import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
 import { displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
-import { findTags, insights, qlooMode, searchEntities } from "./qloo";
+import { findTags, insights, lookupEntities, qlooMode, searchEntities } from "./qloo";
 import type {
   AgentRequest,
   BrandMatch,
@@ -363,6 +363,22 @@ async function critique(st: RunState) {
     st.rejected = st.rejected.filter((r) => !picks.some((p) => p.id === r.entity.id));
     st.critique = st.critique.filter((c) => !picks.some((p) => c.startsWith(`Rejected ${p.name} (`)));
     st.emit({ type: "step", id: "sideb", label: `${picks.length} side-B picks added`, status: "done" });
+  }
+  // Real links for the brands you'll actually see: one batched entity lookup (insights omits social handles).
+  if (qlooMode() === "live" && st.final.length) {
+    try {
+      const full = await logged(st, "get_entities", `${st.final.length} kept brands ← profile lookup`, async (log) => {
+        const r = await lookupEntities(st.final.map((b) => b.entity.id), log);
+        return { value: r, summary: `${r.filter((x) => x.site || x.instagram).length}/${r.length} with an official site or Instagram` };
+      });
+      for (const b of st.final) {
+        const p = full.find((x) => x.id === b.entity.id);
+        if (!p) continue;
+        b.entity = { ...b.entity, site: b.entity.site ?? p.site, instagram: p.instagram ?? b.entity.instagram, founded: b.entity.founded ?? p.founded, subtitle: b.entity.subtitle ?? p.subtitle };
+      }
+    } catch {
+      // links are a nicety; the reading stands without them
+    }
   }
   st.emit({
     type: "data",
