@@ -8,7 +8,7 @@ import { FlipCard } from "@/components/card/FlipCard";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
-import { PackWindow } from "./PackWindow";
+import { PackAperture } from "./PackAperture";
 import { Sky } from "./Sky";
 import { skyState } from "./traceModel";
 import s from "./reveal.module.css";
@@ -46,8 +46,9 @@ function useViewport() {
 }
 
 /**
- * Phase 3: tear open a foil booster in the card's own colours, flip the face-down card,
- * and let rarity escalate the reveal (secret/holo: charge-up, screen shake, stronger burst).
+ * Phase 3: tear open the sealed "Infinity" booster (the same wrapper for everyone), flip the face-down card,
+ * and let rarity escalate the reveal. The only hint of what's inside before the flip is honest: the light that
+ * leaks through the seam is the card's rarity colour.
  */
 export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: number; reduce: boolean; onDone: () => void }) {
   const { w, h } = useViewport();
@@ -68,12 +69,15 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
   const big = card.rarity === "holo" || card.rarity === "secret";
   const { sun, moon, rising } = card.bigThree;
   const glow = RARITY_GLOW[card.rarity];
+  // The wrapper is identical for everyone; the one honest tell is the light through the seam: the card's rarity colour.
+  const leakTone = { common: "#dfe7f1", rare: sun.a, holo: "#c4b5fd", secret: "#fcd34d" }[card.rarity];
 
   const vars = {
     "--a": sun.a,
     "--b": sun.b,
     "--m": moon.a,
     "--ray": r.ray || sun.a,
+    "--leak": leakTone,
   } as React.CSSProperties;
 
   /* ---------------------------------------------------------------- tear */
@@ -97,8 +101,9 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     animate(fl, 1, { type: "spring", stiffness: 700, damping: 28 });
     await sleep(120);
     navigator.vibrate?.([34, 18, 70]);
-    shake.set({ x: 20, y: -8, rotate: 0.6 });
-    shake.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 380, damping: 9, mass: 1.2 } });
+    // a small recoil along the tear direction as the foil gives (no screen shake)
+    shake.set({ x: 4, y: 0, rotate: 0 });
+    shake.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 300, damping: 26 } });
     setStage("opening");
     setTimeout(() => {
       setStage("inpack"); // the card now waits in the open pack until the user pulls it out
@@ -196,10 +201,11 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     }
     settledIn.current = true;
     if (reduce) return cardY.set(peekY);
-    cardY.set(peekY + 70);
+    // settle in from a little lower, but never so low that the card's bottom pokes out under the pack
+    cardY.set(Math.min(peekY + 70, packH / 2 - cardH / 2 - 8));
     const c = animate(cardY, peekY, { type: "spring", stiffness: 200, damping: 20 });
     return () => c.stop();
-  }, [stage, peekY, reduce, cardY]);
+  }, [stage, peekY, reduce, cardY, packH, cardH]);
 
   const onPullDown = (e: React.PointerEvent) => {
     e.preventDefault(); // no native drag ghost: this gesture is ours
@@ -410,12 +416,16 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
 
   const stageRef = useRef<HTMLDivElement>(null);
   const sky = useMemo(() => skyState(card.evolvesFrom, card.archetype), [card]);
+  // Until the reveal, the sky keeps its secrets too: unlabelled patterns, nothing lit.
+  const revealed = stage === "revealed";
+  const sealedSky = useMemo(() => ({ ...sky, critique: undefined }), [sky]);
 
   return (
     <motion.div className="absolute inset-0 flex flex-col" style={vars} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
       {/* your sky: dim while sealed, brightening as you hold to mint, then lit around the card */}
       <Sky
-        f={sky}
+        f={revealed ? sky : sealedSky}
+        nameless={!revealed}
         anchor={stageRef}
         reduce={reduce}
         drawn
@@ -476,7 +486,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
               <motion.div
                 key={stage}
                 className="pointer-events-none fixed inset-0 z-30"
-                style={{ background: `radial-gradient(circle at 50% 50%, white 0%, ${stage === "revealed" && card.rarity === "secret" ? "#fcd34d" : sun.a} 30%, transparent 70%)` }}
+                style={{ background: `radial-gradient(circle at 50% 50%, white 0%, ${stage === "revealed" && card.rarity === "secret" ? "#fcd34d" : stage === "opening" ? leakTone : sun.a} 30%, transparent 70%)` }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 0.95, 0] }}
                 exit={{ opacity: 0 }}
@@ -515,12 +525,12 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   <div className="absolute inset-x-[8%] -bottom-6 h-10 rounded-[50%] bg-black/60 blur-xl" />
                   {/* body */}
                   <div className="absolute inset-0" style={{ clipPath: bodyClip(packW, packH, tearY) }}>
-                    <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} reduce={reduce} />
+                    <PackArt w={packW} h={packH} tearY={tearY} reduce={reduce} />
                   </div>
                   {/* light leaking from the tear */}
                   <motion.div
                     className="pointer-events-none absolute left-0 right-0"
-                    style={{ top: tearY - 30, height: leakH, y: leakY, opacity: leak, background: `radial-gradient(60% 50% at 50% 50%, white, ${sun.a} 40%, transparent 75%)`, filter: "blur(6px)" }}
+                    style={{ top: tearY - 30, height: leakH, y: leakY, opacity: leak, background: `radial-gradient(60% 50% at 50% 50%, white, ${leakTone} 40%, transparent 75%)`, filter: "blur(6px)" }}
                   />
                   {/* foil crinkle as tension builds */}
                   {stage === "sealed" && <motion.div className={s.crinkle} style={{ opacity: crinkle, height: tearY * 2.2, clipPath: stripClip(packW, tearY * 2.2) }} />}
@@ -539,7 +549,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       className="absolute inset-0"
                       style={{ clipPath: stripClip(packW, tearY), rotate: stripRotate, y: stripY, scaleX: stripSX, scaleY: stripSY, transformOrigin: `${packW}px ${tearY}px` }}
                     >
-                      <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} reduce={reduce} />
+                      <PackArt w={packW} h={packH} tearY={tearY} reduce={reduce} strip />
                     </motion.div>
                   </motion.div>
                   <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW, opacity: leak }} />
@@ -778,35 +788,100 @@ function bodyClip(w: number, h: number, tearY: number) {
   return `polygon(${pts.join(",")})`;
 }
 
-function PackArt({ card, loves, w, h, tearY, reduce }: { card: CardData; loves: number; w: number; h: number; tearY: number; reduce: boolean }) {
+/**
+ * The wrapper: the same for everyone ("Infinity", Set 01). Midnight ink foil engraved with rays from an aperture onto
+ * a black hole, framed by an atlas graticule, holo-engraved name. Nothing on it is about the card inside: that stays
+ * sealed until you tear it. A holographic diffraction layer shifts with the pointer or tilt (`--hx`, `--hy`).
+ * `strip` renders the torn-off top band only (the aperture would be clipped away anyway).
+ */
+function PackArt({ w, h, tearY, reduce, strip = false }: { w: number; h: number; tearY: number; reduce: boolean; strip?: boolean }) {
   const u = w / 100;
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = el.current;
+    if (!node || reduce) return;
+    const onMove = (e: PointerEvent) => {
+      node.style.setProperty("--hx", (e.clientX / window.innerWidth).toFixed(3));
+      node.style.setProperty("--hy", (e.clientY / window.innerHeight).toFixed(3));
+    };
+    const onTilt = (e: DeviceOrientationEvent) => {
+      if (e.gamma == null || e.beta == null) return;
+      node.style.setProperty("--hx", (0.5 + Math.max(-0.5, Math.min(0.5, e.gamma / 50))).toFixed(3));
+      node.style.setProperty("--hy", (0.5 + Math.max(-0.5, Math.min(0.5, (e.beta - 45) / 50))).toFixed(3));
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("deviceorientation", onTilt, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("deviceorientation", onTilt);
+    };
+  }, [reduce]);
+
+  const ap = Math.min(68 * u, h - tearY - 58 * u); // aperture diameter
+  const apTop = tearY + 10 * u;
+  const ring = ap * 1.18;
   return (
-    <div className={s.packArt} style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / .35), inset 0 1px 0 rgb(255 255 255 / .6)" }}>
+    <div ref={el} className={s.packArt}>
       <div className={s.foil} />
-      {/* plastic gloss */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .35), transparent 12%, rgb(255 255 255 / .16) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .4))" }} />
       <div className={s.crimp} style={{ top: 0, height: h * 0.065 }} />
       <div className={s.crimp} style={{ bottom: 0, height: h * 0.055 }} />
       <div className={s.tearLine} style={{ top: tearY }} />
 
-      <div className="absolute inset-x-0 flex flex-col items-center text-center text-white" style={{ top: tearY + 4 * u }}>
-        <p className="font-mono uppercase" style={{ fontSize: 2.6 * u, letterSpacing: "0.32em", opacity: 0.8 }}>
-          {BRAND.cardSet} · booster
-        </p>
-        {/* a window into your own sky, set into the foil */}
-        <div className="mt-[4%]" style={{ filter: "drop-shadow(0 10px 24px rgb(0 0 0 / .45))" }}>
-          <PackWindow card={card} width={64 * u} height={Math.min(74 * u, h - tearY - 60 * u)} reduce={reduce} />
-        </div>
-        <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 12 * u, marginTop: 5 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
-          {BRAND.name}
-        </p>
-        <p className="font-serif italic" style={{ fontSize: 4.6 * u, marginTop: 1.2 * u, opacity: 0.92 }}>
-          {BRAND.tagline}
-        </p>
-      </div>
-      <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.5 * u, letterSpacing: "0.22em", opacity: 0.85 }}>
-        1 holographic taste sign · from {loves} loves
-      </div>
+      <p className="absolute inset-x-0 text-center font-mono uppercase text-white/80" style={{ top: tearY + 3.2 * u, fontSize: 2.5 * u, letterSpacing: "0.34em" }}>
+        {BRAND.cardSet} · infinity
+      </p>
+
+      {!strip && (
+        <>
+          {/* atlas graticule around the aperture: hairline rings and degree ticks, gold leaf */}
+          <svg
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+            style={{ top: apTop + ap / 2 - ring / 2, width: ring, height: ring }}
+            viewBox="-60 -60 120 120"
+            aria-hidden
+          >
+            <defs>
+              <linearGradient id="packGold" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#fff7dc" />
+                <stop offset="0.5" stopColor="#e9b95c" />
+                <stop offset="1" stopColor="#fff3d0" />
+              </linearGradient>
+            </defs>
+            <g fill="none" stroke="url(#packGold)">
+              <circle r="58.5" strokeWidth="0.5" opacity="0.8" />
+              <circle r="55.5" strokeWidth="0.25" opacity="0.5" />
+              {Array.from({ length: 72 }, (_, k) => {
+                const a = (k / 72) * Math.PI * 2;
+                const l = k % 6 === 0 ? 4.5 : 2;
+                return <line key={k} x1={Math.cos(a) * 58.5} y1={Math.sin(a) * 58.5} x2={Math.cos(a) * (58.5 - l)} y2={Math.sin(a) * (58.5 - l)} strokeWidth="0.35" opacity="0.75" />;
+              })}
+            </g>
+            {["☉", "☽", "↑"].map((g, k) => {
+              const a = -Math.PI / 2 + (k * Math.PI * 2) / 3;
+              return (
+                <text key={g} x={Math.cos(a) * 49.5} y={Math.sin(a) * 49.5 + 2.2} textAnchor="middle" fill="url(#packGold)" style={{ fontSize: 6.2 }}>
+                  {g}
+                </text>
+              );
+            })}
+          </svg>
+          {/* the aperture: a window onto infinity, set into the foil */}
+          <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: apTop, width: ap, height: ap, boxShadow: "0 0 0 1.5px rgb(255 240 210 / .7), 0 0 0 4px rgb(0 0 0 / .55), inset 0 0 18px rgb(0 0 0 / .9)" }}>
+            <PackAperture size={ap} reduce={reduce} />
+          </div>
+          <div className="absolute inset-x-0 flex flex-col items-center text-center" style={{ top: apTop + ap + 9 * u }}>
+            <p className={`${s.holoText} font-display font-extrabold leading-none tracking-[-0.03em]`} style={{ fontSize: 12.5 * u }}>
+              {BRAND.name}
+            </p>
+            <p className="font-serif italic text-white/85" style={{ fontSize: 4.4 * u, marginTop: 1.4 * u }}>
+              {BRAND.tagline}
+            </p>
+          </div>
+          <div className="absolute inset-x-0 text-center font-mono uppercase text-white/75" style={{ bottom: h * 0.085, fontSize: 2.4 * u, letterSpacing: "0.24em" }}>
+            1 holographic taste sign · sealed
+          </div>
+        </>
+      )}
     </div>
   );
 }
