@@ -34,7 +34,7 @@ describe("fighter sheets", () => {
 });
 
 describe("/api/battle", () => {
-  it("battles two registered fighters, 404s unknown ones, caches immutably", async () => {
+  it("battles two registered fighters, 404s unknown ones, caches briefly (a burn must reach the CDN)", async () => {
     const { toSheet, registerFighter } = await import("@/lib/fighters");
     const { buildCard, cardCode } = await import("@/lib/card");
     const { GET } = await import("@/app/api/battle/route");
@@ -48,7 +48,7 @@ describe("/api/battle", () => {
     const req = (a: string, b: string) => new Request(`http://x/api/battle?a=${a}&b=${b}`);
     const ok = await GET(req(codes[0], codes[1]));
     expect(ok.status).toBe(200);
-    expect(ok.headers.get("cache-control")).toContain("immutable");
+    expect(ok.headers.get("cache-control")).toContain("s-maxage=300");
     const j = (await ok.json()) as { result: { rounds: unknown[]; winner: string } };
     expect(j.result.rounds).toHaveLength(4);
     expect((await GET(req(codes[0], "0000-ZZZZ"))).status).toBe(404);

@@ -1,8 +1,10 @@
 import { clerkOn } from "@/lib/auth";
+import { previewDust } from "@/lib/burn";
 import { ddbConfigured, ddbPutIfAbsent, ddbQuery } from "@/lib/ddb";
 import { deviceIdsOn, newDevice } from "@/lib/device";
 import { deckOwner } from "@/lib/owner";
 import { allow, clientId } from "@/lib/ratelimit";
+import { dustOn, dustStatus } from "@/lib/stardust";
 import { getTwin, TWIN_CODE } from "@/lib/twins";
 import type { CardData } from "@/lib/card";
 import type { DeckEntry } from "@/lib/deck";
@@ -24,16 +26,22 @@ export async function GET(request: Request) {
   const { owner, kind } = await deckOwner(request.headers);
   const base = { enabled: true, owner: kind, accounts: clerkOn() };
   if (!owner) return Response.json({ ...base, cards: [] }, { headers: NO_STORE });
-  const page = await ddbQuery(`OWNER#${owner}`, "CARD#", DECK_MAX, undefined, ["code", "card", "addedAt", "minted"]);
+  const page = await ddbQuery(`OWNER#${owner}`, "CARD#", DECK_MAX, undefined, ["code", "card", "addedAt", "minted", "runId", "funding", "rarityScore"]);
   if (!page) return Response.json({ error: "Your deck is unreachable right now." }, { status: 503, headers: NO_STORE });
+  // Burning: signed-in accounts only (docs/design/burn.md). `earns` is the published rate before the weekly cap.
+  const canBurn = kind === "user";
+  const dust = canBurn && dustOn();
   const cards: DeckEntry[] = [];
   for (const it of page.items) {
     try {
-      cards.push({ code: String(it.code), card: JSON.parse(String(it.card)) as CardData, addedAt: Number(it.addedAt) || 0, minted: it.minted === 1 });
+      const minted = it.minted === 1;
+      cards.push({ code: String(it.code), card: JSON.parse(String(it.card)) as CardData, addedAt: Number(it.addedAt) || 0, minted, ...(dust && minted ? { earns: previewDust(it) } : {}) });
     } catch {}
   }
   cards.sort((a, b) => b.addedAt - a.addedAt);
-  return Response.json({ ...base, cards }, { headers: NO_STORE });
+  const ds = dust ? await dustStatus(owner).catch(() => null) : null;
+  const burn = { on: canBurn, dustOn: dust, dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null };
+  return Response.json({ ...base, cards, burn }, { headers: NO_STORE });
 }
 
 /**

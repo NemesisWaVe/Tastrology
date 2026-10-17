@@ -4,6 +4,7 @@ import { runAgent } from "@/lib/agent";
 import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
 import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
 import { creditsOn, refundCredit, RUN_ID_RE, spendCredit } from "@/lib/ledger";
+import { dustOn, READING_DUST, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache } from "@/lib/cache";
 import { buildCard, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
@@ -81,16 +82,25 @@ function logRun(x: { runId: string | null; planner: string | null; qlooCalls: nu
 /** Who started a fresh run: their own mint is filed in their deck, and a charged credit is refunded if the run fails. */
 interface Minter {
   userId: string;
-  /** Set when a credit was taken for this run (CREDITS_ON=1). */
+  /** Set when a credit (or dust) was taken for this run (CREDITS_ON=1). */
   runId?: string;
+  /** What paid for it: a credit, or READING_DUST Stardust once credits ran out. */
+  paidWith?: "credit" | "dust";
 }
 
 /** Files the account's own fresh mint in its deck as minted:1 (upgrading a card it had only claimed or collected). */
-async function fileOwnMint(userId: string, code: string, card: ReturnType<typeof buildCard>) {
-  const PK = `OWNER#${userId}`;
+async function fileOwnMint(minter: Minter, code: string, card: ReturnType<typeof buildCard>) {
+  const PK = `OWNER#${minter.userId}`;
   const SK = `CARD#${code}`;
-  const out = await ddbPutIfAbsent({ PK, SK, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), minted: 1, source: "mint" });
-  if (out === "exists") await ddbUpdate(PK, SK, "SET minted = :one, #s = :src", { names: { "#s": "source" }, values: { ":one": 1, ":src": "mint" } });
+  // runId + funding let a burn check the ledger (docs/design/burn.md). Every credit is free during the beta; once the shop
+  // sells credits, spendCredit must report which kind it took and "paid" goes here (paid mints burn at a flat rate).
+  const paid: Record<string, string> = minter.runId ? { runId: minter.runId, funding: minter.paidWith === "dust" ? "dust" : "free" } : {};
+  const out = await ddbPutIfAbsent({ PK, SK, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), minted: 1, source: "mint", ...paid });
+  if (out === "exists") {
+    const set = minter.runId ? ", runId = :run, funding = :fund" : "";
+    const values: Record<string, string | number> = { ":one": 1, ":src": "mint", ...(minter.runId ? { ":run": paid.runId, ":fund": paid.funding } : {}) };
+    await ddbUpdate(PK, SK, `SET minted = :one, #s = :src${set}`, { names: { "#s": "source" }, values });
+  }
 }
 
 function startFlight(key: string, fallbackKey: string, req: AgentRequest, release: () => Promise<void>, minter?: Minter): Flight {
@@ -116,7 +126,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         const card = buildCard(result);
         const code = await registerTwin(card);
         await registerFighter(code, toSheet(result));
-        if (minter) await fileOwnMint(minter.userId, code, card).catch(() => {});
+        if (minter) await fileOwnMint(minter, code, card).catch(() => {});
         bg(recordMint(code, SEASON, card.rarityScore));
       }
       // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of
@@ -133,11 +143,11 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       throw err;
     },
   );
-  const charged = minter?.runId ? { userId: minter.userId, runId: minter.runId } : null;
+  const charged = minter?.runId ? { userId: minter.userId, runId: minter.runId, dust: minter.paidWith === "dust" } : null;
   const settled = charged
     ? run.catch((err) => {
-        // The run didn't produce a card: give the credit back (write-once per run id).
-        bg(refundCredit(charged.userId, charged.runId));
+        // The run didn't produce a card: give the credit (or dust) back (write-once per run id).
+        bg(charged.dust ? refundDust(charged.userId, charged.runId) : refundCredit(charged.userId, charged.runId));
         throw err;
       })
     : run;
@@ -230,15 +240,25 @@ export async function POST(request: Request) {
     if (minter && creditsOn() && !admin) {
       const hdr = request.headers.get("x-run-id") ?? "";
       const runId = RUN_ID_RE.test(hdr) ? hdr : randomUUID();
-      const spent = await spendCredit(minter.userId, runId);
+      let spent = await spendCredit(minter.userId, runId);
+      let paidWith: Minter["paidWith"] = "credit";
+      // Out of credits: a reading costs READING_DUST Stardust instead, if there's enough (burn.md §3).
+      if (spent === "empty" && dustOn()) {
+        const d = await spendDust(minter.userId, runId);
+        if (d === "spent" || d === "dup" || d === "used") {
+          spent = d;
+          paidWith = "dust";
+        }
+      }
       if (spent !== "spent" && spent !== "dup") {
         await release();
         await dropLease(key);
-        if (spent === "empty") return reply({ error: "You're out of readings. The shop has more.", reason: "credits" }, { status: 402 });
+        if (spent === "empty")
+          return reply({ error: dustOn() ? `You're out of readings. Burn cards for Stardust: ${READING_DUST} buys one.` : "You're out of readings. The shop has more.", reason: "credits" }, { status: 402 });
         if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
         return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
       }
-      minter = { ...minter, runId };
+      minter = { ...minter, runId, paidWith };
     }
     flight = startFlight(key, fallbackKey, body, release, minter);
     // The run outlives this response if the client drops: it finishes, caches its result and releases its slot.

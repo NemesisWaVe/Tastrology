@@ -2,7 +2,7 @@ import { battle, ENGINE_V } from "@/lib/battle";
 import { fromSheet, getFighterStatus, putFighterMemory, type FighterSheet } from "@/lib/fighters";
 import { allow, clientId } from "@/lib/ratelimit";
 import { s3Get, s3PutIfAbsent } from "@/lib/s3";
-import { TWIN_CODE } from "@/lib/twins";
+import { burnedAt, TWIN_CODE } from "@/lib/twins";
 
 export const runtime = "nodejs";
 
@@ -13,6 +13,9 @@ export async function GET(request: Request) {
   const b = q.get("b")?.toUpperCase() ?? "";
   if (!TWIN_CODE.test(a) || !TWIN_CODE.test(b)) return Response.json({ error: "bad code" }, { status: 400 });
   if (!(await allow(`battle:${clientId(request.headers)}`, 120, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429 });
+  // A burned card can't fight (docs/design/burn.md). A tombstone that can't be read fails open, like every optional store.
+  const [ta, tb] = await Promise.all([burnedAt(a), burnedAt(b)]);
+  if (ta || tb) return Response.json({ error: "burned", burned: ta ? a : b }, { status: 410, headers: { "cache-control": "public, max-age=60, s-maxage=60" } });
   const [la, lb] = await Promise.all([getFighterStatus(a), getFighterStatus(b)]);
   const fa = la.sheet;
   const fb = lb.sheet;
@@ -24,7 +27,7 @@ export async function GET(request: Request) {
   // Sides matter in the result, so a swapped order gets its own key.
   const key = `battles/v1/${x}_${y}_${ENGINE_V}${a === x ? "" : "_r"}.json`;
   if (!(await s3Get(key).catch(() => null))) await s3PutIfAbsent(key, JSON.stringify(out)).catch(() => {});
-  return Response.json({ result: out }, { headers: { "cache-control": "public, max-age=31536000, s-maxage=31536000, immutable" } });
+  return Response.json({ result: out }, { headers: { "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=60" } });
 }
 
 /** Dev only: in mock mode (not live, not production), registers a sheet in memory so the route can be exercised without a live run. */

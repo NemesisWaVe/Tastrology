@@ -6,6 +6,7 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
+import { Burned } from "@/components/card/Burned";
 import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
@@ -18,6 +19,8 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const [source, setSource] = useState<"server" | "device" | null>(null);
   /** The server couldn't answer (storage blip or offline), so "not found" would be a lie. */
   const [unavailable, setUnavailable] = useState(false);
+  /** The owner burned it (410): gone on purpose, so no device fallback either. */
+  const [burned, setBurned] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -26,6 +29,11 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       const res = await fetch(`/api/card?code=${encodeURIComponent(code)}`, { cache: "no-store" }).catch(() => null);
       const j = res?.ok ? ((await res.json().catch(() => null)) as { card: CardData | null } | null) : null;
       if (off) return;
+      if (res?.status === 410) {
+        setBurned(true);
+        setCard(null);
+        return;
+      }
       if (j?.card && cardCode(j.card) === code) {
         setCard(j.card);
         setSource("server");
@@ -65,7 +73,9 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {card === undefined && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Looking up No. {code}…</p>}
 
-      {card === null && unavailable && (
+      {card === null && burned && <Burned code={code} />}
+
+      {card === null && !burned && unavailable && (
         <div className="max-w-md text-center">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-warn">Temporarily unavailable</p>
           <h1 className="mt-3 font-serif text-5xl italic leading-[0.95]">The vault is stuck for a moment.</h1>
@@ -76,7 +86,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
         </div>
       )}
 
-      {card === null && !unavailable && (
+      {card === null && !burned && !unavailable && (
         <div className="max-w-md text-center">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-bad">Not found</p>
           <h1 className="mt-3 font-display text-4xl font-bold tracking-tight">No card with code {code}</h1>
