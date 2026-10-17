@@ -19,13 +19,14 @@ const clerk = (...src: string[]) => (CLERK ? ` ${src.join(" ")}` : "");
 
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${clerk(CLERK!)}`,
+  // *.protect.clerk.com: Clerk Protect, which runs the "challenge suspicious sign-ups" check.
+  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${clerk(CLERK!, "https://*.protect.clerk.com")}`,
   "frame-src https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   // Qloo entity images render directly; canvas exports go through /api/img instead.
   `img-src 'self' data: blob: https://images.qloo.com${clerk("https://img.clerk.com")}`,
-  `connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://challenges.cloudflare.com${clerk(CLERK!)}`,
+  `connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://challenges.cloudflare.com${clerk(CLERK!, "https://*.protect.clerk.com")}`,
   ...(CLERK ? ["worker-src 'self' blob:"] : []),
   "media-src 'self' blob: data:",
   "object-src 'none'",
