@@ -22,7 +22,8 @@ export type Sfx =
   | "beep" // checkout scan
   | "stamp" // rubber stamp thunk
   | "tear" // paper tearing off
-  | "ding"; // microwave-style bell: the card is done
+  | "ding" // microwave-style bell: the card is done
+  | "rustle"; // card turning in the hand: soft low air
 
 export type SfxOpts = { i?: number; gain?: number };
 

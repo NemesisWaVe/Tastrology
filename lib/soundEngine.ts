@@ -18,7 +18,7 @@ let noiseBuf: AudioBuffer | null = null;
 let on = false;
 let loaded = false;
 const last: Partial<Record<Sfx, number>> = {};
-const MIN_GAP: Partial<Record<Sfx, number>> = { pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { rustle: 90, pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120 };
 
 function load() {
   if (loaded) return;
@@ -214,6 +214,10 @@ function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
     case "ding": // a struck bell: bright fundamental, inharmonic overtones, long ring, tiny strike click
       noise(c, t, 0.012, 0.12 * gv, { type: "highpass", f0: 4000, send: 0.05 });
       [[1, 0.3, 1.9], [2.76, 0.09, 1.1], [5.4, 0.035, 0.6], [1.003, 0.12, 2.2]].forEach(([r, v, d]) => tone(c, t, 1975 * r, d, v * gv, { attack: 0.002, send: 0.35 }));
+      break;
+    case "rustle": // a card turning: low, soft air with a papery edge
+      noise(c, t, 0.16, 0.12 * gv, { type: "bandpass", f0: 260 + Math.random() * 120, f1: 520, q: 0.7, attack: 0.05, send: 0.15, pan: (Math.random() - 0.5) * 0.4 });
+      noise(c, t + 0.02, 0.08, 0.035 * gv, { type: "highpass", f0: 2600, attack: 0.03, send: 0.05 });
       break;
     case "whoosh": // airy sweep up, quick settle
       noise(c, t, 0.35, 0.2 * gv, { type: "bandpass", f0: 400, f1: 2400, q: 0.8, attack: 0.12, send: 0.3, pan: 0.15 });
