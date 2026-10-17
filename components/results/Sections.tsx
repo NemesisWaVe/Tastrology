@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import type { StyleResult } from "@/lib/types";
-import { KIND_ICON, KIND_LABEL } from "@/components/SeedPicker";
+import { KIND_LABEL } from "@/components/SeedPicker";
+import { ReceiptPaper } from "@/components/card/Receipt";
+import { displayName } from "@/lib/card";
 import { SectionHead, Thumb } from "./ui";
 
 /* ------------------------------------------------------------------ what changed */
@@ -43,70 +45,79 @@ export function Changes({ result }: { result: StyleResult }) {
   );
 }
 
-/* ------------------------------------------------------------------ self-critique */
+/* ------------------------------------------------------------------ the critic, in one line */
 
+/**
+ * What the critic did, said plainly in one line. The full detail (each cut, why, the checks) is one tap away for
+ * anyone who wants it; most people don't, and it shouldn't read like a log.
+ */
 export function Critique({ result }: { result: StyleResult }) {
-  const seedName = (id: string) => result.seeds.find((s) => s.id === id)?.name ?? "";
-  const checks = result.critique.filter((c) => !c.startsWith("Contradiction") && !c.startsWith("Rejected"));
+  const [open, setOpen] = useState(false);
+  const seedName = (id: string) => displayName(result.seeds.find((s) => s.id === id)?.name ?? "");
+  const flukes = result.rejected.filter((r) => r.reason.startsWith("Carried")).length;
+  const budget = result.rejected.length - flukes;
   const con = result.contradictions[0];
+  const checks = result.critique.filter((c) => !c.startsWith("Contradiction") && !c.startsWith("Rejected"));
+  const parts = [
+    flukes ? `cut ${flukes} brand${flukes === 1 ? "" : "s"} that leaned on just one of your loves` : "",
+    budget ? `dropped ${budget} over your budget` : "",
+  ].filter(Boolean);
   return (
     <section id="doubts" className="scroll-mt-20">
-      <SectionHead
-        title={
-          <>
-            The agent argued <em className="text-ink-2">with itself</em>
-          </>
-        }
-        note="Before showing you anything, it checks what Qloo sent back and drops the matches it can't defend."
-      />
-      <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr]">
-        <div className="space-y-3 rounded-[22px] border border-line bg-card p-4 sm:p-5">
+      <div className="rise flex flex-col items-center gap-3 border-y border-line/70 py-8 text-center">
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.24em] text-ink-3">The critic</p>
+        <p className="max-w-2xl text-balance font-serif text-[24px] leading-snug text-ink sm:text-[30px]">
+          {parts.length ? <>Before you saw a thing, it {parts.join(" and ")}.</> : <>Every brand held up. Nothing was cut.</>}
           {con && (
-            <div className="rounded-2xl border border-warn/25 bg-[linear-gradient(135deg,rgba(251,191,36,0.10),transparent_70%)] p-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-warn">☽ Contradiction detected</p>
-              <p className="mt-1.5 font-display text-[17px] font-semibold leading-snug">
-                {seedName(con.a)} <span className="text-warn">≠</span> {seedName(con.b)}
-              </p>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">
-                Their Qloo aesthetic overlap is {(con.overlap * 100).toFixed(0)}%, so they point at different wardrobes. Your sign was split into two sides
-                instead of averaged into mush. That&apos;s your Moon.
-              </p>
-            </div>
+            <>
+              {" "}
+              <em className="text-ink-2">
+                {seedName(con.a)} and {seedName(con.b)} pull different ways, so you got two sides.
+              </em>
+            </>
           )}
-          <ul className="space-y-2.5">
-            {checks.map((c, i) => (
-              <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-ink-2">
-                <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good-soft text-[11px] text-good">✓</span>
-                {c}
-              </li>
-            ))}
-            {!con && (
-              <li className="flex gap-2.5 text-[13.5px] text-ink-2">
-                <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good-soft text-[11px] text-good">✓</span>
-                No contradictions: your loves point the same way.
-              </li>
-            )}
-          </ul>
-        </div>
-        <div className="rounded-[22px] border border-line bg-card p-4 sm:p-5">
-          <p className="flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
-            <span>Rejected by the agent</span>
-            <span>{result.rejected.length}</span>
-          </p>
-          {result.rejected.length === 0 && <p className="mt-3 text-sm text-ink-3">Nothing rejected this round.</p>}
-          <ul className="mt-3 divide-y divide-line/70">
-            {result.rejected.map((r) => (
-              <li key={r.entity.id} className="py-2.5 first:pt-0">
-                <p className="flex items-baseline justify-between gap-3">
-                  <span className="truncate font-medium text-ink-2 line-through decoration-bad/70 decoration-[1.5px]">{r.entity.name}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-ink-3">aff {r.affinity.toFixed(2)}</span>
-                </p>
-                <p className="mt-0.5 text-[12.5px] leading-snug text-ink-3">{r.reason}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
+        </p>
+        {(result.rejected.length > 0 || checks.length > 0) && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 underline decoration-dotted underline-offset-4 transition hover:text-ink"
+          >
+            {open ? "hide the cuts −" : "see the cuts +"}
+          </button>
+        )}
       </div>
+      {open && (
+        <div className="rise mx-auto mt-6 max-w-[460px]">
+          <ReceiptPaper curl>
+            <div className="px-6 pt-4 font-mono text-[11.5px] uppercase leading-[1.55]" style={{ color: "rgb(58 42 30 / 0.9)" }}>
+              <p className="text-center font-bold tracking-[0.2em]">Struck from the record</p>
+              <div className="my-2 border-t border-dashed border-black/40" />
+              {result.rejected.map((r) => (
+                <div key={r.entity.id} className="mb-1.5">
+                  <p className="flex items-baseline gap-1.5">
+                    <s className="min-w-0 truncate decoration-[#c4302b] decoration-[1.5px]">{r.entity.name}</s>
+                    <span className="flex-1 border-b border-dotted border-black/35" />
+                    <span className="tabular-nums">.{String(Math.round(r.affinity * 100)).padStart(2, "0")}</span>
+                  </p>
+                  <p className="pl-3 normal-case opacity-70">{r.reason}</p>
+                </div>
+              ))}
+              {checks.length > 0 && (
+                <>
+                  <div className="my-2 border-t border-dashed border-black/40" />
+                  {checks.map((c, i) => (
+                    <p key={i} className="mb-1 normal-case opacity-80">
+                      ✓ {c}
+                    </p>
+                  ))}
+                </>
+              )}
+            </div>
+          </ReceiptPaper>
+        </div>
+      )}
     </section>
   );
 }
@@ -212,62 +223,77 @@ export function Matrix({ result }: { result: StyleResult }) {
 
 /* ------------------------------------------------------------------ capsule + bridges */
 
-function BridgeImg({ src, icon }: { src?: string; icon: string }) {
+const SIGIL: Record<string, string> = { place: "⌖", movie: "◐", artist: "♪", book: "❡", tv_show: "▭", podcast: "◎", videogame: "◇" };
+
+/** A bridge (place, film, artist, book) as a small star plate: its image in an orbit ring, duotoned into the sky. */
+function BridgePlate({ b }: { b: StyleResult["bridges"][number] }) {
   const [bad, setBad] = useState(false);
-  if (!src || bad) return <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-paper-2 text-xl text-ink-2">{icon}</span>;
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt="" loading="lazy" onError={() => setBad(true)} className="h-16 w-16 shrink-0 rounded-2xl bg-paper-2 object-cover" />;
+  const e = b.entity;
+  return (
+    <article className="rise group relative flex gap-4 overflow-hidden rounded-[22px] border border-line p-4 transition hover:border-ink-3/60 sm:p-5" style={{ background: "repeating-conic-gradient(from 200deg at 0% 0%, rgb(255 236 200 / .028) 0 .6deg, transparent .6deg 3deg), var(--card)" }}>
+      <span className="relative grid h-[84px] w-[84px] shrink-0 place-items-center">
+        <span aria-hidden className="absolute inset-0 rounded-full border border-dashed border-[rgb(233_185_92/0.4)] transition-transform duration-[2000ms] group-hover:rotate-90" />
+        <span aria-hidden className="absolute -right-0.5 top-2 h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)]" />
+        {e.image && !bad ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={e.image} alt="" loading="lazy" onError={() => setBad(true)} className="h-[70px] w-[70px] rounded-full object-cover [filter:grayscale(1)_sepia(.35)_contrast(1.1)_brightness(.95)] transition group-hover:[filter:none]" />
+        ) : (
+          <span className="grid h-[70px] w-[70px] place-items-center rounded-full bg-paper-2 font-serif text-2xl italic text-ink-2">{SIGIL[e.kind] ?? "✦"}</span>
+        )}
+      </span>
+      <div className="min-w-0">
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
+          <span className="text-accent">{SIGIL[e.kind] ?? "✦"}</span> {KIND_LABEL[e.kind] ?? e.kind}
+        </p>
+        <h3 className="mt-1 font-serif text-[23px] leading-[1.05]">{e.name}</h3>
+        {e.subtitle && <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-ink-3">{e.subtitle}</p>}
+        {b.why && <p className="mt-2 font-serif text-[14px] italic leading-snug text-ink-2">{b.why}</p>}
+      </div>
+    </article>
+  );
 }
 
 export function CapsuleAndBridges({ result }: { result: StyleResult }) {
-  const brand = (id: string) => result.brands.find((b) => b.entity.id === id)?.entity;
+  const brandOf = (id: string) => result.brands.find((b) => b.entity.id === id);
+  const seedName = (id: string) => displayName(result.seeds.find((s) => s.id === id)?.name ?? "");
   return (
-    <div className="grid gap-12 lg:grid-cols-2 lg:gap-8">
+    <div className="grid gap-14 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-10">
       <section id="capsule" className="scroll-mt-20">
-        <SectionHead title="Start with these, in this order" note="One brand per piece, picked from the matches above." />
-        <ol className="overflow-hidden rounded-[22px] border border-line bg-card">
-          {result.capsule.map((c, i) => (
-            <li key={c.category} className="flex items-center gap-4 border-t border-line/70 px-4 py-3.5 first:border-t-0 sm:px-5">
-              <span className="w-6 font-mono text-[11px] text-accent">{String(i + 1).padStart(2, "0")}</span>
-              <span className="w-28 shrink-0 font-display text-[14px] font-semibold sm:w-36">{c.category}</span>
-              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <SectionHead kicker="Your first haul" title="Start here" note="One brand per piece, in the order they fit you." />
+        <ReceiptPaper curl className="mx-auto max-w-[420px]">
+          <div className="px-6 pt-4 font-mono text-[11.5px] uppercase leading-[1.55]" style={{ color: "rgb(58 42 30 / 0.9)" }}>
+            <p className="text-center text-[15px] font-bold tracking-[0.2em]">Shopping list</p>
+            <p className="text-center tracking-[0.1em] opacity-70">· one piece per line ·</p>
+            <div className="my-2 border-t border-dashed border-black/40" />
+            {result.capsule.map((c, i) => (
+              <div key={c.category} className="mb-2">
+                <p className="font-bold">
+                  {String(i + 1).padStart(2, "0")} {c.category}
+                </p>
                 {c.brandIds.map((id) => {
-                  const e = brand(id);
-                  if (!e) return null;
+                  const b = brandOf(id);
+                  if (!b) return null;
+                  const via = b.because.slice(0, 1).map(seedName).filter(Boolean)[0];
                   return (
-                    <span key={id} className="inline-flex items-center gap-1.5 text-[13px] text-ink-2">
-                      <span className="grid h-5 w-5 place-items-center overflow-hidden rounded-md bg-white p-[2px]">
-                        {e.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={e.image} alt="" className="h-full w-full object-contain" loading="lazy" />
-                        ) : (
-                          <span className="text-[11px] text-black">{e.name[0]}</span>
-                        )}
-                      </span>
-                      {e.name}
-                    </span>
+                    <p key={id} className="flex items-baseline gap-1.5 pl-3">
+                      <span className="min-w-0 truncate">{b.entity.name}</span>
+                      <span className="flex-1 border-b border-dotted border-black/35" />
+                      <span className="shrink-0 normal-case opacity-70">{via ? `via ${via}` : ""}</span>
+                    </p>
                   );
                 })}
-              </span>
-            </li>
-          ))}
-        </ol>
+              </div>
+            ))}
+            <div className="my-2 border-t border-dashed border-black/40" />
+            <p className="text-center tracking-[0.14em] opacity-70">{result.capsule.length} pieces · read from your loves</p>
+          </div>
+        </ReceiptPaper>
       </section>
       <section id="bridges" className="scroll-mt-20">
-        <SectionHead kicker="Outside the closet" title="Same taste, other shelves" note="Films, books and places Qloo links to the same loves." />
-        <div className="space-y-2.5">
+        <SectionHead kicker="Other constellations" title="Same taste, other shelves" note="Places, films, music and books Qloo links to the same loves." />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
           {result.bridges.map((b) => (
-            <div key={b.entity.id} className="flex gap-3.5 rounded-[22px] border border-line bg-card p-3.5 sm:p-4">
-              <BridgeImg src={b.entity.image} icon={KIND_ICON[b.entity.kind] ?? "◆"} />
-              <div className="min-w-0">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-                  {KIND_ICON[b.entity.kind]} {KIND_LABEL[b.entity.kind] ?? b.entity.kind}
-                </p>
-                <p className="mt-0.5 font-display text-[16px] font-semibold leading-snug">{b.entity.name}</p>
-                {b.entity.subtitle && <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-3">{b.entity.subtitle}</p>}
-                {b.why && <p className="mt-1.5 text-[13px] leading-snug text-ink-2">{b.why}</p>}
-              </div>
-            </div>
+            <BridgePlate key={b.entity.id} b={b} />
           ))}
         </div>
       </section>

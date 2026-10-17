@@ -42,6 +42,12 @@ export interface QEntity {
   tier?: 1 | 2 | 3;
   /** Qloo brand properties: personal_style + aesthetic_properties. */
   style?: string[];
+  /** Qloo properties.official_site (brands; not always present). */
+  site?: string;
+  /** Qloo properties.external.instagram id (a handle), when Qloo has one. */
+  instagram?: string;
+  /** Qloo properties.founded_year. */
+  founded?: string;
 }
 
 export interface InsightsParams {

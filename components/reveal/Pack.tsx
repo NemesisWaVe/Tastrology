@@ -5,10 +5,10 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardBack, RARITY_GLOW } from "@/components/card/HoloCard";
 import { FlipCard } from "@/components/card/FlipCard";
-import { Sigil, type SigilKind } from "@/components/card/Sigils";
+import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
-import { PackAperture } from "./PackAperture";
+import { figureFor, rng } from "./skyFigures";
 import { Sky } from "./Sky";
 import { skyState } from "./traceModel";
 import s from "./reveal.module.css";
@@ -525,7 +525,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   <div className="absolute inset-x-[8%] -bottom-6 h-10 rounded-[50%] bg-black/60 blur-xl" />
                   {/* body */}
                   <div className="absolute inset-0" style={{ clipPath: bodyClip(packW, packH, tearY) }}>
-                    <PackArt w={packW} h={packH} tearY={tearY} reduce={reduce} />
+                    <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
                   </div>
                   {/* light leaking from the tear */}
                   <motion.div
@@ -549,7 +549,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       className="absolute inset-0"
                       style={{ clipPath: stripClip(packW, tearY), rotate: stripRotate, y: stripY, scaleX: stripSX, scaleY: stripSY, transformOrigin: `${packW}px ${tearY}px` }}
                     >
-                      <PackArt w={packW} h={packH} tearY={tearY} reduce={reduce} strip />
+                      <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
                     </motion.div>
                   </motion.div>
                   <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW, opacity: leak }} />
@@ -789,99 +789,84 @@ function bodyClip(w: number, h: number, tearY: number) {
 }
 
 /**
- * The wrapper: the same for everyone ("Infinity", Set 01). Midnight ink foil engraved with rays from an aperture onto
- * a black hole, framed by an atlas graticule, holo-engraved name. Nothing on it is about the card inside: that stays
- * sealed until you tear it. A holographic diffraction layer shifts with the pointer or tilt (`--hx`, `--hy`).
- * `strip` renders the torn-off top band only (the aperture would be clipped away anyway).
+ * The wrapper: the original Tastrology booster (vivid foil in the card's Sun colours, medallion, wordmark), with a
+ * hint of the sky pressed into the foil: a few faint constellations and scattered stars, the same on every pack.
  */
-function PackArt({ w, h, tearY, reduce, strip = false }: { w: number; h: number; tearY: number; reduce: boolean; strip?: boolean }) {
+function PackArt({ card, loves, w, h, tearY }: { card: CardData; loves: number; w: number; h: number; tearY: number }) {
+  const { sun } = card.bigThree;
   const u = w / 100;
-  const el = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const node = el.current;
-    if (!node || reduce) return;
-    const onMove = (e: PointerEvent) => {
-      node.style.setProperty("--hx", (e.clientX / window.innerWidth).toFixed(3));
-      node.style.setProperty("--hy", (e.clientY / window.innerHeight).toFixed(3));
-    };
-    const onTilt = (e: DeviceOrientationEvent) => {
-      if (e.gamma == null || e.beta == null) return;
-      node.style.setProperty("--hx", (0.5 + Math.max(-0.5, Math.min(0.5, e.gamma / 50))).toFixed(3));
-      node.style.setProperty("--hy", (0.5 + Math.max(-0.5, Math.min(0.5, (e.beta - 45) / 50))).toFixed(3));
-    };
-    window.addEventListener("pointermove", onMove, { passive: true });
-    window.addEventListener("deviceorientation", onTilt, { passive: true });
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("deviceorientation", onTilt);
-    };
-  }, [reduce]);
-
-  const ap = Math.min(68 * u, h - tearY - 58 * u); // aperture diameter
-  const apTop = tearY + 10 * u;
-  const ring = ap * 1.18;
   return (
-    <div ref={el} className={s.packArt}>
+    <div className={s.packArt}>
       <div className={s.foil} />
+      <StarHint w={w} h={h} />
+      {/* plastic gloss */}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .35), transparent 12%, rgb(255 255 255 / .16) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .4))" }} />
       <div className={s.crimp} style={{ top: 0, height: h * 0.065 }} />
       <div className={s.crimp} style={{ bottom: 0, height: h * 0.055 }} />
       <div className={s.tearLine} style={{ top: tearY }} />
 
-      <p className="absolute inset-x-0 text-center font-mono uppercase text-white/80" style={{ top: tearY + 3.2 * u, fontSize: 2.5 * u, letterSpacing: "0.34em" }}>
-        {BRAND.cardSet} · infinity
-      </p>
-
-      {!strip && (
-        <>
-          {/* atlas graticule around the aperture: hairline rings and degree ticks, gold leaf */}
-          <svg
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
-            style={{ top: apTop + ap / 2 - ring / 2, width: ring, height: ring }}
-            viewBox="-60 -60 120 120"
-            aria-hidden
-          >
-            <defs>
-              <linearGradient id="packGold" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#fff7dc" />
-                <stop offset="0.5" stopColor="#e9b95c" />
-                <stop offset="1" stopColor="#fff3d0" />
-              </linearGradient>
-            </defs>
-            <g fill="none" stroke="url(#packGold)">
-              <circle r="58.5" strokeWidth="0.5" opacity="0.8" />
-              <circle r="55.5" strokeWidth="0.25" opacity="0.5" />
-              {Array.from({ length: 72 }, (_, k) => {
-                const a = (k / 72) * Math.PI * 2;
-                const l = k % 6 === 0 ? 4.5 : 2;
-                return <line key={k} x1={Math.cos(a) * 58.5} y1={Math.sin(a) * 58.5} x2={Math.cos(a) * (58.5 - l)} y2={Math.sin(a) * (58.5 - l)} strokeWidth="0.35" opacity="0.75" />;
-              })}
-            </g>
-            {["☉", "☽", "↑"].map((g, k) => {
-              const a = -Math.PI / 2 + (k * Math.PI * 2) / 3;
-              return (
-                <text key={g} x={Math.cos(a) * 49.5} y={Math.sin(a) * 49.5 + 2.2} textAnchor="middle" fill="url(#packGold)" style={{ fontSize: 6.2 }}>
-                  {g}
-                </text>
-              );
-            })}
-          </svg>
-          {/* the aperture: a window onto infinity, set into the foil */}
-          <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: apTop, width: ap, height: ap, boxShadow: "0 0 0 1.5px rgb(255 240 210 / .7), 0 0 0 4px rgb(0 0 0 / .55), inset 0 0 18px rgb(0 0 0 / .9)" }}>
-            <PackAperture size={ap} reduce={reduce} />
-          </div>
-          <div className="absolute inset-x-0 flex flex-col items-center text-center" style={{ top: apTop + ap + 9 * u }}>
-            <p className={`${s.holoText} font-display font-extrabold leading-none tracking-[-0.03em]`} style={{ fontSize: 12.5 * u }}>
-              {BRAND.name}
-            </p>
-            <p className="font-serif italic text-white/85" style={{ fontSize: 4.4 * u, marginTop: 1.4 * u }}>
-              {BRAND.tagline}
-            </p>
-          </div>
-          <div className="absolute inset-x-0 text-center font-mono uppercase text-white/75" style={{ bottom: h * 0.085, fontSize: 2.4 * u, letterSpacing: "0.24em" }}>
-            1 holographic taste sign · sealed
-          </div>
-        </>
-      )}
+      <div className="absolute inset-x-0 flex flex-col items-center text-center text-white" style={{ top: tearY + 4 * u }}>
+        <p className="font-mono uppercase" style={{ fontSize: 2.6 * u, letterSpacing: "0.32em", opacity: 0.8 }}>
+          {BRAND.cardSet} · booster
+        </p>
+        <div
+          className="relative mt-[6%] grid place-items-center rounded-full"
+          style={{
+            width: 46 * u,
+            height: 46 * u,
+            background: "radial-gradient(circle, rgb(255 255 255 / .22), rgb(255 255 255 / .04) 62%, transparent 63%), conic-gradient(from 0deg, rgb(255 255 255 / .55), transparent 25%, rgb(255 255 255 / .45) 50%, transparent 75%, rgb(255 255 255 / .55))",
+            boxShadow: "inset 0 0 0 1.5px rgb(255 255 255 / .55), 0 10px 40px -8px rgb(0 0 0 / .5)",
+          }}
+        >
+          <TypeSigil glyph={sun.glyph} className="drop-shadow-[0_2px_18px_rgb(0_0_0/0.35)]" style={{ width: 22 * u, height: 22 * u }} />
+        </div>
+        <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 14.5 * u, marginTop: 7 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
+          {BRAND.name}
+        </p>
+        <p className="font-serif italic" style={{ fontSize: 5.2 * u, marginTop: 1.5 * u, opacity: 0.92 }}>
+          {BRAND.tagline}
+        </p>
+      </div>
+      <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.5 * u, letterSpacing: "0.22em", opacity: 0.85 }}>
+        1 holographic taste sign · from {loves} loves
+      </div>
     </div>
+  );
+}
+
+/** Faint constellations pressed into the foil, kept clear of the medallion and wordmark. Generic: same on every pack. */
+function StarHint({ w, h }: { w: number; h: number }) {
+  const art = useMemo(() => {
+    const r = rng("tastrology-pack-sky");
+    const spots = [
+      [0.17, 0.27],
+      [0.84, 0.24],
+      [0.13, 0.66],
+      [0.86, 0.7],
+    ];
+    const figs = spots.map(([fx, fy], k) => {
+      const f = figureFor(`pack-${k}`, w * 0.075);
+      return { x: fx * w, y: fy * h, f };
+    });
+    const dots = Array.from({ length: 46 }, () => ({ x: r() * w, y: r() * h, s: 0.5 + Math.pow(r(), 4) * 1.6, o: 0.25 + r() * 0.5 }));
+    return { figs, dots };
+  }, [w, h]);
+  return (
+    <svg className="pointer-events-none absolute inset-0 mix-blend-overlay" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+      {art.dots.map((d, i) => (
+        <circle key={i} cx={d.x} cy={d.y} r={d.s} fill="#fff" opacity={d.o} />
+      ))}
+      {art.figs.map(({ x, y, f }, k) => (
+        <g key={k} transform={`translate(${x} ${y})`} opacity="0.85">
+          {f.edges.map(([a, b]) => (
+            <line key={`${a}-${b}`} x1={f.stars[a].x} y1={f.stars[a].y} x2={f.stars[b].x} y2={f.stars[b].y} stroke="#fff" strokeWidth="0.7" strokeOpacity="0.55" />
+          ))}
+          {f.stars.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r={0.9 + p.m * 1.3} fill="#fff" />
+          ))}
+          <circle cx={f.stars[f.alpha].x} cy={f.stars[f.alpha].y} r="4" fill="none" stroke="#fff" strokeWidth="0.6" strokeOpacity="0.6" />
+        </g>
+      ))}
+    </svg>
   );
 }
