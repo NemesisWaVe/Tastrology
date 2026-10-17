@@ -7,7 +7,7 @@
  */
 
 export type SkyView = { cx: number; vTop: number; ww: number; wh: number; hz: number };
-export type Touch = { x: number; y: number; t: number };
+export type Touch = { x: number; y: number; t: number; amp: number; name?: string };
 
 export const SKY_AR = 1500 / 1167; // sky.webp width / height
 
@@ -28,7 +28,7 @@ uniform sampler2D sky, drop;
 uniform vec2 res;           // css px
 uniform vec4 view;          // cx, vTop, ww, wh
 uniform float hz, t, fade, vid, dropAmt;
-uniform vec3 touch[6];      // x, y (css px), age (s; <0 = off)
+uniform vec4 touch[6];      // x, y (css px), age (s; <0 = off), strength
 uniform vec3 imp;           // the drop's impact: x, y (css px), age (s; <0 = not yet)
 
 vec3 skyAt(vec2 s){
@@ -62,14 +62,14 @@ void main(){
     vec2 off = n * vec2(90., 45.) * vid * dropAmt * fm;
     // touches: expanding rings that bend the reflection
     for (int i = 0; i < 6; i++) {
-      vec3 k = touch[i];
+      vec4 k = touch[i];
       if (k.z < 0.) continue;
       vec2 r = s - k.xy; r.y *= 2.6;             // flattened by perspective
       float dist = length(r), front = k.z * 260.;
       float env = exp(-k.z * 1.3) * smoothstep(front + 40., front, dist) * smoothstep(0., 30., dist);
       float wv = sin((dist - front) * .09) * env;
-      off += normalize(r + .001) * wv * 10.;
-      hi += max(0., wv) * .12;
+      off += normalize(r + .001) * wv * 10. * k.w;
+      hi += max(0., wv) * .12 * k.w;
     }
     // the impact: a train of wavefronts spreading from where the drop lands
     if (imp.z >= 0.) {
@@ -157,7 +157,7 @@ export function createMirror(canvas: HTMLCanvasElement, skySrc: string, video: H
   img.src = skySrc;
 
   let w = 1, h = 1;
-  const touchBuf = new Float32Array(18);
+  const touchBuf = new Float32Array(24);
   return {
     ready: () => skyOk,
     resize(cw, ch, dpr) {
@@ -181,9 +181,10 @@ export function createMirror(canvas: HTMLCanvasElement, skySrc: string, video: H
       }
       for (let i = 0; i < 6; i++) {
         const k = touches[i];
-        touchBuf[i * 3] = k ? k.x : 0;
-        touchBuf[i * 3 + 1] = k ? k.y : 0;
-        touchBuf[i * 3 + 2] = k ? now - k.t : -1;
+        touchBuf[i * 4] = k ? k.x : 0;
+        touchBuf[i * 4 + 1] = k ? k.y : 0;
+        touchBuf[i * 4 + 2] = k ? now - k.t : -1;
+        touchBuf[i * 4 + 3] = k ? k.amp : 0;
       }
       gl.uniform2f(u.res, w, h);
       gl.uniform4f(u.view, view.cx, view.vTop, view.ww, view.wh);
@@ -192,7 +193,7 @@ export function createMirror(canvas: HTMLCanvasElement, skySrc: string, video: H
       gl.uniform1f(u.fade, skyOk ? fade : 0);
       gl.uniform1f(u.vid, vid);
       gl.uniform1f(u.dropAmt, dropAmt);
-      gl.uniform3fv(u.touch, touchBuf);
+      gl.uniform4fv(u.touch, touchBuf);
       const H = view.hz * h;
       gl.uniform3f(u.imp, w / 2, H + Math.max(1, h - H) * 0.42, impact);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
