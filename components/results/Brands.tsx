@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { figureFor, rng } from "@/components/reveal/skyFigures";
 import { ablationLines, displayName } from "@/lib/card";
 import type { BrandMatch, QEntity } from "@/lib/types";
 import { Thumb, cleanStyle, type Vote } from "./ui";
+import bs from "./brands.module.css";
 
 /**
  * A brand as a specimen plate: catalogue number, an ink-stamped logo, Qloo's own description, and a small star chart
@@ -43,7 +45,7 @@ export function BrandCard({
     <article
       className={`rise group relative flex flex-col overflow-hidden rounded-[22px] border p-4 transition duration-300 sm:p-5 ${
         vote === "up"
-          ? "border-accent/70 shadow-[0_0_0_1px_rgba(198,255,61,0.25),0_20px_50px_-30px_rgba(198,255,61,0.6)]"
+          ? "-translate-y-1 border-accent/60 shadow-[0_0_0_1px_rgba(198,255,61,0.25),0_-18px_60px_-26px_rgba(198,255,61,0.7),0_24px_60px_-30px_rgba(198,255,61,0.45)]"
           : vote === "down"
             ? "border-bad/30 saturate-0 [&>*:not(:first-child)]:opacity-40"
             : "border-line hover:border-ink-3/60"
@@ -54,6 +56,7 @@ export function BrandCard({
         background: "repeating-conic-gradient(from 200deg at 0% 0%, rgb(255 236 200 / .028) 0 .6deg, transparent .6deg 3deg), var(--card)",
       }}
     >
+      <SpaceBack id={e.id} on={vote === "up"} />
       {/* hairline specimen frame */}
       <span aria-hidden className="pointer-events-none absolute inset-[7px] rounded-[16px] border border-[rgb(233_185_92/0.16)]" />
 
@@ -213,6 +216,39 @@ function PullChart({ b, drivers, big = false }: { b: BrandMatch; drivers: { id: 
       {/* the brand as a star; the loves as the stars that point to it */}
       <title>{b.entity.name}</title>
     </svg>
+  );
+}
+
+/**
+ * Behind an upvoted card: deep space with a diffused field of stars and one faint constellation (seeded by the brand),
+ * revealed by a band of light sweeping up the card, plus a beacon breathing at the top edge. Fades out on un-vote.
+ */
+function SpaceBack({ id, on }: { id: string; on: boolean }) {
+  const art = useMemo(() => {
+    const r = rng(`beacon-${id}`);
+    const stars = Array.from({ length: 110 }, () => ({ x: r() * 200, y: r() * 200, s: 0.18 + Math.pow(r(), 5) * 0.45, o: 0.15 + r() * 0.45 }));
+    const f = figureFor(id, 30);
+    const pts = f.stars.map((p) => ({ x: 148 + p.x, y: 60 + p.y, m: p.m }));
+    return { stars, f, pts };
+  }, [id]);
+  return (
+    <span aria-hidden className={bs.space} data-on={on}>
+      <svg className={bs.stars} viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
+        {art.stars.map((d, i) => (
+          <circle key={i} cx={d.x} cy={d.y} r={d.s} fill="#fff" opacity={d.o} />
+        ))}
+        <g className={bs.figure}>
+          {art.f.edges.map(([a, b]) => (
+            <line key={`${a}-${b}`} x1={art.pts[a].x} y1={art.pts[a].y} x2={art.pts[b].x} y2={art.pts[b].y} stroke="#c6ff3d" strokeOpacity=".3" strokeWidth=".35" />
+          ))}
+          {art.pts.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r={0.5 + p.m * 0.6} fill={i === art.f.alpha ? "#c6ff3d" : "#fff"} opacity=".7" />
+          ))}
+        </g>
+      </svg>
+      {on && <span className={bs.beacon} />}
+      {on && <span className={bs.sweep} />}
+    </span>
   );
 }
 

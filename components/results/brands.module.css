@@ -1,0 +1,75 @@
+/* Upvoted brand: a light sweeps up through the card ("beam up") and leaves deep space behind it. */
+.space {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  background:
+    radial-gradient(90% 55% at 50% 0%, rgb(198 255 61 / 0.13), transparent 70%),
+    radial-gradient(70% 60% at 88% 18%, rgb(120 148 255 / 0.16), transparent 70%),
+    radial-gradient(60% 55% at 8% 70%, rgb(216 117 255 / 0.11), transparent 70%),
+    radial-gradient(120% 80% at 50% 120%, rgb(131 255 247 / 0.07), transparent 60%),
+    #07070d;
+}
+.space[data-on="true"] {
+  opacity: 1;
+  animation: reveal 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes reveal {
+  from { clip-path: inset(100% 0 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+.stars {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  animation: drift 38s ease-in-out infinite alternate;
+}
+.figure {
+  filter: blur(0.6px) drop-shadow(0 0 4px rgb(198 255 61 / 0.5));
+}
+@keyframes drift {
+  to { transform: translate(-3%, 2%); }
+}
+
+/* The beam itself: a bright band rising once from the bottom edge. */
+.sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: linear-gradient(to top, transparent, rgb(198 255 61 / 0.22) 62%, rgb(240 255 210 / 0.75) 70%, rgb(198 255 61 / 0.25) 73%, transparent 80%);
+  animation: sweep 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+@keyframes sweep {
+  0% { transform: translateY(20%); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(-250%); opacity: 0; }
+}
+
+/* A beacon at the top edge that keeps breathing while the vote stands. */
+.beacon {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 70%;
+  height: 46%;
+  translate: -50% 0;
+  pointer-events: none;
+  background: radial-gradient(50% 100% at 50% 0%, rgb(198 255 61 / 0.22), transparent 70%);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space[data-on="true"], .stars, .sweep, .beacon { animation: none; }
+  .sweep { display: none; }
+}
