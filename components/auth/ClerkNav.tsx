@@ -9,7 +9,7 @@ export default function ClerkNav() {
       <SignedOut>
         <button
           onClick={() => void whenAuthReady().then((b) => b?.openSignIn())}
-          className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink"
+          className="whitespace-nowrap py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink"
         >
           Sign in
         </button>

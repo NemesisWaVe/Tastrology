@@ -604,10 +604,10 @@ function UnderTheHood({ m, running, reduce }: { m: SceneModel; running: boolean;
             exit={{ opacity: 0, y: 12 }}
             transition={spring}
             aria-expanded={false}
-            className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-line/80 bg-paper-2/80 py-2 pl-3.5 pr-3 font-mono text-[11px] text-ink-2 backdrop-blur-md transition-colors hover:border-ink-3 hover:text-ink lg:left-auto lg:right-6 lg:translate-x-0"
+            className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-line/80 bg-paper-2/80 py-2 pl-3.5 pr-3 font-mono text-[11px] text-ink-2 backdrop-blur-md transition-colors hover:border-ink-3 hover:text-ink lg:left-auto lg:right-6 lg:translate-x-0"
           >
             <span className={`h-1.5 w-1.5 rounded-full ${running ? "pulse-dot bg-accent" : "bg-good"}`} />
-            <span className="uppercase tracking-[0.16em]">Under the hood</span>
+            <span className="uppercase tracking-[0.12em] sm:tracking-[0.16em]">Under the hood</span>
             <span className="tabular-nums text-ink-3">{m.calls} Qloo calls</span>
             <span aria-hidden className="text-ink-3">▴</span>
           </motion.button>
