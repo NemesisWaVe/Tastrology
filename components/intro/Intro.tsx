@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { sfx } from "@/lib/sound";
 import { enableSound, soundOn } from "@/lib/soundEngine";
 import { createMirror, SKY_AR, type Mirror, type SkyView, type Touch } from "./mirror";
-import { buildWord, CARD_AR, drawStars, type Rect, type Word } from "./stars";
+import { PERSONAS } from "@/lib/personas";
+import { buildWord, CARD_AR, drawDrops, drawStars, type Rect, type Word } from "./stars";
 import s from "./intro.module.css";
 
 const KEY = "tastrology:intro";
@@ -19,6 +20,13 @@ const sst = (a: number, b: number, x: number) => {
   return k * k * (3 - 2 * k);
 };
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+
+/** Real persona loves, interleaved so neighbouring drops differ. */
+const LOVES = (() => {
+  const out: string[] = [];
+  for (let j = 0; j < 5; j++) for (const p of PERSONAS) if (p.seeds[j]) out.push(p.seeds[j].name);
+  return out;
+})();
 
 const store = {
   get: () => {
@@ -46,7 +54,7 @@ function serifFamily(): string {
 }
 
 /** Where the camera looks for scroll progress p. Water first, then the horizon slides off and Scorpius fills the frame. */
-function viewAt(p: number, w: number, h: number): SkyView {
+function viewAt(p: number, w: number, h: number, par = { x: 0, y: 0 }): SkyView {
   const phone = w < 768;
   const look = sst(0.1, 0.5, p);
   const ww = phone ? 0.27 : Math.min(0.82, 0.62 / ((h / w) * SKY_AR));
@@ -57,7 +65,8 @@ function viewAt(p: number, w: number, h: number): SkyView {
   const vB = 0.36 - 0.5 * wh; // Scorpius centred
   const vTop = Math.min(1 - wh, Math.max(0, lerp(vA, vB, look)));
   const cx = lerp(0.5, phone ? 0.61 : 0.56, look);
-  return { cx: Math.min(1 - ww / 2, Math.max(ww / 2, cx)), vTop, ww, wh, hz };
+  const pcx = cx + par.x * ww * 0.03, pv = Math.min(1 - wh, Math.max(0, vTop + par.y * wh * 0.025));
+  return { cx: Math.min(1 - ww / 2, Math.max(ww / 2, pcx)), vTop: pv, ww, wh, hz };
 }
 
 function birthRect(w: number, h: number): Rect {
@@ -152,18 +161,30 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
 
     // ---- visitor ripples on the water ----
     const touches: Touch[] = [];
+    const parT = { x: 0, y: 0 }, par = { x: 0, y: 0 };
+    let loveI = 0, autoDrops = 0;
+    // six shader slots: cursor ripples give way before named drops
+    const trim = () => {
+      while (touches.length > 6) {
+        let i = touches.length - 1;
+        while (i >= 0 && touches[i].name) i--;
+        touches.splice(i >= 0 ? i : touches.length - 1, 1);
+      }
+    };
     let lastT = { x: -999, y: -999, t: 0 };
     const clock = () => performance.now() / 1000;
     const onPointer = (e: PointerEvent) => {
       if (!w) return;
       const r = st.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
+      parT.x = (x / w - 0.5) * 2;
+      parT.y = (y / h - 0.5) * 2;
       if (y < viewAt(scrollYProgress.get(), w, h).hz * h + 6) return;
       const now = clock(), down = e.type === "pointerdown";
       if (!down && (Math.hypot(x - lastT.x, y - lastT.y) < 70 || now - lastT.t < 0.22)) return;
       lastT = { x, y, t: now };
-      touches.unshift({ x, y, t: now });
-      touches.length = Math.min(touches.length, 6);
+      touches.unshift(down ? { x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length] } : { x, y, t: now, amp: 0.6 });
+      trim();
       if (down) sfx("ripple", { i: (touches.length * 2) % 7, gain: 0.6 });
     };
     st.addEventListener("pointermove", onPointer, { passive: true });
@@ -187,7 +208,19 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
 
     const frame = (p: number) => {
       const now = clock(), t = now - t0, since = started > 0 ? now - started : -1;
-      const view = viewAt(p, w, h);
+      par.x += (parT.x - par.x) * 0.04;
+      par.y += (parT.y - par.y) * 0.04;
+      const view = viewAt(p, w, h, par);
+      // after the first drop, more fall, each one a real love; they stop once we look up
+      const due = [IMPACT + 1.2, IMPACT + 2.1, IMPACT + 3.0, IMPACT + 4.1, IMPACT + 5.3];
+      if (since > 0 && autoDrops < due.length && since >= due[autoDrops] && p < 0.2) {
+        const H = view.hz * h, side = autoDrops % 2 ? 1 : -1;
+        const x = w * (0.5 + side * (0.12 + 0.18 * ((autoDrops * 0.37) % 1))), y = H + (h - H) * (0.25 + 0.4 * ((autoDrops * 0.61) % 1));
+        touches.unshift({ x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length] });
+        trim();
+        autoDrops++;
+        sfx("ripple", { i: autoDrops % 7, gain: 0.5 });
+      }
       const fade = started > 0 ? sst(0, 0.9, since + 0.3) : 0.35 * sst(0, 1.5, t);
       mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
       const bgO = String(reduce ? 1 : 1 - sst(0.9, 0.985, p));
@@ -199,6 +232,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const dock = k > 0 ? dockRect(h) : null;
       drawStars(ctx, word, {
         w, h, t, view, mono, phone,
+        twinkle: sst(0, 1, since + 0.5),
         cons: sst(0.36, 0.66, p),
         consDim: sst(0.62, 0.76, p),
         frame: sst(0.6, 0.8, p),
@@ -206,6 +240,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         fade: 1 - sst(0.95, 1, p),
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
+      drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p));
       root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.95, 1, p).toFixed(3));
     };
     const paintNow = () => {
@@ -335,7 +370,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         if (cross(0.86)) sfx("form");
       }
       const now = clock();
-      while (touches.length && now - touches[touches.length - 1].t > 3.5) touches.pop();
+      while (touches.length && now - touches[touches.length - 1].t > 4) touches.pop();
       const settled = p >= 0.999 && prevP >= 0.999 && touches.length === 0;
       try {
         if (!settled || !idle) frame(p);

@@ -5,6 +5,7 @@
  *    at the letter strokes, joined by hairlines
  *  - the card frame, traced in light
  */
+import BRIGHT from "./bright.json";
 import CONS from "./constellations.json";
 import { skyToScreen, type SkyView } from "./mirror";
 
@@ -69,7 +70,7 @@ function tint(r: number, g: number, b: number): [number, number, number] {
 // Stellar palette for the wordmark: blackbody-ish, mostly white, a few hot blues and warm ambers.
 const PAL: [number, number, number][] = [[200, 215, 255], [235, 240, 255], [255, 250, 240], [255, 238, 205], [255, 214, 170], [255, 190, 140]];
 
-export type Word = { pts: Float32Array; mag: Float32Array; col: Uint8Array; edges: Uint16Array; order: Float32Array; font: string; text: string; span: number; tw: number; base: number };
+export type Word = { pts: Float32Array; mag: Float32Array; col: Uint8Array; edges: Uint16Array; order: Float32Array; font: string; text: string; span: number; tw: number; base: number; x0: number };
 
 /** Sample the wordmark into ~n star positions (card-local 0..1) and join them like a star chart. */
 export function buildWord(family: string, n: number, text = "Tastrology"): Word {
@@ -149,12 +150,27 @@ export function buildWord(family: string, n: number, text = "Tastrology"): Word 
       }
     }
   }
+  // keep only joins that run along the letter's own ink (no shortcuts across counters or between letters)
+  const near = (qx: number, qy: number) => {
+    for (let oy = -3; oy <= 3; oy += 3)
+      for (let ox = -3; ox <= 3; ox += 3) {
+        const X = Math.round(qx + ox), Y = Math.round(qy + oy);
+        if (X >= 0 && Y >= 0 && X < W && Y < H && d[((Y * W + X) << 2) + 3] > 100) return true;
+      }
+    return false;
+  };
+  const along = (a: number, b: number) => {
+    const ax = ink[pick[a] * 2], ay = ink[pick[a] * 2 + 1], bx = ink[pick[b] * 2], by = ink[pick[b] * 2 + 1];
+    for (let k = 1; k < 8; k++) if (!near(ax + ((bx - ax) * k) / 8, ay + ((by - ay) * k) / 8)) return false;
+    return true;
+  };
   const med = [...len].sort((a, b) => a - b)[len.length >> 1] || 0;
   const keep: number[] = [];
-  for (let i = 0; i < len.length; i++) if (len[i] < med * 2.1) keep.push(e[i * 2], e[i * 2 + 1]);
+  for (let i = 0; i < len.length; i++) if (len[i] < med * 2.4 && along(e[i * 2], e[i * 2 + 1])) keep.push(e[i * 2], e[i * 2 + 1]);
   // where the text's baseline sits in card-local units, for the glow pass
   const base = 0.5 + ((pad + asc - H / 2) / tw) * span * CARD_AR;
-  return { pts, mag, col, edges: new Uint16Array(keep), order, font: `italic 400 FSpx ${family}`, text, span, tw, base };
+  const ox = 0.5 + ((pad + left - W / 2) / tw) * span; // text origin, card-local
+  return { pts, mag, col, edges: new Uint16Array(keep), order, font: `italic 400 FSpx ${family}`, text, span, tw, base, x0: ox };
 }
 
 export type StarFrame = {
@@ -164,12 +180,14 @@ export type StarFrame = {
   word: number;   // 0..1 wordmark ignition
   frame: number;  // 0..1 card frame traced
   fade: number;   // 0..1 overall layer opacity (dock handoff)
+  twinkle: number; // 0..1 living-star layer
   card: Rect;
   mono: string;
   phone: boolean;
 };
 
 const CONS_LIST = CONS as Con[];
+const BRIGHT_LIST = BRIGHT as number[][];
 const FEATURED = new Set(["Sco", "Sgr", "Oph", "Lup", "CrA"]);
 
 export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: StarFrame) {
@@ -177,6 +195,24 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
   ctx.clearRect(0, 0, w, h);
   ctx.globalCompositeOperation = "lighter";
   const k = f.phone ? 0.8 : 1;
+
+  // ---- the photo's own brightest stars, alive: they scintillate in the sky and glint in the water ----
+  const H0 = view.hz * h;
+  for (let i = 0; i < BRIGHT_LIST.length; i++) {
+    const [u, v, r, g, b] = BRIGHT_LIST[i];
+    const [x, y] = skyToScreen(view, u, v, w, h);
+    if (x < -20 || x > w + 20) continue;
+    const rank = 1 - i / BRIGHT_LIST.length;
+    // scintillation: mostly calm, with quick bright flickers
+    const ph = i * 12.9898, sp = 0.6 + (i % 7) * 0.35;
+    const tw = Math.pow(0.5 + 0.5 * Math.sin(t * sp + ph), 6) * 0.9 + 0.1 * (0.5 + 0.5 * Math.sin(t * 7.3 + ph * 3));
+    const a = (0.25 + 0.75 * tw) * (0.35 + 0.65 * rank) * f.fade * f.twinkle;
+    const size = (5 + rank * 9 + tw * 8) * k;
+    const c = tint(r, g, b);
+    if (y < H0 && y > -20) star(ctx, x, y, size, a, c, rank > 0.9 && tw > 0.6);
+    const yw = H0 + (H0 - y) / 0.92; // where the water reflects it
+    if (yw > H0 + 2 && yw < h + 20) star(ctx, x + Math.sin(t * 1.7 + i) * 1.5, yw, size * 0.8, a * 0.35, c);
+  }
 
   // ---- real constellations ----
   if (f.cons > 0) {
@@ -226,24 +262,53 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
     });
   }
 
-  // ---- the card frame, traced in light ----
+  // ---- the card frame: a luminous holo line, stitched with stars ----
   const R = f.card;
   if (f.frame > 0 && R.w > 0) {
     const rr = R.w * 0.055;
     const per = 2 * (R.w + R.h);
-    ctx.save();
-    ctx.globalAlpha = f.fade * 0.85;
-    ctx.strokeStyle = "rgba(225,235,255,0.9)";
-    ctx.lineWidth = 1;
-    ctx.shadowColor = "rgba(198,255,61,0.55)";
-    ctx.shadowBlur = 14;
-    ctx.setLineDash([per * f.frame, per]);
-    ctx.lineDashOffset = -per * 0.12;
-    ctx.beginPath();
-    ctx.roundRect(R.x, R.y, R.w, R.h, rr);
-    ctx.stroke();
-    ctx.restore();
-    // a breath of nebula inside the frame
+    const full = f.frame > 0.995;
+    const holo = ctx.createLinearGradient(R.x, R.y, R.x + R.w, R.y + R.h);
+    holo.addColorStop(0, "rgba(198,255,61,1)");
+    holo.addColorStop(0.5, "rgba(143,216,255,1)");
+    holo.addColorStop(1, "rgba(216,117,255,1)");
+    const pass = (lw: number, a: number, blur: number, style: string | CanvasGradient) => {
+      ctx.save();
+      ctx.globalAlpha = a * f.fade;
+      ctx.strokeStyle = style;
+      ctx.lineWidth = lw;
+      ctx.shadowColor = "rgba(170,200,255,0.9)";
+      ctx.shadowBlur = blur;
+      if (!full) ctx.setLineDash([per * f.frame, per * 2]);
+      ctx.beginPath();
+      ctx.roundRect(R.x, R.y, R.w, R.h, rr);
+      ctx.stroke();
+      ctx.restore();
+    };
+    pass(7, 0.16, 26, holo);
+    pass(2.2, 0.45, 10, holo);
+    pass(0.9, 0.95, 0, "rgba(245,248,255,1)");
+    // stars stitched along the edge: they light as the trace reaches them, and keep twinkling
+    const N = 30;
+    for (let i = 0; i < N; i++) {
+      const u = i / N;
+      if (u > f.frame) break;
+      const d = u * per;
+      let x: number, y: number;
+      if (d < R.w) [x, y] = [R.x + d, R.y];
+      else if (d < R.w + R.h) [x, y] = [R.x + R.w, R.y + d - R.w];
+      else if (d < 2 * R.w + R.h) [x, y] = [R.x + R.w - (d - R.w - R.h), R.y + R.h];
+      else [x, y] = [R.x, R.y + R.h - (d - 2 * R.w - R.h)];
+      const tw = Math.pow(0.5 + 0.5 * Math.sin(t * (1.3 + (i % 4) * 0.7) + i * 2.3), 3);
+      star(ctx, x, y, (8 + tw * 10) * k, f.fade * (0.35 + 0.65 * tw), PAL[i % PAL.length]);
+    }
+    if (f.frame > 0.9) {
+      const a = sst(0.9, 1, f.frame) * f.fade;
+      for (const [x, y] of [[R.x, R.y], [R.x + R.w, R.y], [R.x + R.w, R.y + R.h], [R.x, R.y + R.h]]) {
+        const tw = 0.8 + 0.2 * Math.sin(t * 2.1 + x * 0.01);
+        star(ctx, x, y, 44 * k * tw, a, [235, 245, 255], true);
+      }
+    }
     const g = ctx.createRadialGradient(R.x + R.w * 0.35, R.y + R.h * 0.4, 0, R.x + R.w * 0.5, R.y + R.h * 0.5, R.w * 0.9);
     g.addColorStop(0, "rgba(140,110,255,0.10)");
     g.addColorStop(0.5, "rgba(198,255,61,0.04)");
@@ -263,11 +328,11 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
     ctx.save();
     ctx.globalAlpha = 0.16 * sst(0.25, 1, f.word) * f.fade;
     ctx.font = word.font.replace("FS", fsPx.toFixed(1));
-    ctx.textAlign = "center";
+    ctx.textAlign = "left";
     ctx.fillStyle = "rgba(200,215,255,1)";
     ctx.shadowColor = "rgba(160,140,255,0.9)";
     ctx.shadowBlur = fsPx * 0.25;
-    ctx.fillText(word.text, R.x + R.w / 2, R.y + word.base * R.h);
+    ctx.fillText(word.text, R.x + word.x0 * R.w, R.y + word.base * R.h);
     ctx.restore();
     ctx.globalCompositeOperation = "lighter";
     ctx.strokeStyle = "rgba(210,225,255,1)";
@@ -295,4 +360,60 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
+}
+
+type Drop = { x: number; y: number; t: number; amp: number; name?: string };
+
+/** The ripples carry taste: each named drop's love rides the near edge of its ring, and rings that meet are joined. */
+export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: number, hz: number, mono: string, phone: boolean, fade: number) {
+  const named = drops.filter((d) => d.name);
+  if (!named.length || fade <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  const ring = (d: Drop) => {
+    const age = now - d.t;
+    return { age, rx: age * 260, ry: (age * 260) / 2.6, a: sst(0, 0.35, age) * (1 - sst(2.4, 3.6, age)) * fade };
+  };
+  // where two rings meet, a line of light joins their centres
+  for (let i = 0; i < named.length; i++)
+    for (let j = i + 1; j < named.length; j++) {
+      const A = named[i], B = named[j], ra = ring(A), rb = ring(B);
+      if (Math.hypot(B.x - A.x, (B.y - A.y) * 2.6) > ra.rx + rb.rx) continue;
+      const a = Math.min(ra.a, rb.a);
+      const gr = ctx.createLinearGradient(A.x, A.y, B.x, B.y);
+      gr.addColorStop(0, "rgba(198,255,61,0.9)");
+      gr.addColorStop(1, "rgba(216,117,255,0.9)");
+      ctx.globalAlpha = a * 0.7;
+      ctx.strokeStyle = gr;
+      ctx.lineWidth = 1;
+      ctx.shadowColor = "rgba(198,255,61,0.8)";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      ctx.lineTo(B.x, B.y);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      star(ctx, A.x, A.y, 26, a, [220, 255, 180], true);
+      star(ctx, B.x, B.y, 26, a, [235, 200, 255], true);
+    }
+  ctx.font = `500 ${phone ? 10 : 11.5}px ${mono}`;
+  ctx.textAlign = "center";
+  for (const d of named) {
+    const { rx, ry, a } = ring(d);
+    if (a <= 0) continue;
+    // a faint crest so the ring reads, then the name on its near edge
+    ctx.globalAlpha = a * 0.22;
+    ctx.strokeStyle = "rgba(200,225,255,1)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(d.x, d.y, Math.max(1, rx), Math.max(1, ry), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    const ty = d.y + ry + 16;
+    if (ty < hz + 8) continue;
+    const floor = ctx.canvas.clientHeight - 120; // keep clear of the caption line
+    ctx.globalAlpha = a * 0.92 * (1 - sst(floor - 40, floor, ty));
+    ctx.fillStyle = "rgb(226,236,255)";
+    ctx.fillText(d.name!.toLowerCase(), d.x, ty);
+  }
+  ctx.restore();
 }
