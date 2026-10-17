@@ -89,3 +89,16 @@ export async function s3PutIfAbsent(key: string, body: string, contentType = "ap
     return "error";
   }
 }
+
+/** DELETE one object (S3 answers 204 whether or not it existed). Needs s3:DeleteObject. */
+export async function s3Delete(key: string): Promise<"deleted" | "error"> {
+  const c = s3Config();
+  if (!c) return "error";
+  try {
+    const { url, headers } = signS3(c, "DELETE", key, {}, EMPTY_SHA256, now());
+    const res = await fetch(url, { method: "DELETE", headers, signal: AbortSignal.timeout(2500) });
+    return res.ok || res.status === 404 ? "deleted" : "error";
+  } catch {
+    return "error";
+  }
+}

@@ -12,6 +12,12 @@ interface Me {
   creditsOn?: boolean;
   credits?: number | null;
   freeLeft?: number | null;
+  burnOn?: boolean;
+  stardust?: {
+    dust: number | null;
+    weekLeft: number | null;
+    rates: { common: number; rare: number; holo: number; secret: number; paidFlat: number; reading: number; weeklyCap: number };
+  } | null;
 }
 
 /** Account skeleton: credits chip, deck link, sign out. Without accounts it just points at the device deck. */
@@ -105,6 +111,16 @@ export default function AccountPage() {
             </Link>
           </section>
 
+          {me?.stardust && <StardustPanel s={me.stardust} />}
+          {me && !me.stardust && me.burnOn && (
+            <section className="rounded-3xl border border-line bg-card p-6 sm:col-span-2">
+              <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Burning</p>
+              <p className="mt-3 max-w-xl text-ink-2">
+                You can burn any card you minted from your deck. During the free beta a burn earns nothing: it clears the card and kills its share link, and that&apos;s all.
+              </p>
+            </section>
+          )}
+
           <section className="flex flex-col justify-between rounded-3xl border border-line bg-card p-6">
             <div>
               <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Your deck</p>
@@ -122,5 +138,48 @@ export default function AccountPage() {
         </div>
       )}
     </SiteShell>
+  );
+}
+
+/** Stardust balance and the published rates (docs/design/burn.md §3; legal "Burn rewards"). */
+function StardustPanel({ s }: { s: NonNullable<Me["stardust"]> }) {
+  const r = s.rates;
+  const tiers: [string, number][] = [
+    ["Common", r.common],
+    ["Rare", r.rare],
+    ["Holo Rare", r.holo],
+    ["Secret Rare", r.secret],
+  ];
+  return (
+    <section className="rounded-3xl border border-accent/25 bg-card p-6 sm:col-span-2">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Stardust</p>
+          <p className="mt-3 font-display text-5xl font-semibold tracking-[-0.04em] text-accent">
+            {s.dust ?? "–"}
+            <span className="ml-2 align-middle text-base font-normal text-ink-3">dust</span>
+          </p>
+        </div>
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
+          {s.weekLeft ?? "–"} of {r.weeklyCap} left to earn this week · {r.reading} dust = 1 reading
+        </p>
+      </div>
+      <dl className="mt-6 grid grid-cols-2 gap-3 border-y border-line py-4 sm:grid-cols-4">
+        {tiers.map(([k, v]) => (
+          <div key={k}>
+            <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">{k}</dt>
+            <dd className="mt-1 font-display text-xl font-semibold tabular-nums">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-4 max-w-2xl text-sm text-ink-2">
+        Burn a card you minted with a credit and it turns into dust at these rates. When your credits run out, {r.reading} dust pays for a reading. Burning a
+        code that was burned before earns nothing.
+      </p>
+      <p className="mt-2 max-w-2xl text-[13px] text-ink-3">
+        Stardust only buys readings. It has no cash value and can&apos;t be bought, sold, transferred or refunded. Rate changes get 14 days&apos; notice and never
+        reduce dust you already have.
+      </p>
+    </section>
   );
 }

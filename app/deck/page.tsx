@@ -2,15 +2,18 @@
 
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { HoloCard } from "@/components/card/HoloCard";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BurnButton } from "@/components/card/BurnButton";
+import { dissolve, playBurnSound } from "@/components/card/dissolve";
+import { HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
+import { DustCounter } from "@/components/deck/DustCounter";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { CursorArrow } from "@/components/CursorArrow";
 import { SiteNav } from "@/components/site/SiteShell";
 import { whenAuthReady } from "@/lib/authBridge";
 import { buildCard, cardCode, SEASON } from "@/lib/card";
-import { claimDeviceDeck, loadDeck, type DeckEntry } from "@/lib/deck";
+import { burnFromDeck, claimDeviceDeck, loadDeck, type BurnReply, type DeckBurn, type DeckEntry } from "@/lib/deck";
 import { isPersonaRequest } from "@/lib/personas";
 import type { AgentRequest, StyleResult } from "@/lib/types";
 
@@ -47,6 +50,7 @@ export default function DeckPage() {
   const [error, setError] = useState<string>();
   const [owner, setOwner] = useState<"user" | "device">("device");
   const [toast, setToast] = useState<string>();
+  const [burn, setBurn] = useState<DeckBurn | null>(null);
 
   useEffect(() => {
     let off = false;
@@ -57,6 +61,7 @@ export default function DeckPage() {
       const d = await loadDeck();
       if (off) return;
       if (d.owner) setOwner(d.owner);
+      if (d.burn?.on) setBurn(d.burn);
       if (d.enabled && !d.error) return setCards(d.cards);
       // No server deck (or it's unreachable): fall back to the card saved on this device.
       setError(d.error);
@@ -77,6 +82,65 @@ export default function DeckPage() {
 
   const reduce = Boolean(useReducedMotion());
   const sky = useMemo(() => (cards?.[0] ? skyState(cards[0].card.evolvesFrom, cards[0].card.archetype) : null), [cards]);
+
+  // ---- Burning (docs/design/burn.md). Only for signed-in accounts, only on your own mints.
+  const [armed, setArmed] = useState<string | null>(null);
+  const [burning, setBurning] = useState<string | null>(null);
+  const [sound, setSound] = useState(false);
+  const counterRef = useRef<HTMLDivElement>(null);
+  const cardEls = useRef(new Map<string, HTMLDivElement>());
+  useEffect(() => {
+    try {
+      setSound(localStorage.getItem("tastrology:burn-sound") === "1");
+    } catch {}
+  }, []);
+  const toggleSound = () =>
+    setSound((on) => {
+      try {
+        localStorage.setItem("tastrology:burn-sound", on ? "0" : "1");
+      } catch {}
+      return !on;
+    });
+
+  /** Hold heat: the edges char inward and the foil runs hot. */
+  const heat = useCallback(
+    (code: string, p: number) => {
+      const el = cardEls.current.get(code);
+      if (!el || reduce) return;
+      const mask = p > 0 ? `radial-gradient(140% 120% at 50% 50%, #000 ${100 - p * 40}%, transparent ${118 - p * 34}%)` : "";
+      el.style.maskImage = mask;
+      el.style.webkitMaskImage = mask;
+      el.style.filter = p > 0 ? `sepia(${p * 0.45}) saturate(${1 + p * 0.9}) brightness(${1 + p * 0.12}) drop-shadow(0 0 ${p * 18}px rgb(198 255 61 / ${p * 0.5}))` : "";
+    },
+    [reduce],
+  );
+
+  const doBurn = async (entry: DeckEntry) => {
+    const { code, card } = entry;
+    setBurning(code);
+    if (sound && !reduce) playBurnSound();
+    const el = cardEls.current.get(code);
+    const colors = [...card.types.flatMap((t) => [t.a, t.b]), RARITY_GLOW[card.rarity], RARITY_GLOW[card.rarity]];
+    const fx = el ? dissolve(el, { target: burn?.dustOn ? counterRef.current : null, colors, reduce }) : null;
+    const [res] = await Promise.all([burnFromDeck(code), fx?.done]);
+    if (!res.httpOk || !res.status) {
+      fx?.restore();
+      heat(code, 0);
+      setBurning(null);
+      setArmed(null);
+      setToast(res.error ?? "Couldn't burn it just now. Try again in a moment.");
+      return;
+    }
+    setCards((cs) => cs?.filter((c) => c.code !== code) ?? cs);
+    cardEls.current.delete(code);
+    setBurning(null);
+    setArmed(null);
+    if (burn?.dustOn && typeof res.balance === "number") {
+      const bal = res.balance;
+      setBurn((b) => (b ? { ...b, dust: bal, weekLeft: b.weekLeft === null ? null : Math.max(0, b.weekLeft - (res.dust ?? 0)) } : b));
+    }
+    setToast(burnToast(res, Boolean(burn?.dustOn)));
+  };
 
   return (
     <div className="relative isolate min-h-screen">
@@ -100,6 +164,16 @@ export default function DeckPage() {
               : `${cards.length} ${cards.length === 1 ? "card" : "cards"}, kept ${owner === "user" ? "in your account" : "for this device"}. Every one is a verified original you can share.`}
         </p>
         {error && <p className="mt-2 font-mono text-[11px] text-warn">{error}</p>}
+        {burn?.on && !local && (
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            {burn.dustOn && <DustCounter ref={counterRef} value={burn.dust ?? 0} weekLeft={burn.weekLeft} reduce={reduce} />}
+            {!reduce && (
+              <button type="button" onClick={toggleSound} aria-pressed={sound} className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
+                Burn sound {sound ? "on" : "off"}
+              </button>
+            )}
+          </div>
+        )}
 
         {cards?.length === 0 && (
           <div className="mt-16 max-w-md">
@@ -113,20 +187,79 @@ export default function DeckPage() {
 
         {!!cards?.length && (
           <ul className="mt-12 grid grid-cols-1 justify-items-center gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
-            {cards.map(({ code, card }, i) => (
-              <li key={code} className="rise flex flex-col items-center" style={{ animationDelay: `${Math.min(i, 9) * 60}ms` }}>
-                <Link href={`/c/${code}`} aria-label={`Open ${card.archetype}`} className="transition duration-300 hover:-translate-y-1">
-                  <HoloCard card={card} width={260} idle={false} still={reduce} />
-                </Link>
-                <p className="mt-4 text-center font-serif text-xl italic leading-tight">{card.archetype}</p>
-                <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
-                  No. {card.serial} · {card.rarityLabel} · {code}
-                </p>
-              </li>
-            ))}
+            {cards.map((entry, i) => {
+              const { code, card } = entry;
+              const burnable = Boolean(burn?.on && !local && entry.minted);
+              return (
+                <li key={code} className="rise flex flex-col items-center" style={{ animationDelay: `${Math.min(i, 9) * 60}ms` }}>
+                  <div
+                    ref={(el) => {
+                      if (el) cardEls.current.set(code, el);
+                    }}
+                  >
+                    <Link href={`/c/${code}`} aria-label={`Open ${card.archetype}`} className="block transition duration-300 hover:-translate-y-1">
+                      <HoloCard card={card} width={260} idle={false} still={reduce} />
+                    </Link>
+                  </div>
+                  <p className="mt-4 text-center font-serif text-xl italic leading-tight">{card.archetype}</p>
+                  <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
+                    No. {card.serial} · {card.rarityLabel} · {code}
+                  </p>
+                  {burnable && armed !== code && (
+                    <button
+                      type="button"
+                      disabled={Boolean(burning)}
+                      onClick={() => setArmed(code)}
+                      className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3 transition hover:text-accent disabled:opacity-40"
+                    >
+                      Burn to dust
+                    </button>
+                  )}
+                  {burnable && burn && armed === code && (
+                    <div className="mt-4 flex flex-col items-center gap-3">
+                      <p className="max-w-[260px] text-center font-serif text-base italic leading-snug text-ink-2">{confirmLine(entry, burn)}</p>
+                      <BurnButton disabled={burning !== null} onProgress={(p) => heat(code, p)} onBurn={() => void doBurn(entry)} />
+                      {burning !== code && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            heat(code, 0);
+                            setArmed(null);
+                          }}
+                          className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink"
+                        >
+                          Keep it
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </main>
     </div>
   );
+}
+
+/** The one plain line above the hold button. Never promises dust the burn won't pay. */
+function confirmLine(entry: DeckEntry, burn: DeckBurn): string {
+  if (!burn.dustOn) return "Permanent. Its share link stops working.";
+  const earns = entry.earns ?? 0;
+  const label = entry.card.rarityLabel;
+  if (earns <= 0) return `${label} · earns no dust · permanent`;
+  const left = burn.weekLeft ?? earns;
+  if (left <= 0) return `${label} · weekly dust cap reached, earns 0 · permanent`;
+  return `${label} · ${Math.min(earns, left)} dust · permanent`;
+}
+
+function burnToast(res: BurnReply, dustOn: boolean): string {
+  if (!dustOn) return "Burned. Its link is gone.";
+  const d = res.dust ?? 0;
+  if (d > 0) return res.capped ? `Ash. +${d} dust. That's the weekly cap.` : `Ash. +${d} dust.`;
+  if (res.reason === "cap") return "Burned. Weekly dust cap reached, so no dust this time.";
+  if (res.reason === "burned-before") return "Burned. This sign was burned before, so no dust.";
+  if (res.reason === "uncharged") return "Burned. This one didn't cost a credit, so no dust.";
+  return "Burned. Its link is gone.";
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BattleStage } from "@/components/battle/BattleArena";
+import { Burned } from "@/components/card/Burned";
 import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
@@ -12,7 +13,7 @@ import type { BattleResult } from "@/lib/battle";
 import type { CardData } from "@/lib/card";
 import { TWIN_CODE } from "@/lib/twins";
 
-type State = { kind: "loading" } | { kind: "missing" } | { kind: "unavailable" } | { kind: "card"; card: CardData } | { kind: "fight"; out: BattleResult };
+type State = { kind: "loading" } | { kind: "missing" } | { kind: "burned"; code: string } | { kind: "unavailable" } | { kind: "card"; card: CardData } | { kind: "fight"; out: BattleResult };
 
 export function VsCode({ code }: { code: string }) {
   const b = useSearchParams().get("vs")?.toUpperCase() ?? "";
@@ -28,11 +29,13 @@ export function VsCode({ code }: { code: string }) {
         const r = await fetch(`/api/battle?a=${code}&b=${b}`, { cache: "no-store" }).catch(() => null);
         const j = r?.ok ? ((await r.json().catch(() => null)) as { result: BattleResult } | null) : null;
         if (j?.result) return set({ kind: "fight", out: j.result });
+        if (r?.status === 410) return set({ kind: "burned", code: ((await r.json().catch(() => null)) as { burned?: string } | null)?.burned ?? code });
         if (!r || r.status >= 500 || r.status === 429) return set({ kind: "unavailable" });
       }
       const r = await fetch(`/api/card?code=${code}`, { cache: "no-store" }).catch(() => null);
       const j = r?.ok ? ((await r.json().catch(() => null)) as { card: CardData | null } | null) : null;
       if (j?.card) return set({ kind: "card", card: j.card });
+      if (r?.status === 410) return set({ kind: "burned", code });
       set(!r || r.status >= 500 || r.status === 429 ? { kind: "unavailable" } : { kind: "missing" });
     })();
     return () => {
@@ -69,6 +72,7 @@ export function VsCode({ code }: { code: string }) {
           </button>
         </>
       )}
+      {st.kind === "burned" && <Burned code={st.code} what="fighter" />}
       {st.kind === "missing" && (
         <>
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-bad">Not found</p>

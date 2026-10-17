@@ -1,6 +1,6 @@
 import { sharedCache, upstash, upstashConfigured, upstashGetStatus } from "./cache";
 import type { Lookup } from "./lookup";
-import { s3GetStatus, s3PutIfAbsent } from "./s3";
+import { s3Delete, s3GetStatus, s3PutIfAbsent } from "./s3";
 import { TWIN_CODE } from "./twins";
 import type { BrandMatch, EntityKind, QEntity, StyleResult } from "./types";
 
@@ -141,6 +141,12 @@ export async function getFighterStatus(code: string): Promise<FighterLookup> {
 
 export async function getFighter(code: string): Promise<FighterSheet | null> {
   return (await getFighterStatus(code)).sheet;
+}
+
+/** After a burn: drops the fighter sheet everywhere (best effort; /api/battle also checks the tombstone). */
+export async function purgeFighter(code: string): Promise<void> {
+  mem.delete(code);
+  await Promise.allSettled([s3Delete(`fighters/v1/${code}.json`), upstashConfigured() ? upstash([["DEL", rkey(code)]]) : null]);
 }
 
 /** Dev only (QLOO_MODE=mock): seed memory directly so /api/battle can be exercised without a live run. */
