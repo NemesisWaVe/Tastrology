@@ -110,6 +110,59 @@ I read the whole doc and aligned the drafts with §3 (referrals, the race-free c
 
 What the design gets right legally: no random re-rolls or resale; Razorpay refuses live keys while `PAYMENTS_LIVE=0`; webhook-only crediting; minimal, encrypted address with a TTL; no contact uploads; manual winner review; the print edition carries no brand names.
 
+## Hackathon phase posture (2026-10-17)
+
+A free student beta with no payments and no prints is low-risk if the site **says so plainly**. Honest labelling is the whole posture.
+
+**Safe to run now**
+- Free readings, decks, share links, battles, sign-in, and referral unlocks with **digital perks only**.
+- **The shop showcase.** With no money involved, Qloo clause 5 ("charging for access") isn't triggered. The real risk is advertising goods that can't be bought.
+  - Buttons must be disabled.
+  - No checkout, "reserve" flow, addresses or pre-orders.
+  - Label any prices as concept prices (or omit them).
+- **Not now:** the first-100 print claim or any promise of physical goods. At most a print waitlist, with no addresses.
+
+**Copy**
+- Shop banner: *"Concept shop: nothing is for sale. Tastrology is a student hackathon project and every reading is free during the beta. Prices show what a future version might cost."*
+- Footer: *"Tastrology is a free student project built for the Qloo hackathon. Not for sale. Taste data from Qloo; not affiliated with or endorsed by any brand shown. Terms · Privacy · Cookies · Grievances"*
+
+**Simplifying the documents during the beta**
+- Mark "Not active during the free beta" on:
+  - Terms §10 (purchases) and §11 (shipping);
+  - the Razorpay, print and courier rows in the Privacy processors table;
+  - the order and address retention rows;
+  - the whole of promo-first-100.md.
+- **Keep, even now:**
+  - who runs the site and how to contact them;
+  - the Grievance Officer (24h acknowledgement, 15-day resolution). Public cards host user input, and IT Rules 2021 Rule 3 requires published terms, privacy policy and a grievance contact;
+  - the 18+ rule;
+  - the not-an-asset clause, AI disclaimer and brand non-endorsement;
+  - acceptable use;
+  - the liability cap;
+  - the privacy notice: data collected, processors, rights, deletion. DPDP duties fully apply from about May 2027, but Clerk emails are personal data today;
+  - the Cookie notice.
+
+**Telling Qloo**
+- Email the hackathon/partnerships contact **before submission (by 28 Oct)**:
+  - it's a free showcase with no sales;
+  - it stores rendered cards (Qloo-selected names and derived scores) permanently for share links, and caches raw responses for 6h at most;
+  - the shop is a non-functional concept.
+- Ask whether permanent storage of rendered cards is acceptable after the hackathon, and what commercial terms would look like if it wins.
+- Say the same in the Devpost write-up. Keep Qloo's written reply.
+
+**If Qloo is replaced**
+- **Provenance:** add `source`/`sourceVersion` to new twins now.
+- **On termination**, Qloo's terms require stopping use of the Services. Delete or regenerate Qloo-derived stored data: twins in S3, DynamoDB and Upstash, fighter sheets, caches, and deck copies. The only exception is cards Qloo agrees in writing may stay.
+- Never relabel Qloo-chosen brand names as another provider's output; retire or regenerate those cards.
+- Update Terms §7, the processors table and the footer.
+
+**Running as a student or individual in India**
+- An individual may run a free beta. Liability is **personal and unlimited**; no money, disclaimers and minimal data keep it small.
+- The Grievance Officer can be the founder: name, email, and city/state. A full home address is needed only once selling under the E-Commerce Rules; use a registered or virtual office then.
+- **If the founder is under 18**, contracts with users and vendors are voidable (Indian Contract Act). A parent or guardian should hold the accounts.
+- Check the university's IP policy and the hackathon eligibility rules.
+- Form an LLP or Pvt Ltd before the first rupee is taken.
+
 ## E. Sources consulted
 
 Qloo and hackathon

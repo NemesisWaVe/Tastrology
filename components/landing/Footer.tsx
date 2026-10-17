@@ -36,7 +36,10 @@ export function Footer({ onPick }: { onPick: () => void }) {
           <p>Built for the Qloo Agentic Hackathon</p>
           <p className="text-ink-3/70">{BRAND.cardSet} · {BRAND.tagline}</p>
         </div>
-        <LegalLinks className="-mt-2 pb-8" />
+        <p className="-mt-2 max-w-3xl pb-4 text-xs leading-relaxed text-ink-3">
+          {BRAND.name} is a free student project built for the Qloo hackathon. Not for sale. Taste data from Qloo; not affiliated with or endorsed by any brand shown.
+        </p>
+        <LegalLinks className="pb-8" />
       </div>
 
       <div className="pointer-events-none select-none px-2 text-center" aria-hidden>
