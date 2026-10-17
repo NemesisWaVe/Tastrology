@@ -139,8 +139,8 @@
   color: var(--paperw);
 }
 .brandMark {
-  width: 2.4cqw;
-  height: 2.4cqw;
+  width: 3.6cqw;
+  height: 3.6cqw;
   color: var(--a);
   filter: drop-shadow(0 0 0.8cqw var(--a));
 }

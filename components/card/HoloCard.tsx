@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/components/site/Mark";
 import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef } from "react";
 import { SEASON, TWIN_HOST, cardCode, twinUrl, type CardData, type CardType } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
@@ -160,7 +161,7 @@ function CardFace({ card }: { card: CardData }) {
 
       <header className={s.top}>
         <span className={s.brand}>
-          <Sparkle className={s.brandMark} />
+          <Mark className={s.brandMark} color="currentColor" />
           {BRAND.name}
         </span>
         <span className={s.serial}>
@@ -424,7 +425,7 @@ export function CardBack({ card, className = "", crack = false, printSafe = fals
           <Rosette className={s.backRosette} paths={art.rosette} />
           <header className={s.backTop}>
             <span className={s.brand}>
-              <Sparkle className={s.brandMark} />
+              <Mark className={s.brandMark} color="currentColor" />
               {BRAND.name}
             </span>
             <span>
