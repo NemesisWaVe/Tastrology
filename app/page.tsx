@@ -386,16 +386,16 @@ export default function Home() {
         <button onClick={reset} className="font-display text-lg font-bold tracking-tight">
           {BRAND.name}
         </button>
-        <span className="flex items-center gap-4">
+        <span className="flex items-center gap-3 sm:gap-4">
           <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
             Shop
           </a>
-          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
-            My deck
+          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink whitespace-nowrap">
+            <span className="hidden sm:inline">My </span>Deck
           </a>
           <SoundToggle />
           <AuthNav />
-          <button onClick={reset} className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink">
+          <button onClick={reset} className="shrink-0 whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:px-4">
             New sign
           </button>
         </span>

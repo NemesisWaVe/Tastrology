@@ -176,9 +176,9 @@ export function ResultsView({
       {/* ------------------------------------------------------------ section nav */}
       <nav
         aria-label="Result sections"
-        className={`pointer-events-none fixed inset-x-0 top-3 z-30 flex justify-center px-3 transition duration-300 ${navOn ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"}`}
+        className={`pointer-events-none fixed inset-x-0 top-[64px] z-30 flex justify-center px-3 transition duration-300 ${navOn ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"}`}
       >
-        <div className={`flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-paper/80 p-1 text-[12.5px] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)] backdrop-blur-md [scrollbar-width:none] ${navOn ? "pointer-events-auto" : ""}`}>
+        <div className={`flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-paper/95 p-1 text-[12.5px] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)] backdrop-blur-md [scrollbar-width:none] ${navOn ? "pointer-events-auto" : ""}`}>
           {[
             ["matches", "Matches"],
             ["doubts", "Doubts"],
