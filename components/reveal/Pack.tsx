@@ -5,7 +5,7 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardBack, RARITY_GLOW } from "@/components/card/HoloCard";
 import { FlipCard } from "@/components/card/FlipCard";
-import { Sigil, TypeSigil, type SigilKind } from "@/components/card/Sigils";
+import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import type { CardData, CardType } from "@/lib/card";
 import { figureFor, rng } from "./skyFigures";
@@ -525,7 +525,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                   <div className="absolute inset-x-[8%] -bottom-6 h-10 rounded-[50%] bg-black/60 blur-xl" />
                   {/* body */}
                   <div className="absolute inset-0" style={{ clipPath: bodyClip(packW, packH, tearY) }}>
-                    <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
+                    <PackArt w={packW} h={packH} tearY={tearY} />
                   </div>
                   {/* light leaking from the tear */}
                   <motion.div
@@ -549,7 +549,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       className="absolute inset-0"
                       style={{ clipPath: stripClip(packW, tearY), rotate: stripRotate, y: stripY, scaleX: stripSX, scaleY: stripSY, transformOrigin: `${packW}px ${tearY}px` }}
                     >
-                      <PackArt card={card} loves={loves} w={packW} h={packH} tearY={tearY} />
+                      <PackArt w={packW} h={packH} tearY={tearY} />
                     </motion.div>
                   </motion.div>
                   <motion.div className={s.seam} style={{ top: tearY - 1.5, width: seamW, opacity: leak }} />
@@ -789,84 +789,208 @@ function bodyClip(w: number, h: number, tearY: number) {
 }
 
 /**
- * The wrapper: the original Tastrology booster (vivid foil in the card's Sun colours, medallion, wordmark), with a
- * hint of the sky pressed into the foil: a few faint constellations and scattered stars, the same on every pack.
+ * The wrapper, "Atlas Band" (Set 01). The original vivid Tastrology foil, crossed by one matte black star-atlas band
+ * carrying four generic Set 01 figures (the Crate, the Reel, the Shelf, the Map); one figure's line escapes the band and
+ * climbs to the crimp. A Trine emblem (☉ ☽ ↑), a wordmark whose T is drawn in stars, crimps printed with the set line.
+ * Nothing on it is about the card inside. Only the sheen, the sparkle flares and the band's parallax move (`--hx`).
  */
-function PackArt({ card, loves, w, h, tearY }: { card: CardData; loves: number; w: number; h: number; tearY: number }) {
-  const { sun } = card.bigThree;
+function PackArt({ w, h, tearY }: { w: number; h: number; tearY: number }) {
   const u = w / 100;
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    const onMove = (e: PointerEvent) => node.style.setProperty("--hx", (e.clientX / window.innerWidth).toFixed(3));
+    const onTilt = (e: DeviceOrientationEvent) => e.gamma != null && node.style.setProperty("--hx", (0.5 + Math.max(-0.5, Math.min(0.5, e.gamma / 50))).toFixed(3));
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("deviceorientation", onTilt, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("deviceorientation", onTilt);
+    };
+  }, []);
+
+  const INK = "#07070a";
+  const bandC = h * 0.56;
+  const bandH = 20 * u;
+  const crimpT = h * 0.065;
+  const crimpB = h * 0.055;
+  const emblem = 30 * u;
+  const emblemTop = tearY + 9 * u;
+
   return (
-    <div className={s.packArt}>
+    <div ref={el} className={s.packArt} style={{ boxShadow: `inset 0 0 0 ${0.3 * u}px rgb(255 255 255 / .5)` }}>
       <div className={s.foil} />
-      <StarHint w={w} h={h} />
+      <StarDust w={w} h={h} u={u} />
       {/* plastic gloss */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .35), transparent 12%, rgb(255 255 255 / .16) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .4))" }} />
-      <div className={s.crimp} style={{ top: 0, height: h * 0.065 }} />
-      <div className={s.crimp} style={{ bottom: 0, height: h * 0.055 }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .3), transparent 12%, rgb(255 255 255 / .14) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .35))" }} />
+      <div className={s.crimp} style={{ top: 0, height: crimpT }} />
+      <div className={s.crimp} style={{ bottom: 0, height: crimpB }} />
+      <CrimpPrint top={0} height={crimpT} u={u} ink={INK} />
+      <CrimpPrint top={h - crimpB} height={crimpB} u={u} ink={INK} />
       <div className={s.tearLine} style={{ top: tearY }} />
 
-      <div className="absolute inset-x-0 flex flex-col items-center text-center text-white" style={{ top: tearY + 4 * u }}>
-        <p className="font-mono uppercase" style={{ fontSize: 2.6 * u, letterSpacing: "0.32em", opacity: 0.8 }}>
-          {BRAND.cardSet} · booster
-        </p>
-        <div
-          className="relative mt-[6%] grid place-items-center rounded-full"
-          style={{
-            width: 46 * u,
-            height: 46 * u,
-            background: "radial-gradient(circle, rgb(255 255 255 / .22), rgb(255 255 255 / .04) 62%, transparent 63%), conic-gradient(from 0deg, rgb(255 255 255 / .55), transparent 25%, rgb(255 255 255 / .45) 50%, transparent 75%, rgb(255 255 255 / .55))",
-            boxShadow: "inset 0 0 0 1.5px rgb(255 255 255 / .55), 0 10px 40px -8px rgb(0 0 0 / .5)",
-          }}
-        >
-          <TypeSigil glyph={sun.glyph} className="drop-shadow-[0_2px_18px_rgb(0_0_0/0.35)]" style={{ width: 22 * u, height: 22 * u }} />
-        </div>
-        <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 14.5 * u, marginTop: 7 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
-          {BRAND.name}
-        </p>
-        <p className="font-serif italic" style={{ fontSize: 5.2 * u, marginTop: 1.5 * u, opacity: 0.92 }}>
+      <p className="absolute inset-x-0 text-center font-mono uppercase text-white/80" style={{ top: tearY + 3 * u, fontSize: 2.4 * u, letterSpacing: "0.34em" }}>
+        {BRAND.cardSet} · booster
+      </p>
+
+      {/* Trine emblem: ☉ ☽ ↑ as three stars joined by hairlines, on a black disc with a lime ring */}
+      <svg className="absolute left-1/2 -translate-x-1/2" style={{ top: emblemTop, width: emblem, height: emblem }} viewBox="-50 -50 100 100" aria-hidden>
+        <circle r="49" fill={INK} />
+        <circle r="47.6" fill="none" stroke="var(--accent)" strokeWidth="1.4" />
+        <circle r="40" fill="none" stroke="#f3f1ec" strokeOpacity=".18" strokeWidth=".5" strokeDasharray="1 3" />
+        {(() => {
+          const pts = [0, 1, 2].map((k) => ({ x: Math.cos(-Math.PI / 2 + (k * 2 * Math.PI) / 3) * 26, y: Math.sin(-Math.PI / 2 + (k * 2 * Math.PI) / 3) * 26 }));
+          return (
+            <>
+              <polygon points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#f3f1ec" strokeOpacity=".7" strokeWidth=".8" />
+              {pts.map((p, k) => (
+                <g key={k}>
+                  <circle cx={p.x} cy={p.y} r="3.3" fill="#fff" />
+                  <text x={p.x * 1.45} y={p.y * 1.45 + 3} textAnchor="middle" fill="#f3f1ec" fillOpacity=".75" style={{ fontSize: 9 }}>
+                    {["☉", "☽", "↑"][k]}
+                  </text>
+                </g>
+              ))}
+            </>
+          );
+        })()}
+      </svg>
+
+      <AtlasBand w={w} u={u} top={bandC - bandH / 2} height={bandH} crimpT={crimpT} ink={INK} />
+
+      <div className="absolute inset-x-0 flex flex-col items-center text-center" style={{ top: bandC + bandH / 2 + 4.5 * u }}>
+        <StarWordmark u={u} ink={INK} />
+        <p className="font-serif italic" style={{ fontSize: 4.4 * u, marginTop: 1.2 * u, color: INK, opacity: 0.8 }}>
           {BRAND.tagline}
         </p>
       </div>
-      <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.5 * u, letterSpacing: "0.22em", opacity: 0.85 }}>
-        1 holographic taste sign · from {loves} loves
+      <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.2 * u, letterSpacing: "0.24em", opacity: 0.85 }}>
+        1 holographic taste sign · sealed
       </div>
     </div>
   );
 }
 
-/** Faint constellations pressed into the foil, kept clear of the medallion and wordmark. Generic: same on every pack. */
-function StarHint({ w, h }: { w: number; h: number }) {
-  const art = useMemo(() => {
-    const r = rng("tastrology-pack-sky");
-    const spots = [
-      [0.17, 0.27],
-      [0.84, 0.24],
-      [0.13, 0.66],
-      [0.86, 0.7],
-    ];
-    const figs = spots.map(([fx, fy], k) => {
-      const f = figureFor(`pack-${k}`, w * 0.075);
-      return { x: fx * w, y: fy * h, f };
-    });
-    const dots = Array.from({ length: 46 }, () => ({ x: r() * w, y: r() * h, s: 0.5 + Math.pow(r(), 4) * 1.6, o: 0.25 + r() * 0.5 }));
-    return { figs, dots };
-  }, [w, h]);
+/** "SET 01 · ☉ ☽ ↑ ·" printed along a crimp, in ink, over the ridges. */
+function CrimpPrint({ top, height, u, ink }: { top: number; height: number; u: number; ink: string }) {
   return (
-    <svg className="pointer-events-none absolute inset-0 mix-blend-overlay" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
-      {art.dots.map((d, i) => (
-        <circle key={i} cx={d.x} cy={d.y} r={d.s} fill="#fff" opacity={d.o} />
-      ))}
-      {art.figs.map(({ x, y, f }, k) => (
-        <g key={k} transform={`translate(${x} ${y})`} opacity="0.85">
-          {f.edges.map(([a, b]) => (
-            <line key={`${a}-${b}`} x1={f.stars[a].x} y1={f.stars[a].y} x2={f.stars[b].x} y2={f.stars[b].y} stroke="#fff" strokeWidth="0.7" strokeOpacity="0.55" />
+    <div className="pointer-events-none absolute inset-x-0 flex items-center overflow-hidden whitespace-nowrap font-mono uppercase" style={{ top, height, fontSize: 1.8 * u, letterSpacing: "0.2em", color: ink, opacity: 0.55 }}>
+      {"SET 01 · ☉ ☽ ↑ · ".repeat(8)}
+    </div>
+  );
+}
+
+const BAND_FIGURES = [
+  { key: "set01-crate", label: "the Crate" },
+  { key: "set01-reel", label: "the Reel" },
+  { key: "set01-shelf", label: "the Shelf" },
+  { key: "set01-map", label: "the Map" },
+];
+
+/** The matte black atlas band. It ignores the foil sheen on purpose: matte against holo is the tell. */
+function AtlasBand({ w, u, top, height, crimpT, ink }: { w: number; u: number; top: number; height: number; crimpT: number; ink: string }) {
+  const cell = w / BAND_FIGURES.length;
+  const figs = BAND_FIGURES.map((b, k) => {
+    const f = figureFor(b.key, 1);
+    const xs = f.stars.map((p) => p.x);
+    const ys = f.stars.map((p) => p.y);
+    const k2 = Math.min((cell * 0.62) / (Math.max(...xs) - Math.min(...xs) || 1), (height * 0.5) / (Math.max(...ys) - Math.min(...ys) || 1));
+    const cx = cell * (k + 0.5);
+    const cy = height * 0.42;
+    const ox = cx - ((Math.max(...xs) + Math.min(...xs)) / 2) * k2;
+    const oy = cy - ((Math.max(...ys) + Math.min(...ys)) / 2) * k2;
+    return { ...b, f, pts: f.stars.map((p) => ({ x: ox + p.x * k2, y: oy + p.y * k2, m: p.m })), cx };
+  });
+  const last = figs[figs.length - 1];
+  const tail = last.pts.reduce((a, p) => (p.x > a.x ? p : a), last.pts[0]);
+  const ticks = Math.floor(w / (2 * u));
+  return (
+    <>
+      <div className="absolute inset-x-0" style={{ top, height, background: ink, boxShadow: `0 ${0.3 * u}px 0 0 var(--accent) inset, 0 ${-0.3 * u}px 0 0 var(--accent) inset`, transform: `translateX(calc((var(--hx, .5) - .5) * ${0.8 * u}px))` }}>
+        <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} className="block" aria-hidden>
+          {Array.from({ length: ticks }, (_, k) => (
+            <line key={k} x1={k * 2 * u + u} y1={0.3 * u} x2={k * 2 * u + u} y2={(k % 5 === 0 ? 1.4 : 0.8) * u} stroke="#f3f1ec" strokeOpacity=".4" strokeWidth={0.18 * u} />
           ))}
-          {f.stars.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r={0.9 + p.m * 1.3} fill="#fff" />
+          {figs.map((g) => (
+            <g key={g.key}>
+              {g.f.edges.map(([a, b]) => (
+                <line key={`${a}-${b}`} x1={g.pts[a].x} y1={g.pts[a].y} x2={g.pts[b].x} y2={g.pts[b].y} stroke="#f3f1ec" strokeOpacity=".7" strokeWidth={0.25 * u} strokeLinecap="round" />
+              ))}
+              {g.pts.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={(0.35 + p.m * 0.55) * u} fill={i === g.f.alpha ? "var(--accent)" : "#fff"} />
+              ))}
+              <text x={g.cx} y={height - 1.8 * u} textAnchor="middle" fill="#f3f1ec" fillOpacity=".75" className="font-serif italic" style={{ fontSize: 2.6 * u }}>
+                {g.label}
+              </text>
+            </g>
           ))}
-          <circle cx={f.stars[f.alpha].x} cy={f.stars[f.alpha].y} r="4" fill="none" stroke="#fff" strokeWidth="0.6" strokeOpacity="0.6" />
-        </g>
-      ))}
-    </svg>
+        </svg>
+      </div>
+      {/* one line escapes the band and climbs the foil to the top crimp */}
+      <svg className="pointer-events-none absolute inset-0" width={w} height={top + height} viewBox={`0 0 ${w} ${top + height}`} aria-hidden>
+        <polyline
+          points={`${tail.x},${top + tail.y} ${w * 0.93},${top - 6 * u} ${w * 0.9},${top * 0.55} ${w * 0.95},${crimpT}`}
+          fill="none"
+          stroke="#fff"
+          strokeOpacity=".6"
+          strokeWidth={0.3 * u}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {[
+          [w * 0.93, top - 6 * u],
+          [w * 0.9, top * 0.55],
+          [w * 0.95, crimpT],
+        ].map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r={0.6 * u} fill="#fff" />
+        ))}
+      </svg>
+    </>
+  );
+}
+
+/** "Tastrology" in ink, whose T is drawn in stars (crossbar = three star dots on a hairline); the full stop is a lime star. */
+function StarWordmark({ u, ink }: { u: number; ink: string }) {
+  const fs = 13 * u;
+  return (
+    <p className="flex items-baseline font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: fs, color: ink, textShadow: "0 1px 0 rgb(255 255 255 / .35)" }}>
+      <svg aria-hidden style={{ width: fs * 0.58, height: fs * 0.74, marginRight: fs * 0.01 }} viewBox="0 0 58 74">
+        <line x1="4" y1="9" x2="54" y2="9" stroke={ink} strokeWidth="2.2" />
+        {[6, 29, 52].map((x) => (
+          <circle key={x} cx={x} cy="9" r="5.2" fill={ink} />
+        ))}
+        <rect x="22" y="9" width="14" height="65" fill={ink} />
+      </svg>
+      <span className="sr-only">T</span>
+      astrology
+      <svg aria-hidden style={{ width: fs * 0.22, height: fs * 0.22, marginLeft: fs * 0.02 }} viewBox="-10 -10 20 20">
+        <path d="M0-10 2.4-2.4 10 0 2.4 2.4 0 10-2.4 2.4-10 0-2.4-2.4Z" fill="var(--accent)" stroke={ink} strokeWidth="0.8" />
+      </svg>
+    </p>
+  );
+}
+
+/** Star dust pressed into the foil (same on every pack); the brightest few carry sparkles that flare as the sheen passes. */
+function StarDust({ w, h, u }: { w: number; h: number; u: number }) {
+  const art = useMemo(() => {
+    const r = rng("tastrology-pack-dust");
+    const dots = Array.from({ length: 60 }, () => ({ x: r() * w, y: r() * h, s: (0.25 + Math.pow(r(), 3) * 0.35) * u }));
+    const bright = [...dots].sort((a, b) => b.s - a.s).slice(0, 6);
+    return { dots, bright };
+  }, [w, h, u]);
+  return (
+    <>
+      <svg className="pointer-events-none absolute inset-0 mix-blend-overlay" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+        {art.dots.map((d, i) => (
+          <circle key={i} cx={d.x} cy={d.y} r={d.s} fill="#fff" opacity=".35" />
+        ))}
+      </svg>
+      <svg className={`pointer-events-none absolute inset-0 ${s.sheenMask}`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+        {art.bright.map((d, i) => (
+          <path key={i} d={`M${d.x - 1.6 * u} ${d.y}H${d.x + 1.6 * u}M${d.x} ${d.y - 1.6 * u}V${d.y + 1.6 * u}`} stroke="#fff" strokeWidth={0.15 * u} strokeLinecap="round" />
+        ))}
+      </svg>
+    </>
   );
 }

@@ -441,6 +441,17 @@
   background-size: 250% 100%;
 }
 
+/* Pack sparkles flare only where the foil sheen passes: a moving mask driven by the pointer/tilt (--hx). */
+.sheenMask {
+  -webkit-mask-image: linear-gradient(105deg, transparent 0%, #000 45%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(105deg, transparent 0%, #000 45%, #000 55%, transparent 100%);
+  -webkit-mask-size: 260% 100%;
+  mask-size: 260% 100%;
+  -webkit-mask-position: calc(var(--hx, 0.5) * 100%) 0;
+  mask-position: calc(var(--hx, 0.5) * 100%) 0;
+  opacity: 0.9;
+}
+
 /* Pack window: a few bright stars scintillate (scale + opacity, from their own centre). */
 .twinkle {
   transform-box: fill-box;
