@@ -4,7 +4,7 @@ import { useLenis } from "lenis/react";
 import { useReducedMotion, useScroll } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { sfx } from "@/lib/sound";
-import { enableSound, soundOn } from "@/lib/soundEngine";
+import { audioAllowed, enableSound, soundOn } from "@/lib/soundEngine";
 import { createMirror, SKY_AR, type Mirror, type SkyView, type Touch } from "./mirror";
 import { PERSONAS } from "@/lib/personas";
 import { buildWord, CARD_AR, drawDrops, drawStars, type Rect, type Word } from "./stars";
@@ -144,10 +144,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
   const choose = useCallback(
     (withSound: boolean) => {
       closeGate();
-      if (withSound) {
-        enableSound(true);
-        setTimeout(() => sfx("drop"), 60); // the scene is already playing: answer the click with a drop
-      }
+      enableSound(withSound); // "quietly" is remembered, so the gate won't ask again
       startRef.current?.(withSound);
     },
     [closeGate],
@@ -175,7 +172,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     const touches: Touch[] = [];
     const parT = { x: 0, y: 0 }, par = { x: 0, y: 0 };
     const taps: { x: number; y: number; t: number }[] = []; // the visitor's own constellations
-    let loveI = 0, autoDrops = 0, userDropped = false;
+    let loveI = 0, autoDrops = 0, userDropped = false, tingI = 0; // every drop takes the next note up the scale
     // six shader slots: cursor ripples give way before named drops
     const trim = () => {
       while (touches.length > 6) {
@@ -206,7 +203,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       }
       touches.unshift(down ? { x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length], user: true } : { x, y, t: now, amp: 0.6 });
       trim();
-      if (down) sfx("ripple", { i: (touches.length * 2) % 7, gain: 0.6 });
+      if (down) sfx("ripple", { i: tingI++ % 10, gain: 0.6 });
     };
     // the first click unlocks audio: answer it with a drop, so nobody misses the splash
     const onUnlocked = () => {
@@ -248,7 +245,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         if (taps.length > 6) taps.shift();
         trim();
         autoDrops++;
-        sfx("ripple", { i: autoDrops % 7, gain: 0.5 });
+        sfx("ripple", { i: tingI++ % 10, gain: 0.5 });
       }
       const fade = started > 0 ? sst(0, 0.9, since + 0.3) : 0.35 * sst(0, 1.5, t);
       mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
@@ -359,14 +356,12 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       };
     }
 
-    // First visit: the gate (sound or quiet). Returning visitors: no gate, the beats auto-advance to the hero.
     let auto = false; // never scroll on the visitor's behalf
-    const returning = store.get() && window.scrollY < 10;
-    // a reload leaves audio locked until a click/tap/key (a wheel scroll doesn't count), so anyone who wants sound
-    // gets the gate again: one click enters and unlocks. Quiet returners skip it.
-    if (returning) start(soundOn());
-    else if (window.scrollY < 10) start(soundOn()); // no gate: the corner sound orb invites sound without interrupting
-    else start(false);
+    // Sound is on by default. If the browser already allows audio, just play; if it is holding audio until a click,
+    // ask once with the gate before the scene starts (it never interrupts the tutorial). Quiet visitors are never asked.
+    if (!soundOn() || window.scrollY >= 10) start(false);
+    else if (audioAllowed()) start(true);
+    else setGate("open");
     const stopAuto = () => {
       if (!auto) return;
       auto = false;
