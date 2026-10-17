@@ -392,10 +392,14 @@ export function Sky({
     const slow = (navigator.hardwareConcurrency ?? 8) <= 4 || window.innerWidth < 640; // phones: 30fps leaves the GPU to the card
     let raf = 0;
     let skip = false;
+    let stillAt = -1e9;
     let last = performance.now();
     const t0 = last;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
+      // a still sky (reduced motion, or phones on the landing) only needs an occasional repaint for new figures
+      if (reduce && now - stillAt < 500) return;
+      stillAt = now;
       const long = now - last > 24;
       if ((slow || long) && (skip = !skip)) return; // 30fps on weak devices or after a long frame
       last = now;
