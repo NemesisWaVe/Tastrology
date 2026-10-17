@@ -17,19 +17,40 @@ export function ClerkBridge() {
   const signedIn = useRef(false);
   const listeners = useRef(new Set<(on: boolean) => void>());
 
-  useEffect(() => {
-    signedIn.current = Boolean(isSignedIn);
-    if (isSignedIn) {
+  // One place that turns "Clerk has a user now" into a closed sheet and a resumed reading.
+  const settle = useRef((on: boolean) => {
+    if (on === signedIn.current) return;
+    signedIn.current = on;
+    if (on) {
       onClose.current = undefined;
       setOpen(false);
     }
-    for (const l of listeners.current) l(Boolean(isSignedIn));
-  }, [isSignedIn]);
+    for (const l of listeners.current) l(on);
+  });
+
+  useEffect(() => settle.current(Boolean(isSignedIn)), [isSignedIn]);
+
+  // useAuth can lag behind a sign-up finished in the sheet or in another tab (an email link), which used to need a
+  // refresh. Clerk's own listener, plus a check when the tab comes back into view, catches it straight away.
+  useEffect(() => {
+    if (!isLoaded) return;
+    const off = clerk.addListener(({ user }) => settle.current(Boolean(user)));
+    const look = () => {
+      if (document.visibilityState === "visible") settle.current(Boolean(clerk.user));
+    };
+    window.addEventListener("focus", look);
+    document.addEventListener("visibilitychange", look);
+    return () => {
+      off();
+      window.removeEventListener("focus", look);
+      document.removeEventListener("visibilitychange", look);
+    };
+  }, [isLoaded, clerk]);
 
   useEffect(() => {
     if (!isLoaded) return;
     setBridge({
-      signedIn: () => signedIn.current,
+      signedIn: () => signedIn.current || Boolean(clerk.user),
       openSignIn: (close) => {
         onClose.current = close;
         setBack(location.href);

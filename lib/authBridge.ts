@@ -45,19 +45,20 @@ export function whenAuthReady(timeoutMs = 8000): Promise<Bridge | null> {
 }
 
 const PENDING = "tastrology:pending";
-const PENDING_TTL_MS = 15 * 60 * 1000;
+/** Long enough to sign up and click an email link, which may open in a new tab (hence localStorage, not sessionStorage). */
+const PENDING_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Opens sign-in for a reading that needs an account, and resolves true once the person is signed in
  * (false if they close the sheet, the run is abandoned, or accounts are off). The request is parked in
- * sessionStorage first, so a sign-in that leaves the page (Google OAuth) can pick it up again on return.
+ * localStorage first, so a sign-in that leaves the page (Google OAuth, an email link in a new tab) picks it up again.
  */
 export async function signInForRun(req: AgentRequest, signal: AbortSignal): Promise<boolean> {
   const b = await whenAuthReady();
   if (!b || signal.aborted) return false;
   if (b.signedIn()) return true;
   try {
-    sessionStorage.setItem(PENDING, JSON.stringify({ req, at: Date.now() }));
+    localStorage.setItem(PENDING, JSON.stringify({ req, at: Date.now() }));
   } catch {}
   return new Promise((resolve) => {
     let off = () => {};
@@ -79,7 +80,7 @@ export async function signInForRun(req: AgentRequest, signal: AbortSignal): Prom
 
 export function clearPendingRun() {
   try {
-    sessionStorage.removeItem(PENDING);
+    localStorage.removeItem(PENDING);
   } catch {}
 }
 
@@ -88,7 +89,7 @@ export async function takePendingRun(): Promise<AgentRequest | null> {
   if (!authOn) return null;
   let parked: { req?: AgentRequest; at?: number } | null = null;
   try {
-    parked = JSON.parse(sessionStorage.getItem(PENDING) ?? "null");
+    parked = JSON.parse(localStorage.getItem(PENDING) ?? "null");
   } catch {}
   if (!parked?.req || Date.now() - (parked.at ?? 0) > PENDING_TTL_MS) {
     clearPendingRun();
@@ -97,4 +98,25 @@ export async function takePendingRun(): Promise<AgentRequest | null> {
   const b = await whenAuthReady();
   clearPendingRun();
   return b?.signedIn() ? parked.req : null;
+}
+
+/** What someone typed into "Bring your own", kept in this browser until their reading lands. */
+const DRAFT = "tastrology:draft";
+export function saveDraft(d: unknown) {
+  try {
+    localStorage.setItem(DRAFT, JSON.stringify({ d, at: Date.now() }));
+  } catch {}
+}
+export function loadDraft<T>(): T | null {
+  try {
+    const j = JSON.parse(localStorage.getItem(DRAFT) ?? "null") as { d?: T; at?: number } | null;
+    return j?.d && Date.now() - (j.at ?? 0) < 7 * 24 * 3600 * 1000 ? j.d : null;
+  } catch {
+    return null;
+  }
+}
+export function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT);
+  } catch {}
 }

@@ -2,8 +2,9 @@
 
 import { CursorArrow } from "@/components/CursorArrow";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SeedPicker, type Seed } from "@/components/SeedPicker";
+import { loadDraft, saveDraft } from "@/lib/authBridge";
 import type { AgentRequest } from "@/lib/types";
 import { EASE, Eyebrow, Magnetic, MaskedWords, Reveal } from "./primitives";
 
@@ -24,6 +25,18 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [budget, setBudget] = useState<1 | 2 | 3 | undefined>();
   const [goal, setGoal] = useState("");
+  // Typed picks survive a sign-up, a reload or a closed tab: restored once, then saved on every change.
+  const restored = useRef(false);
+  useEffect(() => {
+    const d = loadDraft<{ seeds?: Seed[]; budget?: 1 | 2 | 3; goal?: string }>();
+    if (d?.seeds?.length) setSeeds(d.seeds);
+    if (d?.budget) setBudget(d.budget);
+    if (d?.goal) setGoal(d.goal);
+    restored.current = true;
+  }, []);
+  useEffect(() => {
+    if (restored.current) saveDraft({ seeds, budget, goal });
+  }, [seeds, budget, goal]);
   const need = Math.max(0, 3 - seeds.length);
   const ready = need === 0;
 

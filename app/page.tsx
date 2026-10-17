@@ -13,7 +13,7 @@ import { Landing } from "@/components/landing/Landing";
 import { ResultsView, type Vote } from "@/components/results/ResultsView";
 import { Reveal } from "@/components/reveal/Reveal";
 import { TracePanel } from "@/components/TracePanel";
-import { takePendingRun } from "@/lib/authBridge";
+import { clearDraft, takePendingRun } from "@/lib/authBridge";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode } from "@/lib/card";
 import { addToDeck } from "@/lib/deck";
@@ -137,6 +137,8 @@ export default function Home() {
     try {
       localStorage.setItem(STORE, JSON.stringify({ req, result: trim(result), votes, pinned: trimPins(pinned) } satisfies Saved));
     } catch {}
+    // Their own reading landed: the typed draft has done its job.
+    if (!isPersonaRequest(req)) clearDraft();
   }, [stage, req, result, votes, pinned]);
 
   // File each live card into this device's deck (server-side, write-once). Demo personas stay out.
