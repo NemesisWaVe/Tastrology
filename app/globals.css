@@ -137,3 +137,8 @@ img {
 
 /* the intro gate already asks about sound */
 html[data-gate] [data-orb] { opacity: 0; pointer-events: none; }
+
+/* Phones: frosted-glass blur is recomputed on every scroll frame by iOS. Keep the tint, drop the blur. */
+@media (max-width: 767px) {
+  *, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}

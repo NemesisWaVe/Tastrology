@@ -303,7 +303,7 @@ export function Sky({
       W = canvas.clientWidth;
       H = canvas.clientHeight;
       if (!W || !H) return;
-      dpr = Math.min(W < 640 ? 1.5 : 2, window.devicePixelRatio || 1);
+      dpr = Math.min(W < 640 ? 1.25 : 2, window.devicePixelRatio || 1);
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
       plate = buildPlate(W, H, dpr, M);
@@ -389,7 +389,7 @@ export function Sky({
       }
     };
 
-    const slow = (navigator.hardwareConcurrency ?? 8) <= 4;
+    const slow = (navigator.hardwareConcurrency ?? 8) <= 4 || window.innerWidth < 640; // phones: 30fps leaves the GPU to the card
     let raf = 0;
     let skip = false;
     let last = performance.now();
