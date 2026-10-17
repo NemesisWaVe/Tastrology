@@ -6,6 +6,7 @@ import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
 import { creditsOn, heldRegret, nextRefillAt, refundCredit, refundRegret, RUN_ID_RE, spendCredit, spendRegret } from "@/lib/ledger";
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { deviceId } from "@/lib/device";
+import { addToPool } from "@/lib/packs";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache } from "@/lib/cache";
 import { buildCard, SEASON } from "@/lib/card";
@@ -132,6 +133,8 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         const code = await registerTwin(card);
         await registerFighter(code, toSheet(result));
         if (minter) await fileOwnMint(minter, code, card).catch(() => {});
+        // Real people's fresh cards stock the Battle Pack pool (personas stay out).
+        if (minter) bg(addToPool(code, card.rarity));
         bg(recordMint(code, SEASON, card.rarityScore));
       }
       // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of

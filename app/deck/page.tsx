@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BurnButton } from "@/components/card/BurnButton";
 import { dissolve, playBurnSound } from "@/components/card/dissolve";
 import { HoloCard, RARITY_GLOW } from "@/components/card/HoloCard";
+import { Collection } from "@/components/deck/Collection";
 import { DailyOpponent } from "@/components/deck/DailyOpponent";
 import { DustCounter } from "@/components/deck/DustCounter";
 import { NextCard, type Me } from "@/components/deck/NextCard";
@@ -287,6 +288,7 @@ export default function DeckPage() {
         )}
 
         {!!cards?.length && !local && <Timeline cards={cards} />}
+        {owner === "user" && <Collection />}
       </main>
     </div>
   );
