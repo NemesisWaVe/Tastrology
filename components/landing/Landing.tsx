@@ -14,6 +14,7 @@ import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { BringYourOwn } from "./BringYourOwn";
 import { AuthNav } from "@/components/auth/AuthNav";
+import { SoundToggle } from "@/components/site/SoundToggle";
 import { Footer } from "./Footer";
 import { Hero } from "./Hero";
 import { Marquee } from "./Marquee";
@@ -157,6 +158,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
           <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">Shop</a>
           <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">My deck</a>
+          <SoundToggle />
           <AuthNav />
           <button
             onClick={onPick}
