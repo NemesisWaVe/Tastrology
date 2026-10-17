@@ -156,9 +156,11 @@ export async function spendRegret(userId: string, runId: string, now = Date.now(
 }
 
 /** The regret credit held right now (and the picks it can't be spent on), or null. */
-export async function heldRegret(userId: string, now = Date.now()): Promise<{ pick: string } | null> {
+export async function heldRegret(userId: string, now = Date.now()): Promise<{ pick: string; tier: "common" | "rare" | "holo" | "secret" } | null> {
   const w = await ddbGet(pk(userId), "WALLET");
-  return w && Number(w.regret) >= 1 && Number(w.regretExp) >= now ? { pick: String(w.regretPick ?? "") } : null;
+  if (!w || Number(w.regret) < 1 || Number(w.regretExp) < now) return null;
+  const t = String(w.regretTier ?? "common");
+  return { pick: String(w.regretPick ?? ""), tier: t === "rare" || t === "holo" || t === "secret" ? t : "common" };
 }
 
 /** Gives a failed regret-paid run its regret credit back (write-once per run id, like refundCredit). */

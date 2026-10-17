@@ -30,6 +30,8 @@ export interface CardData {
   types: CardType[];
   dual: boolean;
   rarity: Rarity;
+  /** Minted with a regret credit: shown as a "Second draw" mark. */
+  secondDraw?: boolean;
   rarityLabel: string;
   serial: string;
   /** `cut`: the love whose removal costs this brand the most affinity points (leave-one-out re-query). */
@@ -149,7 +151,11 @@ export function buildCard(r: StyleResult): CardData {
     tension: con ? Math.round(15 * (1 - con.overlap)) : 0,
   };
   const rarityScore = pts.obscurity + pts.pairing + pts.spread + pts.tension;
-  const rarity: Rarity = rarityScore >= RARITY_CUTS.secret ? "secret" : rarityScore >= RARITY_CUTS.holo ? "holo" : rarityScore >= RARITY_CUTS.rare ? "rare" : "common";
+  const natural: Rarity = rarityScore >= RARITY_CUTS.secret ? "secret" : rarityScore >= RARITY_CUTS.holo ? "holo" : rarityScore >= RARITY_CUTS.rare ? "rare" : "common";
+  // A second draw (paid by a regret) can't outrank the card it replaced.
+  const TIER: Rarity[] = ["common", "rare", "holo", "secret"];
+  const cap = r.redraw?.cap;
+  const rarity: Rarity = cap && TIER.indexOf(natural) > TIER.indexOf(cap) ? cap : natural;
   const rarityLabel = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[rarity];
   const pc = (v: number) => `${Math.round(v * 100)}%`;
   const rarityWhy = [
@@ -157,6 +163,7 @@ export function buildCard(r: StyleResult): CardData {
     ...(r.overlap === undefined ? [] : [`+${pts.pairing} odd pairing: your loves share ${pc(r.overlap)} of their aesthetic tags`]),
     `+${pts.spread} spread: ${domains} ${domains === 1 ? "domain" : "domains"} across ${n} ${n === 1 ? "love" : "loves"}`,
     ...(con ? [`+${pts.tension} tension: ${seedLabel(r, con.a)} and ${seedLabel(r, con.b)} share ${pc(con.overlap)}`] : []),
+    ...(cap ? [`Second draw: held at ${{ common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[cap]}, the tier of the card it replaced`] : []),
   ];
   const deepCut = avgPop !== undefined && avgPop < 0.9;
 
@@ -229,6 +236,7 @@ export function buildCard(r: StyleResult): CardData {
     mrz,
     domains,
     rarityWhy,
+    ...(cap ? { secondDraw: true } : {}),
     rarityScore,
     bigThree,
     archetype: r.dna.name,

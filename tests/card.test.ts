@@ -99,3 +99,16 @@ describe("rising sign", () => {
     expect(buildCard(base({ brands, createdAt: 0 })).bigThree.rising.name).toBe("Minimalist");
   });
 });
+
+describe("second draw", () => {
+  it("can't outrank the card it replaced, and says so", () => {
+    const r = base({ overlap: 0, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.99);
+    const natural = buildCard(r);
+    expect(natural.rarity).not.toBe("common");
+    const capped = buildCard({ ...r, redraw: { cap: "common" } });
+    expect(capped.rarity).toBe("common");
+    expect(capped.secondDraw).toBe(true);
+    expect(capped.rarityWhy.join(" ")).toMatch(/Second draw/);
+    expect(buildCard({ ...r, redraw: { cap: "secret" } }).rarity).toBe(natural.rarity);
+  });
+});

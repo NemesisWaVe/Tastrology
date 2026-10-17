@@ -119,9 +119,9 @@ export async function burnCard(userId: string, code: string, now = Date.now(), r
         regretKind === "credit"
           ? {
               update: { PK: U, SK: "WALLET" },
-              set: "SET regret = :one, regretExp = :exp, regretPick = :pick",
+              set: "SET regret = :one, regretExp = :exp, regretPick = :pick, regretTier = :tier",
               condition: "attribute_exists(PK)",
-              values: { ":one": 1, ":exp": now + REGRET_TTL_MS, ":pick": String(item.pick ?? "") },
+              values: { ":one": 1, ":exp": now + REGRET_TTL_MS, ":pick": String(item.pick ?? ""), ":tier": tier },
             }
           : { update: { PK: U, SK: "WALLET" }, set: "SET dustAt = :now ADD dust :d", condition: "attribute_exists(PK)", values: { ":now": now, ":d": REGRET_DUST } },
         { put: { PK: U, SK: `LEDGER#regret#${code}`, delta: regretKind === "credit" ? 1 : REGRET_DUST, unit: regretKind, reason: "regret", ref: code, at: now }, condition: "attribute_not_exists(PK)" },

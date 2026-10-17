@@ -166,6 +166,7 @@ function CardFace({ card }: { card: CardData }) {
         </span>
         <span className={s.serial}>
           <b className={s.dots}>№{card.serial}</b> {BRAND.cardSet}
+          {card.secondDraw && <> · 2nd draw</>}
         </span>
         <span className={`${s.rarity} ${s.heroRarity}`}>
           <i>{GEMS[card.rarity]}</i>

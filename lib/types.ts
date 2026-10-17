@@ -116,6 +116,8 @@ export interface CapsuleSlot {
 
 export interface StyleResult {
   runId: string;
+  /** Set when a regret credit paid for this reading: the card can't outrank the one it replaced (regret-burn.md). */
+  redraw?: { cap: "common" | "rare" | "holo" | "secret" };
   mode: "live" | "mock";
   planner: "llm" | "autopilot";
   cached?: boolean;
