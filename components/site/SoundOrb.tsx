@@ -49,7 +49,7 @@ export function SoundOrb() {
       {!on && (
         <span className="text-left leading-tight">
           <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-accent">sound off</span>
-          <span className="block text-[13px] text-ink">the sky has a sound — tap</span>
+          <span className="block text-[13px] font-semibold text-ink">Unmute the universe</span>
         </span>
       )}
     </button>
