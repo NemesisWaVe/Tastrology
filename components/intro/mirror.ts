@@ -158,6 +158,7 @@ export function createMirror(canvas: HTMLCanvasElement, skySrc: string, video: H
 
   let w = 1, h = 1;
   const touchBuf = new Float32Array(24);
+  let lastVT = -1, hasVid = 0;
   return {
     ready: () => skyOk,
     resize(cw, ch, dpr) {
@@ -168,17 +169,19 @@ export function createMirror(canvas: HTMLCanvasElement, skySrc: string, video: H
       gl.viewport(0, 0, canvas.width, canvas.height);
     },
     draw({ view, t, fade, dropAmt, touches, now, impact }) {
-      let vid = 0;
-      if (video.readyState >= 2) {
+      // upload a video frame only when the clip has actually moved on (uploads are the expensive part on phones)
+      if (video.readyState >= 2 && video.currentTime !== lastVT) {
+        lastVT = video.currentTime;
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, tDrop);
         try {
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
-          vid = 1;
+          hasVid = 1;
         } catch {
-          vid = 0;
+          hasVid = 0;
         }
       }
+      const vid = hasVid;
       for (let i = 0; i < 6; i++) {
         const k = touches[i];
         touchBuf[i * 4] = k ? k.x : 0;
