@@ -3,6 +3,7 @@
 import { useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { sfx } from "@/lib/sound";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { fighters, isFighter, type Fighter } from "./data";
@@ -90,7 +91,10 @@ export function BattlePicker({ initialA, initialB }: { initialA?: string | null;
       <button
         type="button"
         disabled={!ready}
-        onClick={() => router.push(`/vs?a=${a}&b=${b}`)}
+        onClick={() => {
+          sfx("tap");
+          router.push(`/vs?a=${a}&b=${b}`);
+        }}
         className="sticky bottom-4 rounded-full bg-accent px-6 py-4 font-display text-[17px] font-bold text-paper shadow-[0_10px_40px_-10px_#c6ff3d] transition enabled:hover:brightness-110 disabled:bg-paper-2 disabled:text-ink-3 disabled:shadow-none"
       >
         {ready ? "Collide them" : "Pick two different tastes"}

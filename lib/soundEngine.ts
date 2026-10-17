@@ -1,0 +1,245 @@
+"use client";
+
+import { setEngine, type Sfx, type SfxOpts } from "./sound";
+
+/**
+ * Synthesized WebAudio palette (no files). Soft transients, low-passed noise, pentatonic pitches,
+ * short decays, a little stereo. See docs/design/sound.md. Off by default; persisted in localStorage.
+ */
+const KEY = "tastrology:sound";
+const MASTER = 0.35;
+const PENTA = [0, 2, 4, 7, 9]; // major pentatonic semitones
+
+let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+let dry: GainNode | null = null;
+let wet: GainNode | null = null;
+let noiseBuf: AudioBuffer | null = null;
+let on = false;
+let loaded = false;
+const last: Partial<Record<Sfx, number>> = {};
+const MIN_GAP: Partial<Record<Sfx, number>> = { tick: 40, tap: 60, ripple: 50, drop: 120 };
+
+function load() {
+  if (loaded) return;
+  loaded = true;
+  try {
+    on = localStorage.getItem(KEY) === "1";
+  } catch {}
+}
+
+export function soundOn(): boolean {
+  if (typeof window === "undefined") return false;
+  load();
+  return on;
+}
+
+function ensure(): AudioContext | null {
+  if (ctx) return ctx;
+  try {
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return null;
+    const c = new AC();
+    master = c.createGain();
+    master.gain.value = MASTER;
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -20;
+    comp.knee.value = 24;
+    comp.ratio.value = 3;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.2;
+    master.connect(comp).connect(c.destination);
+    dry = c.createGain();
+    dry.connect(master);
+    // generated impulse: 1.4s of decaying, low-passed noise
+    const len = Math.floor(c.sampleRate * 1.4);
+    const ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        lp += ((Math.random() * 2 - 1) - lp) * 0.35;
+        d[i] = lp * Math.pow(1 - i / len, 3);
+      }
+    }
+    const conv = c.createConvolver();
+    conv.buffer = ir;
+    wet = c.createGain();
+    wet.gain.value = 0.5;
+    wet.connect(conv).connect(master);
+    const nb = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    noiseBuf = nb;
+    ctx = c;
+  } catch {
+    ctx = null;
+  }
+  return ctx;
+}
+
+type Bus = { in: AudioNode };
+
+/** Route a voice to the master with a send amount to the reverb and a stereo pan. */
+function out(c: AudioContext, send: number, pan: number): Bus {
+  const g = c.createGain();
+  const p = c.createStereoPanner();
+  p.pan.value = pan;
+  g.connect(p);
+  p.connect(dry!);
+  if (send > 0) {
+    const s = c.createGain();
+    s.gain.value = send;
+    p.connect(s).connect(wet!);
+  }
+  return { in: g };
+}
+
+/** Sine/triangle blip with soft attack and exponential decay. */
+function tone(c: AudioContext, t: number, f: number, dur: number, vol: number, o: { type?: OscillatorType; to?: number; send?: number; pan?: number; attack?: number; lp?: number } = {}) {
+  const osc = c.createOscillator();
+  const env = c.createGain();
+  osc.type = o.type ?? "sine";
+  osc.frequency.setValueAtTime(f, t);
+  if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + dur);
+  const a = o.attack ?? 0.004;
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(vol, t + a);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let node: AudioNode = osc;
+  if (o.lp) {
+    const f2 = c.createBiquadFilter();
+    f2.type = "lowpass";
+    f2.frequency.value = o.lp;
+    osc.connect(f2);
+    node = f2;
+  }
+  node.connect(env).connect(out(c, o.send ?? 0.2, o.pan ?? 0).in);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
+/** Filtered noise burst; the filter sweeps from `f0` to `f1`. */
+function noise(c: AudioContext, t: number, dur: number, vol: number, o: { type?: BiquadFilterType; f0: number; f1?: number; q?: number; attack?: number; send?: number; pan?: number; curve?: number }) {
+  const src = c.createBufferSource();
+  src.buffer = noiseBuf;
+  src.loop = true;
+  const f = c.createBiquadFilter();
+  f.type = o.type ?? "lowpass";
+  f.Q.value = o.q ?? 0.7;
+  f.frequency.setValueAtTime(o.f0, t);
+  if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + dur);
+  const env = c.createGain();
+  const a = o.attack ?? 0.005;
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(vol, t + a);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f).connect(env).connect(out(c, o.send ?? 0.15, o.pan ?? 0).in);
+  src.start(t, Math.random() * 1.5);
+  src.stop(t + dur + 0.05);
+}
+
+const hz = (root: number, semis: number) => root * Math.pow(2, semis / 12);
+const pent = (root: number, step: number) => hz(root, PENTA[((step % 5) + 5) % 5] + 12 * Math.floor(step / 5));
+
+function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
+  const gv = o.gain ?? 1;
+  const i = o.i ?? 0;
+  switch (name) {
+    case "tap": // soft key: low thock + a hint of felt
+      tone(c, t, 190, 0.09, 0.5 * gv, { to: 110, send: 0.1 });
+      noise(c, t, 0.04, 0.18 * gv, { f0: 1800, f1: 600, send: 0.05 });
+      tone(c, t + 0.012, 880, 0.12, 0.08 * gv, { type: "triangle", send: 0.3 });
+      break;
+    case "tick": // tiny dry click
+      noise(c, t, 0.022, 0.12 * gv, { type: "bandpass", f0: 2400, q: 1.2, send: 0.04, pan: (Math.random() - 0.5) * 0.3 });
+      break;
+    case "drop": // water plink: falling sine + low bloom
+      tone(c, t, 880, 0.2, 0.45 * gv, { to: 330, send: 0.5 });
+      tone(c, t, 220, 0.35, 0.2 * gv, { to: 110, send: 0.4 });
+      noise(c, t, 0.05, 0.08 * gv, { f0: 1500, f1: 400 });
+      break;
+    case "ripple": { // glass ting on the pentatonic scale
+      const f = pent(523.25, i);
+      const pan = Math.sin(i * 1.7) * 0.4;
+      tone(c, t, f, 0.9, 0.2 * gv, { send: 0.6, pan, attack: 0.006 });
+      tone(c, t, f * 2.76, 0.4, 0.04 * gv, { send: 0.6, pan });
+      break;
+    }
+    case "shimmer": // airy swell: filtered noise + stacked sines
+      noise(c, t, 1.8, 0.2 * gv, { type: "bandpass", f0: 600, f1: 3000, q: 0.8, attack: 1.0, send: 0.7 });
+      [0, 7, 12, 16].forEach((s, k) => tone(c, t + k * 0.08, hz(392, s), 1.7, 0.07 * gv, { attack: 0.8, send: 0.7, pan: (k - 1.5) * 0.25 }));
+      break;
+    case "form": // stars settle: rising pentatonic arpeggio, soft
+      [0, 1, 2, 3, 5].forEach((st, k) => tone(c, t + k * 0.09, pent(392, st), 1.1, 0.14 * gv, { type: "triangle", lp: 3200, send: 0.6, pan: (k - 2) * 0.15 }));
+      tone(c, t + 0.1, 130.8, 1.6, 0.18 * gv, { attack: 0.3, send: 0.4 });
+      break;
+    case "flip": // foil swish + soft landing thock
+      noise(c, t, 0.22, 0.22 * gv, { type: "bandpass", f0: 500, f1: 2600, q: 0.9, attack: 0.07, send: 0.2, pan: -0.2 });
+      tone(c, t + 0.2, 150, 0.12, 0.3 * gv, { to: 90, send: 0.1 });
+      break;
+    case "reveal": // shimmering bell chord, scaled by rarity via gain
+      [0, 4, 7, 12].forEach((s, k) => tone(c, t + k * 0.06, hz(523.25, s), 1.4 - k * 0.15, 0.13 * gv, { send: 0.7, pan: (k - 1.5) * 0.3 }));
+      noise(c, t, 0.9, 0.08 * gv, { type: "highpass", f0: 3500, q: 0.5, attack: 0.15, send: 0.6 });
+      break;
+    case "burn": // soft crackle, then a falling hiss
+      noise(c, t, 1.3, 0.2 * gv, { f0: 5000, f1: 180, attack: 0.02, send: 0.2 });
+      for (let k = 0; k < 9; k++) noise(c, t + 0.03 + Math.random() * 1.0, 0.025, (0.1 + Math.random() * 0.1) * gv, { type: "bandpass", f0: 1200 + Math.random() * 1800, q: 1.5, send: 0.1, pan: (Math.random() - 0.5) * 0.8 });
+      tone(c, t, 70, 0.5, 0.2 * gv, { to: 45 });
+      break;
+    case "collide": // low sub boom + bright bloom
+      tone(c, t, 110, 0.9, 0.5 * gv, { to: 38, send: 0.3 });
+      noise(c, t, 0.7, 0.25 * gv, { f0: 3000, f1: 150, attack: 0.01, send: 0.5 });
+      tone(c, t + 0.05, hz(329.63, 7), 1.2, 0.08 * gv, { send: 0.7 });
+      break;
+    case "whoosh": // airy sweep up, quick settle
+      noise(c, t, 0.35, 0.2 * gv, { type: "bandpass", f0: 400, f1: 2400, q: 0.8, attack: 0.12, send: 0.3, pan: 0.15 });
+      break;
+  }
+}
+
+function play(name: Sfx, o: SfxOpts = {}) {
+  if (!soundOn()) return;
+  const c = ctx;
+  if (!c || c.state !== "running") return; // not unlocked yet
+  const now = performance.now();
+  const gap = MIN_GAP[name] ?? 0;
+  if (gap && now - (last[name] ?? -1e9) < gap) return;
+  last[name] = now;
+  try {
+    voice(c, name, o, c.currentTime + 0.005);
+  } catch {}
+}
+
+/** Turn sound on/off. Call from a user gesture when enabling (resumes the context). */
+export function enableSound(v: boolean): void {
+  if (typeof window === "undefined") return;
+  load();
+  on = v;
+  try {
+    localStorage.setItem(KEY, v ? "1" : "0");
+  } catch {}
+  try {
+    if (v) {
+      const c = ensure();
+      if (c && c.state !== "running") void c.resume().catch(() => {});
+      setEngine({ play });
+    } else {
+      setEngine(null);
+    }
+  } catch {}
+}
+
+/** On a returning visit sound is remembered, but the context can only start after a gesture. */
+export function armSound(): void {
+  if (typeof window === "undefined" || !soundOn()) return;
+  setEngine({ play });
+  const unlock = () => {
+    const c = ensure();
+    if (c && c.state !== "running") void c.resume().catch(() => {});
+    window.removeEventListener("pointerdown", unlock);
+    window.removeEventListener("keydown", unlock);
+  };
+  window.addEventListener("pointerdown", unlock);
+  window.addEventListener("keydown", unlock);
+}

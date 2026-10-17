@@ -6,6 +6,7 @@ import { getFontEmbedCSS, toBlob } from "html-to-image";
 import type { StyleResult } from "@/lib/types";
 import { buildCard, proxied, type CardData } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
+import { sfx } from "@/lib/sound";
 import { HoloCard, glyph } from "./HoloCard";
 import { Sigil, Sparkle } from "./Sigils";
 import { ReceiptBody, ReceiptPaper } from "./Receipt";
@@ -32,6 +33,7 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
   const node = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    sfx("whoosh");
     try {
       const f = new File([new Blob(["x"], { type: "image/png" })], "x.png", { type: "image/png" });
       const coarse = window.matchMedia("(pointer: coarse)").matches;
@@ -148,7 +150,7 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
         <div className="flex w-full max-w-[400px] flex-col gap-2">
           <div className="flex gap-2">
             {canShare && (
-              <motion.button whileTap={{ scale: 0.97 }} transition={SPRING} onClick={() => go("share")} disabled={!!busy} className="flex-1 rounded-full bg-accent py-3.5 text-[15px] font-semibold text-black disabled:opacity-60">
+              <motion.button whileTap={{ scale: 0.97 }} transition={SPRING} onClick={() => { sfx("tap"); go("share"); }} disabled={!!busy} className="flex-1 rounded-full bg-accent py-3.5 text-[15px] font-semibold text-black disabled:opacity-60">
                 {busy === "share" ? "Minting…" : "Share"}
               </motion.button>
             )}

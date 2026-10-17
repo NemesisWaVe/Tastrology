@@ -1,5 +1,7 @@
 "use client";
 
+import { sfx } from "@/lib/sound";
+
 /**
  * The burn (docs/design/burn.md §1). Pure canvas + DOM, no React state, so it holds 60fps over any card.
  *   0 – 280 ms   crack: the foil splits along glowing lime fractures from a random impact point; the card shudders and flashes.
@@ -287,29 +289,7 @@ export function dissolve(el: HTMLElement, opts: { target?: HTMLElement | null; c
   return { done, restore };
 }
 
-/** A crack, then a falling hiss: noise through a closing low-pass. Only ever played after the user's own tap. */
+/** Burn crackle + falling hiss, via the shared sound bus (silent unless the visitor turned sound on). */
 export function playBurnSound(): void {
-  try {
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return;
-    const ac = new AC();
-    const len = Math.floor(ac.sampleRate * 1.4);
-    const buf = ac.createBuffer(1, len, ac.sampleRate);
-    const data = buf.getChannelData(0);
-    const snap = Math.floor(ac.sampleRate * 0.03);
-    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (i < snap ? 1 : 0.6 * (1 - i / len));
-    const src = ac.createBufferSource();
-    src.buffer = buf;
-    const lp = ac.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.setValueAtTime(7000, ac.currentTime);
-    lp.frequency.exponentialRampToValueAtTime(160, ac.currentTime + 1.35);
-    const g = ac.createGain();
-    g.gain.setValueAtTime(0.3, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.12, ac.currentTime + 0.08);
-    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 1.4);
-    src.connect(lp).connect(g).connect(ac.destination);
-    src.start();
-    src.onended = () => void ac.close().catch(() => {});
-  } catch {}
+  sfx("burn");
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AuthNav } from "@/components/auth/AuthNav";
 import { BRAND } from "@/lib/brand";
 import { LegalLinks } from "./LegalLinks";
+import { SoundToggle } from "./SoundToggle";
 
 /** Nav + footer for the quiet pages (shop, account, legal, sign-in). Same look as /deck. */
 export function SiteShell({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export function SiteNav() {
         <Link href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
           My deck
         </Link>
+        <SoundToggle />
         <AuthNav />
         <Link href="/" className="hidden rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">
           New sign

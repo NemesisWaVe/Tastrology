@@ -3,6 +3,7 @@
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { CardData } from "@/lib/card";
+import { sfx } from "@/lib/sound";
 import { CardBack, HoloCard } from "./HoloCard";
 
 const norm = (deg: number) => ((deg % 360) + 360) % 360;
@@ -56,7 +57,10 @@ export function FlipCard({
     else animate(rot, to, { type: "spring", stiffness: 170, damping: 19, velocity });
     report(showsBack(to));
   };
-  const flip = () => go(target.current + (rot.get() >= target.current ? 180 : -180));
+  const flip = () => {
+    sfx("flip");
+    go(target.current + (rot.get() >= target.current ? 180 : -180));
+  };
 
   // External changes (button, results "Back" toggle): turn to the nearest angle showing the requested face.
   useEffect(() => {

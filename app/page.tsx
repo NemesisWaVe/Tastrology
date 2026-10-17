@@ -6,6 +6,7 @@ import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { ShareSheet } from "@/components/card/ShareSheet";
 import { AuthNav } from "@/components/auth/AuthNav";
+import { SoundToggle } from "@/components/site/SoundToggle";
 import { Landing } from "@/components/landing/Landing";
 import { ResultsView, type Vote } from "@/components/results/ResultsView";
 import { Reveal } from "@/components/reveal/Reveal";
@@ -384,6 +385,7 @@ export default function Home() {
           <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
             My deck
           </a>
+          <SoundToggle />
           <AuthNav />
           <button onClick={reset} className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink">
             New sign
