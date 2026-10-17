@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { runAgent } from "@/lib/agent";
-import { clerkOn, currentUserId } from "@/lib/auth";
+import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
 import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
 import { creditsOn, refundCredit, RUN_ID_RE, spendCredit } from "@/lib/ledger";
 import { kvCache } from "@/lib/cache";
@@ -192,6 +192,8 @@ export async function POST(request: Request) {
     const userId = clerkOn() ? await currentUserId() : null;
     if (clerkOn() && !userId && !persona) return Response.json({ error: "Sign in to mint a fresh card.", reason: "signin" }, { status: 401 });
     const who = userId ? `u:${userId}` : clientId(request.headers);
+    // Admins skip the per-person limits, the daily cap and credits. They still queue for a run slot like everyone else.
+    const admin = await isAdmin(userId);
     // Bot check before anything that costs quota (anonymous only: Clerk's sign-up already ran one). The token is spent here, so queue retries ride on the cookie.
     if (!userId && !persona && turnstileOn() && !hasHumanCookie(request.headers)) {
       const token = request.headers.get("x-turnstile") ?? "";
@@ -201,7 +203,7 @@ export async function POST(request: Request) {
       }
       setCookie = humanCookie();
     }
-    if (!(await allow(`agent:${who}`, RATE_LIMIT, RATE_WINDOW_MS))) return reply({ error: RATE_MSG }, { status: 429 });
+    if (!admin && !(await allow(`agent:${who}`, RATE_LIMIT, RATE_WINDOW_MS))) return reply({ error: RATE_MSG }, { status: 429 });
     // Fresh runs only (not replays, not joins): they cost Qloo and LLM calls.
     const release = flights.size >= MAX_FLIGHTS ? null : await acquireSlot("agent", RUN_SLOTS, SLOT_TTL_MS);
     if (!release) {
@@ -209,11 +211,11 @@ export async function POST(request: Request) {
       return reply({ ...BUSY, reason: "slots" }, { status: 503, headers: { "retry-after": String(12 + Math.floor(Math.random() * 10)) } });
     }
     // Counted only once a slot is granted, so waiting in line doesn't use up the allowance.
-    if (!(await allow(`fresh:${who}`, FRESH_LIMIT, RATE_WINDOW_MS))) {
+    if (!admin && !(await allow(`fresh:${who}`, FRESH_LIMIT, RATE_WINDOW_MS))) {
       await release();
       return reply({ error: RATE_MSG }, { status: 429 });
     }
-    if ((await bumpDaily("runs")) > DAILY_RUNS_MAX) {
+    if ((await bumpDaily("runs")) > DAILY_RUNS_MAX && !admin) {
       await release();
       later(bumpDaily("denied_daily"));
       return reply({ ...BUSY, reason: "daily" }, { status: 503, headers: { "retry-after": "600" } });
@@ -225,7 +227,7 @@ export async function POST(request: Request) {
     }
     // Credits last, after every free gate, so being turned away never costs one. Idempotent per run id (the client reuses it across retries).
     let minter: Minter | undefined = userId && !persona ? { userId } : undefined;
-    if (minter && creditsOn()) {
+    if (minter && creditsOn() && !admin) {
       const hdr = request.headers.get("x-run-id") ?? "";
       const runId = RUN_ID_RE.test(hdr) ? hdr : randomUUID();
       const spent = await spendCredit(minter.userId, runId);

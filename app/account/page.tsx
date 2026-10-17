@@ -8,6 +8,7 @@ import { authOn, whenAuthReady, type Bridge } from "@/lib/authBridge";
 interface Me {
   accounts: boolean;
   signedIn: boolean;
+  admin?: boolean;
   creditsOn?: boolean;
   credits?: number | null;
   freeLeft?: number | null;
@@ -51,6 +52,12 @@ export default function AccountPage() {
     <SiteShell>
       <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">Account</p>
       <h1 className="mt-2 font-serif text-5xl italic leading-[0.95] sm:text-6xl">Your chart room</h1>
+      {me?.admin && (
+        <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          Admin · no limits, no credits
+        </p>
+      )}
 
       {!authOn && (
         <p className="mt-4 max-w-xl text-ink-2">

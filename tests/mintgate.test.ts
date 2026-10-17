@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 /** The agent route's sign-in gate, with Clerk mocked: fresh readings need an account, personas never do. */
 const auth = vi.hoisted(() => ({ on: false, user: null as string | null }));
-vi.mock("@/lib/auth", () => ({ clerkOn: () => auth.on, currentUserId: async () => auth.user }));
+vi.mock("@/lib/auth", () => ({ clerkOn: () => auth.on, currentUserId: async () => auth.user, isAdmin: async () => false }));
 
 import { POST } from "@/app/api/agent/route";
 import { PERSONAS } from "@/lib/personas";

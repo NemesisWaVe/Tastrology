@@ -16,3 +16,25 @@ export async function currentUserId(): Promise<string | null> {
     return null;
   }
 }
+
+const adminCache = new Map<string, { admin: boolean; until: number }>();
+
+/**
+ * Admin = Clerk user with public metadata `{ "role": "admin" }` (set in the dashboard: Users → user → Metadata).
+ * Nothing about who is admin lives in code. Cached 5 min per instance; any error reads as "not admin".
+ */
+export async function isAdmin(userId: string | null): Promise<boolean> {
+  if (!userId || !clerkOn()) return false;
+  const hit = adminCache.get(userId);
+  if (hit && hit.until > Date.now()) return hit.admin;
+  let admin = false;
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const user = await (await clerkClient()).users.getUser(userId);
+    admin = (user.publicMetadata as { role?: unknown } | undefined)?.role === "admin";
+  } catch {
+    return false;
+  }
+  adminCache.set(userId, { admin, until: Date.now() + 5 * 60 * 1000 });
+  return admin;
+}
