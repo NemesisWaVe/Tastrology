@@ -412,8 +412,8 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
       const [px, py] = pts[pts.length - 1];
       pts.push([px + Math.cos(ang) * len, py + Math.sin(ang) * len * 0.55]);
     }
-    const prog = 4; // complete at once, so it shows on any frame rate
-    ctx.globalAlpha = a * Math.min(1, age / 0.15);
+    const prog = Math.min(1, age / 0.35) * 4; // stars find each other one by one
+    ctx.globalAlpha = a;
     ctx.strokeStyle = "rgba(225,255,170,1)";
     ctx.lineWidth = 1.6;
     ctx.shadowColor = "rgba(198,255,61,1)";
