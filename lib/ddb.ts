@@ -116,6 +116,8 @@ export async function ddbQuery(PK: string, prefix: string, limit: number, cursor
     KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
     ExpressionAttributeValues: marshal({ ":pk": PK, ":sk": prefix }),
     Limit: limit,
+    // Strongly consistent: a deck read right after a burn or an add must see it (costs 1 RCU per 4KB instead of 0.5).
+    ConsistentRead: true,
   };
   if (attrs?.length) {
     payload.ProjectionExpression = attrs.map((_, i) => `#a${i}`).join(", ");

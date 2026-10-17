@@ -132,6 +132,12 @@ export default function DeckPage() {
       return;
     }
     setCards((cs) => cs?.filter((c) => c.code !== code) ?? cs);
+    // The sign saved in this browser was this card: forget it, so home doesn't bring it back and the deck doesn't re-file it.
+    if (savedCard()?.entry.code === code) {
+      try {
+        localStorage.removeItem("tastrology:v1");
+      } catch {}
+    }
     cardEls.current.delete(code);
     setBurning(null);
     setArmed(null);
