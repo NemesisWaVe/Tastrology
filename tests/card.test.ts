@@ -87,3 +87,15 @@ describe("weakness, Deep Cut, moves", () => {
     expect(c.stats[3].hint).toMatch(/how strongly Qloo backs your top 3 brands/);
   });
 });
+
+describe("rising sign", () => {
+  const styled = (i: number, style: string[]): BrandMatch => ({ ...brand(i), entity: { ...brand(i).entity, style } });
+  it("skips a style nearly every brand carries and picks the specific one", () => {
+    const brands = [styled(1, ["Minimalist", "Techwear"]), styled(2, ["Minimalist"]), styled(3, ["Minimalist"]), styled(4, ["Minimalist", "Techwear"]), styled(5, ["Minimalist"])];
+    expect(buildCard(base({ brands, createdAt: Date.UTC(2026, 9, 20) })).bigThree.rising.name).toBe("Techwear");
+  });
+  it("leaves older readings as they were", () => {
+    const brands = [styled(1, ["Minimalist", "Techwear"]), styled(2, ["Minimalist"]), styled(3, ["Minimalist"]), styled(4, ["Minimalist", "Techwear"]), styled(5, ["Minimalist"])];
+    expect(buildCard(base({ brands, createdAt: 0 })).bigThree.rising.name).toBe("Minimalist");
+  });
+});

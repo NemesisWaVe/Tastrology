@@ -524,7 +524,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
               className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[14px] font-medium backdrop-blur"
             >
               {b.entity.name}
-              <span className="ml-1.5 font-mono text-[10px] text-ink-3">{b.affinity.toFixed(2)}</span>
+              <span className="ml-1.5 font-mono text-[10px] text-ink-3">{b.affinity.toFixed(3)}</span>
             </motion.span>
           ))}
         </div>

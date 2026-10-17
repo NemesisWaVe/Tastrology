@@ -100,6 +100,9 @@ export const KIND_LABEL: Record<string, string> = {
   videogame: "Game",
 };
 
+/** Readings from this moment on use the specificity-weighted Rising (2026-10-19 UTC). */
+export const RISING_V2_AT = Date.UTC(2026, 9, 19);
+
 export function buildCard(r: StyleResult): CardData {
   const dual = r.dna.lobes.length > 1;
   const typeNames = dual
@@ -171,8 +174,26 @@ export function buildCard(r: StyleResult): CardData {
 
   const kw = r.dna.keywords.map((k) => k.name);
   const styleCounts = new Map<string, number>();
-  for (const b of main.slice(0, 6)) for (const st of b.entity.style ?? []) styleCounts.set(st, (styleCounts.get(st) ?? 0) + 1);
-  const risingName = [...styleCounts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => !kw.slice(0, 2).includes(k)) ?? kw[2] ?? kw[1] ?? "Unwritten";
+  let risingName: string;
+  if ((r.createdAt ?? 0) < RISING_V2_AT) {
+    // Readings before the fix keep their Rising, so their card codes don't change.
+    for (const b of main.slice(0, 6)) for (const st of b.entity.style ?? []) styleCounts.set(st, (styleCounts.get(st) ?? 0) + 1);
+    risingName = [...styleCounts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => !kw.slice(0, 2).includes(k)) ?? kw[2] ?? kw[1] ?? "Unwritten";
+  } else {
+    // A style nearly every brand carries (Minimalist, say) says nothing about you: weight each tag by how specific it is
+    // to this pool and skip the near-universal ones.
+    const pool = r.brands.filter((b) => !b.side);
+    const df = new Map<string, number>();
+    for (const b of pool) for (const st of new Set(b.entity.style ?? [])) df.set(st, (df.get(st) ?? 0) + 1);
+    for (const b of main.slice(0, 6))
+      for (const st of b.entity.style ?? []) {
+        const n = df.get(st) ?? 1;
+        if (pool.length >= 4 && n > 0.6 * pool.length) continue;
+        styleCounts.set(st, (styleCounts.get(st) ?? 0) + (b.affinity || 1) / Math.log(1 + n));
+      }
+    const fromStyle = [...styleCounts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => !kw.slice(0, 2).includes(k));
+    risingName = fromStyle ?? kw.slice(2).find((k) => k !== "Minimalist") ?? kw[2] ?? kw[1] ?? "Unwritten";
+  }
   const bigThree: BigThree = {
     sun: typeOf(kw[0] ?? "Unwritten"),
     moon: typeOf(dual ? (sideB.keywords[0]?.name ?? kw[1] ?? "Unwritten") : (kw[1] ?? "Unwritten")),
