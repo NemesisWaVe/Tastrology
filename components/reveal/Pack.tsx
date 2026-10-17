@@ -849,15 +849,15 @@ function PackArt({ w, h, tearY }: { w: number; h: number; tearY: number }) {
 
 /** A total eclipse: night pooled behind it, a holo corona, a dark moon, and a lime diamond ring on the rim. */
 function Eclipse({ size, top }: { size: number; top: number }) {
-  const r = size * 0.385;
+  const r = size * 0.405;
   const a = (-48 * Math.PI) / 180;
   return (
     <div className="absolute left-1/2 -translate-x-1/2" style={{ top, width: size, height: size }} aria-hidden>
       <div className={s.eclipseNight} />
       <div className={s.eclipseTilt}>
         <div className={s.streamers} />
-        <div className={s.corona} style={{ filter: `blur(${size * 0.04}px)` }} />
-        <div className={s.coronaRim} style={{ filter: `blur(${size * 0.012}px)` }} />
+        <div className={s.corona} style={{ filter: `blur(${size * 0.09}px)` }} />
+        <div className={s.coronaRim} style={{ filter: `blur(${size * 0.025}px)` }} />
       </div>
       <div className={s.moon} />
       <div className={s.eclipseTilt}>
