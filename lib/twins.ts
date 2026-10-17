@@ -30,7 +30,8 @@ const TOMB_MEMO_MS = 60_000;
 export async function burnedAt(code: string): Promise<number | null> {
   const hit = tombs.get(code);
   if (hit !== undefined) return hit;
-  const r = await ddbGetStatus(`CARD#${code}`, "TOMBSTONE", 1500);
+  // 3s, not 1.5s: the first DynamoDB call on a cold instance (TLS + signing) can take ~2s.
+  const r = await ddbGetStatus(`CARD#${code}`, "TOMBSTONE", 3000);
   if (r.status === "error") return null;
   const at = r.status === "found" && Number(r.value.revived) !== 1 ? Number(r.value.burnedAt) || 1 : 0;
   tombs.set(code, at, TOMB_MEMO_MS);
