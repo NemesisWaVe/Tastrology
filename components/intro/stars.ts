@@ -365,9 +365,9 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
 type Drop = { x: number; y: number; t: number; amp: number; name?: string; user?: boolean };
 
 /** The ripples carry taste: each named drop's love rides the near edge of its ring, and rings that meet are joined. */
-export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: number, hz: number, mono: string, phone: boolean, fade: number) {
+export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: number, hz: number, mono: string, phone: boolean, fade: number, taps: { x: number; y: number; t: number }[] = []) {
   const named = drops.filter((d) => d.name);
-  if (!named.length || fade <= 0) return;
+  if ((!named.length && !taps.length) || fade <= 0) return;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   const ring = (d: Drop) => {
@@ -398,8 +398,7 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
       star(ctx, B.x, B.y, 26, a, [235, 200, 255], true);
     }
   // a visitor's drop sprouts its own little constellation: 5 stars in a jagged chain, drawn in ~0.35s
-  for (const d of named) {
-    if (!d.user) continue;
+  for (const d of taps) {
     const age = now - d.t;
     const a = (1 - sst(3.6, 5, age)) * fade;
     if (a <= 0) continue;
