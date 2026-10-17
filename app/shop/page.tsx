@@ -30,19 +30,20 @@ export default function ShopPage() {
             Concept shop · nothing is for sale
           </p>
           <p className="mt-2 text-sm text-ink-2">
-            {BRAND.name} is a student hackathon project and every reading is free during the beta. Prices show what a future version might cost.
+            {BRAND.name} is a student hackathon project. Readings come from the monthly refill and from friends you bring in. Prices show what a future version might cost.
           </p>
         </div>
       )}
 
       <ul className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {PRODUCTS.map((p, i) => (
+        {/* No multi-card packs: a card is an identity, not a pull (docs/design/identity-limits.md). */}
+        {PRODUCTS.filter((p) => p.id === "reading" || p.id === "print").map((p, i) => (
           <ProductCard key={p.id} p={p} paid={paid} soon={Boolean(p.physical) && !prints} i={i} />
         ))}
       </ul>
 
       <p className="mt-10 max-w-xl font-mono text-[11px] leading-relaxed text-ink-3">
-        Every account starts with free readings. Demo personas and repeat readings never cost anything.{" "}
+        Every account starts with one free card and gets another each new moon. Demo personas and repeat readings never cost anything.{" "}
         <Link href="/account" className="text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">
           See your credits
         </Link>

@@ -16,7 +16,7 @@ export interface Product {
 }
 
 export const PRODUCTS: Product[] = [
-  { id: "reading", name: "Reading credit", blurb: "Change your loves, get a new sign. One fresh reading.", pricePaise: 4900, credits: 1 },
+  { id: "reading", name: "Extra reading", blurb: "Don't want to wait for the new moon? One more card, from new loves.", pricePaise: 4900, credits: 1 },
   { id: "shadow-pack", name: "Shadow Pack", blurb: "One card per love removed: the you without each of them.", pricePaise: 19900, credits: 5 },
   { id: "domain-deck", name: "Domain Deck", blurb: "Your sign from one shelf only. Just films, just music, just food.", pricePaise: 14900, credits: 3 },
   { id: "print", name: "Physical print", blurb: "Your card on 350 gsm holo stock, posted to your door.", pricePaise: 49900, credits: 0, physical: true },
