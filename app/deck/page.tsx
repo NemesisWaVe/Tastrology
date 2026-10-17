@@ -86,21 +86,8 @@ export default function DeckPage() {
   // ---- Burning (docs/design/burn.md). Only for signed-in accounts, only on your own mints.
   const [armed, setArmed] = useState<string | null>(null);
   const [burning, setBurning] = useState<string | null>(null);
-  const [sound, setSound] = useState(false);
   const counterRef = useRef<HTMLDivElement>(null);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
-  useEffect(() => {
-    try {
-      setSound(localStorage.getItem("tastrology:burn-sound") === "1");
-    } catch {}
-  }, []);
-  const toggleSound = () =>
-    setSound((on) => {
-      try {
-        localStorage.setItem("tastrology:burn-sound", on ? "0" : "1");
-      } catch {}
-      return !on;
-    });
 
   /** Hold heat: the edges char inward and the foil runs hot. */
   const heat = useCallback(
@@ -118,7 +105,7 @@ export default function DeckPage() {
   const doBurn = async (entry: DeckEntry) => {
     const { code, card } = entry;
     setBurning(code);
-    if (sound && !reduce) playBurnSound();
+    if (!reduce) playBurnSound();
     const el = cardEls.current.get(code);
     const colors = [...card.types.flatMap((t) => [t.a, t.b]), RARITY_GLOW[card.rarity], RARITY_GLOW[card.rarity]];
     const fx = el ? dissolve(el, { target: burn?.dustOn ? counterRef.current : null, colors, reduce }) : null;
@@ -173,11 +160,6 @@ export default function DeckPage() {
         {burn?.on && !local && (
           <div className="mt-6 flex flex-wrap items-center gap-4">
             {burn.dustOn && <DustCounter ref={counterRef} value={burn.dust ?? 0} weekLeft={burn.weekLeft} reduce={reduce} />}
-            {!reduce && (
-              <button type="button" onClick={toggleSound} aria-pressed={sound} className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
-                Burn sound {sound ? "on" : "off"}
-              </button>
-            )}
           </div>
         )}
 

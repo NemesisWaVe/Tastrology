@@ -4,6 +4,7 @@ import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
 import { rng, TAU } from "@/components/reveal/skyFigures";
 import type { Side } from "@/lib/battle";
 import type { CardData } from "@/lib/card";
+import { sfx } from "@/lib/sound";
 import g from "./galaxy.module.css";
 
 /**
@@ -292,6 +293,7 @@ export function Galaxies({ sides, beat, reduce, solo = false, className = "", st
     let last = performance.now();
     const t0 = last;
     let lastDraw = 0;
+    let boomed = false;
 
     const bez = (p: number[], q: number[], c: number[], u: number) => {
       const v = 1 - u;
@@ -450,6 +452,10 @@ export function Galaxies({ sides, beat, reduce, solo = false, className = "", st
 
         // first contact: a flash and a shock ring from the impact point
         const ti = now - t0 - IMPACT_MS;
+        if (!reduce && ti > 0 && !boomed) {
+          boomed = true;
+          sfx("collide");
+        }
         if (!reduce && ti > 0 && ti < 1100) {
           const p = ti / 1100;
           flash(mid[0], mid[1], R * (0.35 + 1.3 * p), [198, 255, 61], 0.9 * (1 - p) * (1 - p));

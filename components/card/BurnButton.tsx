@@ -2,6 +2,7 @@
 
 import { animate, motion, useMotionValue, useMotionValueEvent, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { useRef } from "react";
+import { sfx } from "@/lib/sound";
 
 /** How long the button has to be held. Letting go early rewinds the ring. */
 export const HOLD_MS = 1600;
@@ -36,6 +37,7 @@ export function BurnButton({
     if (t > tick.current && t < 4) {
       tick.current = t;
       buzz(12);
+      sfx("tick", { gain: 0.6 + t * 0.2 });
     }
   });
 

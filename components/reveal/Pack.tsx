@@ -7,6 +7,7 @@ import { CardBack, RARITY_GLOW } from "@/components/card/HoloCard";
 import { FlipCard } from "@/components/card/FlipCard";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
+import { sfx } from "@/lib/sound";
 import type { CardData, CardType } from "@/lib/card";
 import { figureFor, rng } from "./skyFigures";
 import { Sky } from "./Sky";
@@ -180,6 +181,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
 
   const takeCard = useCallback(() => {
     if (stage !== "inpack") return;
+    sfx("whoosh");
     pull.current = null;
     setPulling(false);
     navigator.vibrate?.([10, 30, 18]);
@@ -278,6 +280,7 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
     }
     await animate(rotY, 90, { duration: 0.18, ease: "easeIn" });
     setFace("front");
+    sfx(card.rarity === "common" ? "flip" : "reveal", { gain: card.rarity === "secret" ? 1.3 : card.rarity === "holo" ? 1.1 : card.rarity === "rare" ? 0.9 : 0.8 });
     rotY.set(-90);
     animate(rotY, 0, { type: "spring", stiffness: 260, damping: 18 });
     setStage("revealed");
