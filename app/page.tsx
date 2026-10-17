@@ -258,6 +258,14 @@ export default function Home() {
   // A returning sign that was burned (here or on another device) is gone: drop it and land on the home page.
   const resetRef = useRef(reset);
   resetRef.current = reset;
+  // "/?new=1" (shop, "New sign"): start a fresh reading instead of reopening the saved one. The card stays in the deck.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("new") !== "1") return;
+    resetRef.current();
+    try {
+      history.replaceState(null, "", "/");
+    } catch {}
+  }, []);
   useEffect(() => {
     if (!returning || !saved?.result) return;
     let code: string;

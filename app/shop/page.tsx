@@ -90,7 +90,7 @@ function ProductCard({ p, paid, soon, i }: { p: Product; paid: boolean; soon: bo
             Checkout soon
           </span>
         ) : (
-          <Link href="/" className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition hover:brightness-110">
+          <Link href="/?new=1" className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition hover:brightness-110">
             Free during beta
           </Link>
         )}

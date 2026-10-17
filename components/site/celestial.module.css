@@ -16,7 +16,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: conic-gradient(from var(--a, 0deg), #c6ff3d, #8fd8ff, #d875ff, #ffd36b, #c6ff3d);
+  background: conic-gradient(from var(--orbit, 0deg), #c6ff3d, #8fd8ff, #d875ff, #ffd36b, #c6ff3d);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -31,8 +31,8 @@
 }
 .panel:hover::before { opacity: 0.9; }
 .panel:hover .art { transform: scale(1.08) rotate(-4deg); filter: brightness(1.25); }
-@property --a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
-@keyframes spin { to { --a: 360deg; } }
+@property --orbit { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes spin { to { --orbit: 360deg; } }
 @keyframes float {
   0%, 100% { translate: 0 0; }
   50% { translate: 0 -7px; }
@@ -160,7 +160,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: conic-gradient(from var(--a, 0deg), rgba(198, 255, 61, 0.9), rgba(143, 216, 255, 0.15), rgba(216, 117, 255, 0.9), rgba(143, 216, 255, 0.15), rgba(198, 255, 61, 0.9));
+  background: conic-gradient(from var(--orbit, 0deg), rgba(198, 255, 61, 0.9), rgba(143, 216, 255, 0.15), rgba(216, 117, 255, 0.9), rgba(143, 216, 255, 0.15), rgba(198, 255, 61, 0.9));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
