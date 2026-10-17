@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { claimDevice } from "@/lib/claim";
 import { ddbGet } from "@/lib/ddb";
-import { creditsOn, ensureWallet, freeMints, FREE_MINTS_FLOOR, refundCredit, spendCredit, wallet } from "@/lib/ledger";
+import { creditsOn, ensureWallet, freeMints, FREE_MINTS_FLOOR, grantRefill, refundCredit, spendCredit, wallet } from "@/lib/ledger";
 import { FakeDynamo } from "./fakeDynamo";
 
 
@@ -83,7 +83,7 @@ describe("credit spend and refund", () => {
     for (let i = 0; i < 3; i++) expect(await spendCredit(U, `run-0000001${i}`)).toBe("spent");
     expect(await spendCredit(U, "run-00000020")).toBe("empty");
     expect(num(`USER#${U}`, "WALLET", "credits")).toBe(0);
-    expect(await wallet(U)).toEqual({ credits: 0, freeLeft: 0 });
+    expect(await wallet(U)).toMatchObject({ credits: 0, freeLeft: 0 });
   });
 
   it("rejects malformed run ids and reports an unreachable table as an error", async () => {
@@ -96,6 +96,41 @@ describe("credit spend and refund", () => {
 });
 
 /* ------------------------------------------------------------ device deck claim */
+
+describe("identity limits: one card, a monthly refill, a device cap", () => {
+  const U = "user_limits";
+  const DAY = 24 * 3600 * 1000;
+  beforeEach(() => vi.stubEnv("FREE_MINTS", "1"));
+
+  it("gives one free card, then waits for the refill", async () => {
+    expect(await spendCredit(U, "run-lim-0001")).toBe("spent");
+    expect(await spendCredit(U, "run-lim-0002")).toBe("empty");
+    const w = await wallet(U);
+    expect(w?.credits).toBe(0);
+    expect(w?.refillAt).toBeGreaterThan(Date.now() + 29 * DAY);
+  });
+
+  it("refills once a cycle, never stacking", async () => {
+    await spendCredit(U, "run-lim-0003");
+    const later = Date.now() + 31 * DAY;
+    expect(await grantRefill(U, later)).toBe("granted");
+    expect(await grantRefill(U, later)).toBe("none");
+    expect(await grantRefill(U, later + 40 * DAY)).toBe("none");
+    expect(num(`USER#${U}`, "WALLET", "credits")).toBe(1);
+  });
+
+  it("does not refill before the month is up", async () => {
+    await spendCredit(U, "run-lim-0004");
+    expect(await grantRefill(U, Date.now() + 10 * DAY)).toBe("wait");
+  });
+
+  it("funds at most two first cards per browser a month", async () => {
+    for (const u of ["dev_a", "dev_b", "dev_c"]) expect(await ensureWallet(u, "device-1")).toBe("created");
+    expect(num("USER#dev_a", "WALLET", "credits")).toBe(1);
+    expect(num("USER#dev_b", "WALLET", "credits")).toBe(1);
+    expect(num("USER#dev_c", "WALLET", "credits")).toBe(0);
+  });
+});
 
 describe("claimDevice", () => {
   const DEV = "11111111-2222-3333-4444-555555555555";
