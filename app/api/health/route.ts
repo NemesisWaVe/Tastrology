@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { storeMode } from "@/lib/cache";
 import { ddbConfigured } from "@/lib/ddb";
+import { configProblems, deepCheck } from "@/lib/health";
 import { turnstileOn } from "@/lib/human";
 import { llmConfigured, llmPaused } from "@/lib/llm";
 import { qlooMode } from "@/lib/qloo";
@@ -18,10 +19,35 @@ function authorized(request: Request): boolean {
   return timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 
-/** Public: which backends are on. With `?detail=1` and `Authorization: Bearer $HEALTH_TOKEN`: today's counters (UTC). */
+/**
+ * Public: which backends are on, plus `problems` (production misconfigurations; any one makes this a 503, so a plain
+ * uptime monitor catches them). With `Authorization: Bearer $HEALTH_TOKEN`:
+ *   ?detail=1  today's counters (UTC)
+ *   ?deep=1    a live probe of every dependency (1.5s each); any failure makes this a 503
+ */
 export async function GET(request: Request) {
-  const base = { ok: true, qlooMode: qlooMode(), llmConfigured: llmConfigured(), llmPaused: llmPaused(), store: storeMode(), deck: ddbConfigured(), turnstile: turnstileOn() };
-  const detail = new URL(request.url).searchParams.get("detail") === "1" && authorized(request);
-  const today = detail ? Object.fromEntries(await Promise.all(COUNTERS.map(async (c) => [c, await readDaily(c)] as const))) : undefined;
-  return Response.json(today ? { ...base, today } : base, { headers: { "cache-control": "no-store" } });
+  const q = new URL(request.url).searchParams;
+  const wantDeep = q.get("deep") === "1";
+  const authed = authorized(request);
+  if (wantDeep && !authed) return Response.json({ error: "unauthorized" }, { status: 401, headers: { "cache-control": "no-store" } });
+
+  const problems = configProblems();
+  const [today, deep] = await Promise.all([
+    q.get("detail") === "1" && authed ? Promise.all(COUNTERS.map(async (c) => [c, await readDaily(c)] as const)).then(Object.fromEntries) : undefined,
+    wantDeep ? deepCheck() : undefined,
+  ]);
+  const ok = problems.length === 0 && (!deep || deep.degraded.length === 0);
+  const body = {
+    ok,
+    qlooMode: qlooMode(),
+    llmConfigured: llmConfigured(),
+    llmPaused: llmPaused(),
+    store: storeMode(),
+    deck: ddbConfigured(),
+    turnstile: turnstileOn(),
+    ...(problems.length ? { problems } : {}),
+    ...(today ? { today } : {}),
+    ...(deep ?? {}),
+  };
+  return Response.json(body, { status: ok ? 200 : 503, headers: { "cache-control": "no-store" } });
 }
