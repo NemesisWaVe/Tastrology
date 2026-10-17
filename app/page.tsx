@@ -15,7 +15,7 @@ import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode } from "@/lib/card";
 import { addToDeck } from "@/lib/deck";
 import { isPersonaRequest } from "@/lib/personas";
-import { slim, trimResult } from "@/lib/saved";
+import { isSavedResult, slim, trimResult } from "@/lib/saved";
 import { TWIN_CODE } from "@/lib/twins";
 import type { AgentRequest, BrandMatch, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
@@ -36,12 +36,37 @@ function trimPins(p: BrandMatch[]): BrandMatch[] {
   return p.map((b) => ({ ...b, entity: slim(b.entity) }));
 }
 
+/** The saved sign, or null. A save that no longer has the right shape (old version, hand edit) is dropped, not rendered. */
 function load(): Saved | null {
+  let s: Saved | null = null;
   try {
     const raw = localStorage.getItem(STORE);
-    return raw ? (JSON.parse(raw) as Saved) : null;
+    s = raw ? (JSON.parse(raw) as Saved) : null;
   } catch {
+    s = null;
+  }
+  if (!s || typeof s !== "object") return null;
+  if (s.result !== undefined && !savedResultOk(s.result)) {
+    try {
+      localStorage.removeItem(STORE);
+    } catch {}
     return null;
+  }
+  return {
+    req: s.req && Array.isArray(s.req.seeds) ? s.req : undefined,
+    result: s.result,
+    votes: s.votes && typeof s.votes === "object" ? s.votes : {},
+    pinned: Array.isArray(s.pinned) ? s.pinned.filter((b) => b && typeof b === "object" && b.entity && typeof b.entity.id === "string") : [],
+  };
+}
+
+function savedResultOk(r: unknown): r is StyleResult {
+  if (!isSavedResult(r)) return false;
+  try {
+    buildCard(r); // the result screen and the deck both walk this; if it throws here it would throw there
+    return true;
+  } catch {
+    return false;
   }
 }
 
