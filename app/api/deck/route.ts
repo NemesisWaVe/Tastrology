@@ -1,7 +1,7 @@
-import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { clerkOn } from "@/lib/auth";
-import { previewDust } from "@/lib/burn";
-import { ddbConfigured, ddbPutIfAbsent, ddbQuery } from "@/lib/ddb";
+import { previewDust, REGRETS_MAX, regretOn, regretWhy } from "@/lib/burn";
+import { ddbConfigured, ddbGet, ddbPutIfAbsent, ddbQuery } from "@/lib/ddb";
+import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { deviceIdsOn, newDevice } from "@/lib/device";
 import { deckOwner } from "@/lib/owner";
 import { allow, clientId } from "@/lib/ratelimit";
@@ -32,16 +32,28 @@ export async function GET(request: Request) {
   // Burning: signed-in accounts only (docs/design/burn.md). `earns` is the published rate before the weekly cap.
   const canBurn = kind === "user";
   const dust = canBurn && dustOn();
+  // Regret burns: which card (if any) still qualifies. The burn route re-checks everything, including the ledger.
+  const rOn = canBurn && regretOn();
+  const used = rOn ? Number((await ddbGet(`USER#${owner}`, "PROFILE").catch(() => null))?.regretUsed) || 0 : REGRETS_MAX;
+  const newest = Math.max(0, ...page.items.filter((x) => x.minted === 1).map((x) => Number(x.addedAt) || 0));
   const cards: DeckEntry[] = [];
   for (const it of page.items) {
     try {
       const minted = it.minted === 1;
-      cards.push({ code: String(it.code), card: JSON.parse(String(it.card)) as CardData, addedAt: Number(it.addedAt) || 0, minted, ...(dust && minted ? { earns: previewDust(it) } : {}) });
+      const canRegret = rOn && minted && !regretWhy(it, newest, used, ["free", "paid", "regret"].includes(String(it.funding)) && Boolean(it.runId));
+      cards.push({
+        code: String(it.code),
+        card: JSON.parse(String(it.card)) as CardData,
+        addedAt: Number(it.addedAt) || 0,
+        minted,
+        ...(dust && minted ? { earns: previewDust(it) } : {}),
+        ...(canRegret ? { regret: true } : {}),
+      });
     } catch {}
   }
   cards.sort((a, b) => b.addedAt - a.addedAt);
   const ds = dust ? await dustStatus(owner).catch(() => null) : null;
-  const burn = { on: canBurn, dustOn: dust, dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null };
+  const burn = { on: canBurn, dustOn: dust, dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null, regretsLeft: rOn ? Math.max(0, REGRETS_MAX - used) : 0 };
   return Response.json({ ...base, cards, burn }, { headers: NO_STORE });
 }
 

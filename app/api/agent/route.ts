@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
 import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
-import { creditsOn, nextRefillAt, refundCredit, RUN_ID_RE, spendCredit } from "@/lib/ledger";
+import { creditsOn, heldRegret, nextRefillAt, refundCredit, refundRegret, RUN_ID_RE, spendCredit, spendRegret } from "@/lib/ledger";
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { deviceId } from "@/lib/device";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
@@ -86,8 +86,10 @@ interface Minter {
   userId: string;
   /** Set when a credit (or dust) was taken for this run (CREDITS_ON=1). */
   runId?: string;
-  /** What paid for it: a credit, or READING_DUST Stardust once credits ran out. */
-  paidWith?: "credit" | "dust";
+  /** What paid for it: a credit, a regret credit, or READING_DUST Stardust (only with DUST_BUYS_READING=1). */
+  paidWith?: "credit" | "dust" | "regret";
+  /** Hash of the picks, so a regret credit can't buy back the same card (docs/design/regret-burn.md). */
+  pick?: string;
 }
 
 /** Files the account's own fresh mint in its deck as minted:1 (upgrading a card it had only claimed or collected). */
@@ -96,7 +98,8 @@ async function fileOwnMint(minter: Minter, code: string, card: ReturnType<typeof
   const SK = `CARD#${code}`;
   // runId + funding let a burn check the ledger (docs/design/burn.md). Every credit is free during the beta; once the shop
   // sells credits, spendCredit must report which kind it took and "paid" goes here (paid mints burn at a flat rate).
-  const paid: Record<string, string> = minter.runId ? { runId: minter.runId, funding: minter.paidWith === "dust" ? "dust" : "free" } : {};
+  const funding = minter.paidWith === "dust" ? "dust" : minter.paidWith === "regret" ? "regret" : "free";
+  const paid: Record<string, string> = { ...(minter.runId ? { runId: minter.runId, funding } : {}), ...(minter.pick ? { pick: minter.pick } : {}) };
   const out = await ddbPutIfAbsent({ PK, SK, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), minted: 1, source: "mint", ...paid });
   if (out === "exists") {
     const set = minter.runId ? ", runId = :run, funding = :fund" : "";
@@ -145,11 +148,11 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       throw err;
     },
   );
-  const charged = minter?.runId ? { userId: minter.userId, runId: minter.runId, dust: minter.paidWith === "dust" } : null;
+  const charged = minter?.runId ? { userId: minter.userId, runId: minter.runId, paidWith: minter.paidWith } : null;
   const settled = charged
     ? run.catch((err) => {
         // The run didn't produce a card: give the credit (or dust) back (write-once per run id).
-        bg(charged.dust ? refundDust(charged.userId, charged.runId) : refundCredit(charged.userId, charged.runId));
+        bg(charged.paidWith === "dust" ? refundDust(charged.userId, charged.runId) : charged.paidWith === "regret" ? refundRegret(charged.userId, charged.runId) : refundCredit(charged.userId, charged.runId));
         throw err;
       })
     : run;
@@ -238,7 +241,7 @@ export async function POST(request: Request) {
       return running();
     }
     // Credits last, after every free gate, so being turned away never costs one. Idempotent per run id (the client reuses it across retries).
-    let minter: Minter | undefined = userId && !persona ? { userId } : undefined;
+    let minter: Minter | undefined = userId && !persona ? { userId, pick: createHash("sha256").update(key).digest("base64url").slice(0, 22) } : undefined;
     if (minter && !admin && (await deckFull(minter.userId))) {
       await release();
       await dropLease(key);
@@ -247,8 +250,19 @@ export async function POST(request: Request) {
     if (minter && creditsOn() && !admin) {
       const hdr = request.headers.get("x-run-id") ?? "";
       const runId = RUN_ID_RE.test(hdr) ? hdr : randomUUID();
-      let spent = await spendCredit(minter.userId, runId, deviceId(request.headers));
-      let paidWith: Minter["paidWith"] = "credit";
+      // A held regret credit pays first, but never for the picks of the card it came from.
+      const regret = await heldRegret(minter.userId).catch(() => null);
+      if (regret?.pick && regret.pick === minter.pick) {
+        await release();
+        await dropLease(key);
+        return reply({ error: "Change at least one pick. The same loves give the same card you just let go.", reason: "samepicks" }, { status: 409 });
+      }
+      let paidWith: Minter["paidWith"] = regret ? "regret" : "credit";
+      let spent = regret ? await spendRegret(minter.userId, runId) : await spendCredit(minter.userId, runId, deviceId(request.headers));
+      if (regret && spent === "empty") {
+        paidWith = "credit";
+        spent = await spendCredit(minter.userId, runId, deviceId(request.headers));
+      }
       // Out of credits: Stardust buys a reading only if DUST_BUYS_READING=1. Off by default: burning never frees a card (identity-limits.md).
       if (spent === "empty" && dustOn() && process.env.DUST_BUYS_READING === "1") {
         const d = await spendDust(minter.userId, runId);
