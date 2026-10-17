@@ -211,6 +211,10 @@ function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
       noise(c, t, 0.32, 0.28 * gv, { type: "bandpass", f0: 900, f1: 3600, q: 0.9, attack: 0.02, send: 0.1 });
       for (let k = 0; k < 10; k++) noise(c, t + k * 0.028 + Math.random() * 0.01, 0.014, (0.08 + Math.random() * 0.08) * gv, { type: "bandpass", f0: 2000 + Math.random() * 2500, q: 2.5, send: 0.04, pan: (Math.random() - 0.5) * 0.5 });
       break;
+    case "ding": // a struck bell: bright fundamental, inharmonic overtones, long ring, tiny strike click
+      noise(c, t, 0.012, 0.12 * gv, { type: "highpass", f0: 4000, send: 0.05 });
+      [[1, 0.3, 1.9], [2.76, 0.09, 1.1], [5.4, 0.035, 0.6], [1.003, 0.12, 2.2]].forEach(([r, v, d]) => tone(c, t, 1975 * r, d, v * gv, { attack: 0.002, send: 0.35 }));
+      break;
     case "whoosh": // airy sweep up, quick settle
       noise(c, t, 0.35, 0.2 * gv, { type: "bandpass", f0: 400, f1: 2400, q: 0.8, attack: 0.12, send: 0.3, pan: 0.15 });
       break;
