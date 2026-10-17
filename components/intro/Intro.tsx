@@ -121,6 +121,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
 
   const skip = useCallback(() => {
     store.set();
+    setGate("hidden"); // never leave the gate over the hero
+    startRef.current?.(false);
     const el = track.current;
     if (!el) return;
     const r = el.getBoundingClientRect();

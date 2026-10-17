@@ -3,6 +3,7 @@
 .track {
   position: relative;
   z-index: 30;
+  pointer-events: none; /* it overlaps the hero; only the stage takes input, and only while the intro runs */
   height: 320vh;
   margin-bottom: -100svh;
 }
@@ -12,6 +13,7 @@
 .track.still { height: 200svh; }
 
 .stage {
+  pointer-events: auto;
   position: sticky;
   top: 0;
   height: 100svh;
