@@ -237,7 +237,9 @@ async function fetchQloo(path: string, qs: URLSearchParams, mode: "live" | "mock
     }
     if (!res) throw Object.assign(new Error(`Qloo ${path}: ${(netErr as Error)?.name === "TimeoutError" ? "timed out" : "network error"}`), { upstream: true });
     if (!res.ok) throw Object.assign(new Error(`Qloo ${path} → HTTP ${res.status}`), { upstream: res.status === 429 || res.status >= 500 });
-    const json = (await res.json()) as Record<string, unknown>;
+    // A 200 with a truncated or non-JSON body is an upstream fault, not a bad query.
+    const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!json || typeof json !== "object") throw Object.assign(new Error(`Qloo ${path}: malformed response`), { upstream: true });
     if (json.success === false) throw new Error(`Qloo ${path}: ${String(json.error ?? "request failed")}`);
     return json;
   }, signal);
