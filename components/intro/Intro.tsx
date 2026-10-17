@@ -208,6 +208,11 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       trim();
       if (down) sfx("ripple", { i: (touches.length * 2) % 7, gain: 0.6 });
     };
+    // the first click unlocks audio: answer it with a drop, so nobody misses the splash
+    const onUnlocked = () => {
+      if (scrollYProgress.get() < 0.2) setTimeout(() => sfx("drop"), 30);
+    };
+    window.addEventListener("tastrology:unlocked", onUnlocked);
     st.addEventListener("pointermove", onPointer, { passive: true });
     st.addEventListener("pointerdown", onPointer, { passive: true });
     st.addEventListener("click", onPointer, { passive: true });
@@ -330,6 +335,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       alive = false;
       ro.disconnect();
       window.removeEventListener("resize", resize);
+      window.removeEventListener("tastrology:unlocked", onUnlocked);
       st.removeEventListener("pointermove", onPointer);
       st.removeEventListener("pointerdown", onPointer);
       st.removeEventListener("click", onPointer);

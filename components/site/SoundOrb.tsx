@@ -62,8 +62,8 @@ export function SoundOrb() {
       </span>
       {(!on || locked) && (
         <span className="text-left leading-tight">
-          <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-accent">{locked ? "sound paused" : "sound off"}</span>
-          <span className="block text-[13px] font-semibold text-ink">{locked ? "Tap to resume sound" : "Unmute the universe"}</span>
+          <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-accent">{locked ? "sound on" : "sound off"}</span>
+          <span className="block text-[13px] font-semibold text-ink">{locked ? "Tap to hear the sky" : "Unmute the universe"}</span>
         </span>
       )}
     </button>

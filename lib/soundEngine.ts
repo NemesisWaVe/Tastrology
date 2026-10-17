@@ -24,7 +24,7 @@ function load() {
   if (loaded) return;
   loaded = true;
   try {
-    on = localStorage.getItem(KEY) === "1";
+    on = localStorage.getItem(KEY) !== "0"; // on by default; muting is remembered
   } catch {}
 }
 
@@ -264,7 +264,11 @@ export function armSound(): void {
   setEngine({ play });
   const unlock = () => {
     const c = ensure();
-    if (c && c.state !== "running") void c.resume().catch(() => {});
+    if (c && c.state !== "running")
+      void c
+        .resume()
+        .then(() => window.dispatchEvent(new Event("tastrology:unlocked")))
+        .catch(() => {});
     ["pointerdown", "keydown", "touchend"].forEach((e) => window.removeEventListener(e, unlock));
   };
   ["pointerdown", "keydown", "touchend"].forEach((e) => window.addEventListener(e, unlock));
