@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Lookup } from "./lookup";
 
 /** Tiny in-memory LRU with TTL. Survives across requests on a warm serverless instance. */
 export class LRU<V> {
@@ -59,6 +60,14 @@ export async function upstash(commands: (string | number)[][]): Promise<unknown[
   } catch {
     return null;
   }
+}
+
+/** GET one key, tri-state (see lib/lookup.ts). */
+export async function upstashGetStatus(key: string): Promise<Lookup<string>> {
+  if (!upstashConfigured()) return { status: "off" };
+  const out = await upstash([["GET", key]]);
+  if (!out) return { status: "error" };
+  return typeof out[0] === "string" ? { status: "found", value: out[0] } : { status: "missing" };
 }
 
 /** Async cache: in-memory LRU in front, Upstash Redis behind it when configured. */

@@ -12,11 +12,12 @@ import type { BattleResult } from "@/lib/battle";
 import type { CardData } from "@/lib/card";
 import { TWIN_CODE } from "@/lib/twins";
 
-type State = { kind: "loading" } | { kind: "missing" } | { kind: "card"; card: CardData } | { kind: "fight"; out: BattleResult };
+type State = { kind: "loading" } | { kind: "missing" } | { kind: "unavailable" } | { kind: "card"; card: CardData } | { kind: "fight"; out: BattleResult };
 
 export function VsCode({ code }: { code: string }) {
   const b = useSearchParams().get("vs")?.toUpperCase() ?? "";
   const [st, setSt] = useState<State>({ kind: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let off = false;
@@ -24,18 +25,20 @@ export function VsCode({ code }: { code: string }) {
     (async () => {
       if (!TWIN_CODE.test(code)) return set({ kind: "missing" });
       if (TWIN_CODE.test(b) && b !== code) {
-        const r = await fetch(`/api/battle?a=${code}&b=${b}`).catch(() => null);
-        const j = r?.ok ? ((await r.json()) as { result: BattleResult }) : null;
+        const r = await fetch(`/api/battle?a=${code}&b=${b}`, { cache: "no-store" }).catch(() => null);
+        const j = r?.ok ? ((await r.json().catch(() => null)) as { result: BattleResult } | null) : null;
         if (j?.result) return set({ kind: "fight", out: j.result });
+        if (!r || r.status >= 500 || r.status === 429) return set({ kind: "unavailable" });
       }
-      const r = await fetch(`/api/card?code=${code}`).catch(() => null);
-      const j = r?.ok ? ((await r.json()) as { card: CardData | null }) : null;
-      set(j?.card ? { kind: "card", card: j.card } : { kind: "missing" });
+      const r = await fetch(`/api/card?code=${code}`, { cache: "no-store" }).catch(() => null);
+      const j = r?.ok ? ((await r.json().catch(() => null)) as { card: CardData | null } | null) : null;
+      if (j?.card) return set({ kind: "card", card: j.card });
+      set(!r || r.status >= 500 || r.status === 429 ? { kind: "unavailable" } : { kind: "missing" });
     })();
     return () => {
       off = true;
     };
-  }, [code, b]);
+  }, [code, b, attempt]);
 
   // The challenger's card hangs in their sky.
   const reduce = Boolean(useReducedMotion());
@@ -49,6 +52,23 @@ export function VsCode({ code }: { code: string }) {
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">
       {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {st.kind === "loading" && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding the challenger…</p>}
+      {st.kind === "unavailable" && (
+        <>
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-warn">Temporarily unavailable</p>
+          <h1 className="font-serif text-5xl italic leading-[0.95]">The ring is being swept.</h1>
+          <p className="text-ink-2">We couldn&apos;t reach the card archive just now. Nothing&apos;s lost; give it a few seconds and try again.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSt({ kind: "loading" });
+              setAttempt((n) => n + 1);
+            }}
+            className="rounded-full bg-accent px-6 py-3.5 font-semibold text-paper"
+          >
+            Try again
+          </button>
+        </>
+      )}
       {st.kind === "missing" && (
         <>
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-bad">Not found</p>

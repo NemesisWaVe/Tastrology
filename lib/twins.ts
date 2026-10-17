@@ -1,7 +1,8 @@
-import { sharedCache, upstash, upstashConfigured } from "./cache";
+import { sharedCache, upstash, upstashConfigured, upstashGetStatus } from "./cache";
 import { cardCode, type CardData } from "./card";
-import { ddbGet, ddbPutIfAbsent } from "./ddb";
-import { s3Get, s3PutIfAbsent } from "./s3";
+import { ddbGetStatus, ddbPutIfAbsent } from "./ddb";
+import type { Lookup } from "./lookup";
+import { s3GetStatus, s3PutIfAbsent } from "./s3";
 
 /**
  * Digital twins of minted cards, keyed by verify code. Only the server writes them (end of a live run),
@@ -31,9 +32,15 @@ export async function registerTwin(card: CardData): Promise<string> {
   return code;
 }
 
-/** Memory, then S3, then DynamoDB, then Upstash. Only returns a card whose own fields hash to `code`. */
-export async function getTwin(code: string): Promise<CardData | null> {
-  if (!TWIN_CODE.test(code)) return null;
+export type TwinLookup = { status: "found"; card: CardData } | { status: "missing" | "error"; card: null };
+
+/**
+ * Memory, then S3, then DynamoDB, then Upstash. Only returns a card whose own fields hash to `code`.
+ * "error" means nothing was found and at least one backend couldn't answer, so the code may still exist:
+ * callers must not cache that as a 404.
+ */
+export async function getTwinStatus(code: string): Promise<TwinLookup> {
+  if (!TWIN_CODE.test(code)) return { status: "missing", card: null };
   const parse = (raw: string | null | undefined): CardData | null => {
     if (!raw) return null;
     try {
@@ -44,11 +51,36 @@ export async function getTwin(code: string): Promise<CardData | null> {
     }
   };
   const hit = parse(mem.get(code));
-  if (hit) return hit;
-  const found =
-    parse(await s3Get(`twins/v1/${code}.json`)) ??
-    parse((await ddbGet(`CARD#${code}`, "META"))?.card as string | undefined) ??
-    parse(upstashConfigured() ? (((await upstash([["GET", rkey(code)]])) ?? [])[0] as string | null) : null);
-  if (found) mem.set(code, JSON.stringify(found), TTL_MS);
-  return found;
+  if (hit) return { status: "found", card: hit };
+  const seen: Lookup<unknown>["status"][] = [];
+  const sources: (() => Promise<string | null>)[] = [
+    async () => {
+      const r = await s3GetStatus(`twins/v1/${code}.json`);
+      seen.push(r.status);
+      return r.status === "found" ? r.value : null;
+    },
+    async () => {
+      const r = await ddbGetStatus(`CARD#${code}`, "META");
+      seen.push(r.status);
+      return r.status === "found" && typeof r.value.card === "string" ? r.value.card : null;
+    },
+    async () => {
+      const r = await upstashGetStatus(rkey(code));
+      seen.push(r.status);
+      return r.status === "found" ? r.value : null;
+    },
+  ];
+  for (const read of sources) {
+    const found = parse(await read());
+    if (found) {
+      mem.set(code, JSON.stringify(found), TTL_MS);
+      return { status: "found", card: found };
+    }
+  }
+  return { status: seen.includes("error") ? "error" : "missing", card: null };
+}
+
+/** The card for `code`, or null (missing or unreachable). */
+export async function getTwin(code: string): Promise<CardData | null> {
+  return (await getTwinStatus(code)).card;
 }
