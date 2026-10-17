@@ -789,10 +789,9 @@ function bodyClip(w: number, h: number, tearY: number) {
 }
 
 /**
- * The wrapper, "Atlas Band" (Set 01). The original vivid Tastrology foil, crossed by one matte black star-atlas band
- * carrying four generic Set 01 figures (the Crate, the Reel, the Shelf, the Map); one figure's line escapes the band and
- * climbs to the crimp. A Trine emblem (☉ ☽ ↑), a wordmark whose T is drawn in stars, crimps printed with the set line.
- * Nothing on it is about the card inside. Only the sheen, the sparkle flares and the band's parallax move (`--hx`).
+ * The wrapper: the original vivid Tastrology foil, with a total eclipse as the emblem. The dark moon hides the card;
+ * the holo corona and its lime diamond-ring flash lean with the pointer or device tilt (`--hx`). A few pressed stars
+ * and two faint generic figures sit in the foil. Nothing on it is about the card inside.
  */
 function PackArt({ w, h, tearY }: { w: number; h: number; tearY: number }) {
   const u = w / 100;
@@ -810,164 +809,94 @@ function PackArt({ w, h, tearY }: { w: number; h: number; tearY: number }) {
     };
   }, []);
 
-  const INK = "#07070a";
-  const bandC = h * 0.56;
-  const bandH = 20 * u;
   const crimpT = h * 0.065;
   const crimpB = h * 0.055;
-  const emblem = 30 * u;
-  const emblemTop = tearY + 9 * u;
+  const E = 46 * u;
+  const eTop = tearY + 11 * u;
 
   return (
-    <div ref={el} className={s.packArt} style={{ boxShadow: `inset 0 0 0 ${0.3 * u}px rgb(255 255 255 / .5)` }}>
+    <div ref={el} className={s.packArt}>
       <div className={s.foil} />
       <StarDust w={w} h={h} u={u} />
+      <FaintFigures w={w} h={h} u={u} tearY={tearY} />
       {/* plastic gloss */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .3), transparent 12%, rgb(255 255 255 / .14) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .35))" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / .35), transparent 12%, rgb(255 255 255 / .16) 22%, transparent 34%, transparent 80%, rgb(0 0 0 / .4))" }} />
       <div className={s.crimp} style={{ top: 0, height: crimpT }} />
       <div className={s.crimp} style={{ bottom: 0, height: crimpB }} />
-      <CrimpPrint top={0} height={crimpT} u={u} ink={INK} />
-      <CrimpPrint top={h - crimpB} height={crimpB} u={u} ink={INK} />
       <div className={s.tearLine} style={{ top: tearY }} />
 
-      <p className="absolute inset-x-0 text-center font-mono uppercase text-white/80" style={{ top: tearY + 3 * u, fontSize: 2.4 * u, letterSpacing: "0.34em" }}>
+      <p className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ top: tearY + 4 * u, fontSize: 2.6 * u, letterSpacing: "0.32em", opacity: 0.8 }}>
         {BRAND.cardSet} · booster
       </p>
 
-      {/* Trine emblem: ☉ ☽ ↑ as three stars joined by hairlines, on a black disc with a lime ring */}
-      <svg className="absolute left-1/2 -translate-x-1/2" style={{ top: emblemTop, width: emblem, height: emblem }} viewBox="-50 -50 100 100" aria-hidden>
-        <circle r="49" fill={INK} />
-        <circle r="47.6" fill="none" stroke="var(--accent)" strokeWidth="1.4" />
-        <circle r="40" fill="none" stroke="#f3f1ec" strokeOpacity=".18" strokeWidth=".5" strokeDasharray="1 3" />
-        {(() => {
-          const pts = [0, 1, 2].map((k) => ({ x: Math.cos(-Math.PI / 2 + (k * 2 * Math.PI) / 3) * 26, y: Math.sin(-Math.PI / 2 + (k * 2 * Math.PI) / 3) * 26 }));
-          return (
-            <>
-              <polygon points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#f3f1ec" strokeOpacity=".7" strokeWidth=".8" />
-              {pts.map((p, k) => (
-                <g key={k}>
-                  <circle cx={p.x} cy={p.y} r="3.3" fill="#fff" />
-                  <text x={p.x * 1.45} y={p.y * 1.45 + 3} textAnchor="middle" fill="#f3f1ec" fillOpacity=".75" style={{ fontSize: 9 }}>
-                    {["☉", "☽", "↑"][k]}
-                  </text>
-                </g>
-              ))}
-            </>
-          );
-        })()}
-      </svg>
+      <Eclipse size={E} top={eTop} />
 
-      <AtlasBand w={w} u={u} top={bandC - bandH / 2} height={bandH} crimpT={crimpT} ink={INK} />
-
-      <div className="absolute inset-x-0 flex flex-col items-center text-center" style={{ top: bandC + bandH / 2 + 4.5 * u }}>
-        <StarWordmark u={u} ink={INK} />
-        <p className="font-serif italic" style={{ fontSize: 4.4 * u, marginTop: 1.2 * u, color: INK, opacity: 0.8 }}>
+      <div className="absolute inset-x-0 flex flex-col items-center text-center text-white" style={{ top: eTop + E + 8 * u }}>
+        <p className="font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: 14.5 * u, textShadow: "0 3px 24px rgb(0 0 0 / .35)" }}>
+          {BRAND.name}
+          <span style={{ color: "var(--accent)" }}>.</span>
+        </p>
+        <p className="font-serif italic" style={{ fontSize: 5.2 * u, marginTop: 1.5 * u, opacity: 0.92 }}>
           {BRAND.tagline}
         </p>
       </div>
-      <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.2 * u, letterSpacing: "0.24em", opacity: 0.85 }}>
+      <div className="absolute inset-x-0 text-center font-mono uppercase text-white" style={{ bottom: h * 0.085, fontSize: 2.5 * u, letterSpacing: "0.22em", opacity: 0.85 }}>
         1 holographic taste sign · sealed
       </div>
     </div>
   );
 }
 
-/** "SET 01 · ☉ ☽ ↑ ·" printed along a crimp, in ink, over the ridges. */
-function CrimpPrint({ top, height, u, ink }: { top: number; height: number; u: number; ink: string }) {
+/** A total eclipse: night pooled behind it, a holo corona, a dark moon, and a lime diamond ring on the rim. */
+function Eclipse({ size, top }: { size: number; top: number }) {
+  const r = size * 0.385;
+  const a = (-48 * Math.PI) / 180;
   return (
-    <div className="pointer-events-none absolute inset-x-0 flex items-center overflow-hidden whitespace-nowrap font-mono uppercase" style={{ top, height, fontSize: 1.8 * u, letterSpacing: "0.2em", color: ink, opacity: 0.55 }}>
-      {"SET 01 · ☉ ☽ ↑ · ".repeat(8)}
+    <div className="absolute left-1/2 -translate-x-1/2" style={{ top, width: size, height: size }} aria-hidden>
+      <div className={s.eclipseNight} />
+      <div className={s.eclipseTilt}>
+        <div className={s.streamers} />
+        <div className={s.corona} style={{ filter: `blur(${size * 0.04}px)` }} />
+        <div className={s.coronaRim} style={{ filter: `blur(${size * 0.012}px)` }} />
+      </div>
+      <div className={s.moon} />
+      <div className={s.eclipseTilt}>
+        <div
+          className={s.diamond}
+          style={{ left: size / 2 + Math.cos(a) * r, top: size / 2 + Math.sin(a) * r, width: size * 0.06, height: size * 0.06, boxShadow: `0 0 ${size * 0.05}px ${size * 0.025}px #fff, 0 0 ${size * 0.16}px ${size * 0.06}px var(--accent), 0 0 ${size * 0.4}px ${size * 0.1}px color-mix(in oklab, var(--accent) 45%, transparent)` }}
+        />
+      </div>
     </div>
   );
 }
 
-const BAND_FIGURES = [
-  { key: "set01-crate", label: "the Crate" },
-  { key: "set01-reel", label: "the Reel" },
-  { key: "set01-shelf", label: "the Shelf" },
-  { key: "set01-map", label: "the Map" },
-];
-
-/** The matte black atlas band. It ignores the foil sheen on purpose: matte against holo is the tell. */
-function AtlasBand({ w, u, top, height, crimpT, ink }: { w: number; u: number; top: number; height: number; crimpT: number; ink: string }) {
-  const cell = w / BAND_FIGURES.length;
-  const figs = BAND_FIGURES.map((b, k) => {
-    const f = figureFor(b.key, 1);
-    const xs = f.stars.map((p) => p.x);
-    const ys = f.stars.map((p) => p.y);
-    const k2 = Math.min((cell * 0.62) / (Math.max(...xs) - Math.min(...xs) || 1), (height * 0.5) / (Math.max(...ys) - Math.min(...ys) || 1));
-    const cx = cell * (k + 0.5);
-    const cy = height * 0.42;
-    const ox = cx - ((Math.max(...xs) + Math.min(...xs)) / 2) * k2;
-    const oy = cy - ((Math.max(...ys) + Math.min(...ys)) / 2) * k2;
-    return { ...b, f, pts: f.stars.map((p) => ({ x: ox + p.x * k2, y: oy + p.y * k2, m: p.m })), cx };
-  });
-  const last = figs[figs.length - 1];
-  const tail = last.pts.reduce((a, p) => (p.x > a.x ? p : a), last.pts[0]);
-  const ticks = Math.floor(w / (2 * u));
+/** Two faint generic figures pressed into the foil, top-left under the tear and bottom-right above the crimp. */
+function FaintFigures({ w, h, u, tearY }: { w: number; h: number; u: number; tearY: number }) {
+  const figs = useMemo(() => {
+    const place = (key: string, cx: number, cy: number, span: number) => {
+      const f = figureFor(key, 1);
+      const xs = f.stars.map((p) => p.x);
+      const ys = f.stars.map((p) => p.y);
+      const k = span / Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 1);
+      const ox = cx - ((Math.max(...xs) + Math.min(...xs)) / 2) * k;
+      const oy = cy - ((Math.max(...ys) + Math.min(...ys)) / 2) * k;
+      return { key, f, pts: f.stars.map((p) => ({ x: ox + p.x * k, y: oy + p.y * k, m: p.m })) };
+    };
+    return [place("set01-crate", 13 * u, tearY + 24 * u, 18 * u), place("set01-map", w - 14 * u, h * 0.8, 16 * u)];
+  }, [w, h, u, tearY]);
   return (
-    <>
-      <div className="absolute inset-x-0" style={{ top, height, background: ink, boxShadow: `0 ${0.3 * u}px 0 0 var(--accent) inset, 0 ${-0.3 * u}px 0 0 var(--accent) inset`, transform: `translateX(calc((var(--hx, .5) - .5) * ${0.8 * u}px))` }}>
-        <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} className="block" aria-hidden>
-          {Array.from({ length: ticks }, (_, k) => (
-            <line key={k} x1={k * 2 * u + u} y1={0.3 * u} x2={k * 2 * u + u} y2={(k % 5 === 0 ? 1.4 : 0.8) * u} stroke="#f3f1ec" strokeOpacity=".4" strokeWidth={0.18 * u} />
+    <svg className="pointer-events-none absolute inset-0" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+      {figs.map((g) => (
+        <g key={g.key}>
+          {g.f.edges.map(([a, b]) => (
+            <line key={`${a}-${b}`} x1={g.pts[a].x} y1={g.pts[a].y} x2={g.pts[b].x} y2={g.pts[b].y} stroke="#fff" strokeOpacity=".3" strokeWidth={0.25 * u} strokeLinecap="round" />
           ))}
-          {figs.map((g) => (
-            <g key={g.key}>
-              {g.f.edges.map(([a, b]) => (
-                <line key={`${a}-${b}`} x1={g.pts[a].x} y1={g.pts[a].y} x2={g.pts[b].x} y2={g.pts[b].y} stroke="#f3f1ec" strokeOpacity=".7" strokeWidth={0.25 * u} strokeLinecap="round" />
-              ))}
-              {g.pts.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={(0.35 + p.m * 0.55) * u} fill={i === g.f.alpha ? "var(--accent)" : "#fff"} />
-              ))}
-              <text x={g.cx} y={height - 1.8 * u} textAnchor="middle" fill="#f3f1ec" fillOpacity=".75" className="font-serif italic" style={{ fontSize: 2.6 * u }}>
-                {g.label}
-              </text>
-            </g>
+          {g.pts.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r={(0.3 + p.m * 0.45) * u} fill="#fff" opacity=".75" />
           ))}
-        </svg>
-      </div>
-      {/* one line escapes the band and climbs the foil to the top crimp */}
-      <svg className="pointer-events-none absolute inset-0" width={w} height={top + height} viewBox={`0 0 ${w} ${top + height}`} aria-hidden>
-        <polyline
-          points={`${tail.x},${top + tail.y} ${w * 0.93},${top - 6 * u} ${w * 0.9},${top * 0.55} ${w * 0.95},${crimpT}`}
-          fill="none"
-          stroke="#fff"
-          strokeOpacity=".6"
-          strokeWidth={0.3 * u}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {[
-          [w * 0.93, top - 6 * u],
-          [w * 0.9, top * 0.55],
-          [w * 0.95, crimpT],
-        ].map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r={0.6 * u} fill="#fff" />
-        ))}
-      </svg>
-    </>
-  );
-}
-
-/** "Tastrology" in ink, whose T is drawn in stars (crossbar = three star dots on a hairline); the full stop is a lime star. */
-function StarWordmark({ u, ink }: { u: number; ink: string }) {
-  const fs = 13 * u;
-  return (
-    <p className="flex items-baseline font-display font-extrabold leading-none tracking-[-0.04em]" style={{ fontSize: fs, color: ink, textShadow: "0 1px 0 rgb(255 255 255 / .35)" }}>
-      <svg aria-hidden style={{ width: fs * 0.58, height: fs * 0.74, marginRight: fs * 0.01 }} viewBox="0 0 58 74">
-        <line x1="4" y1="9" x2="54" y2="9" stroke={ink} strokeWidth="2.2" />
-        {[6, 29, 52].map((x) => (
-          <circle key={x} cx={x} cy="9" r="5.2" fill={ink} />
-        ))}
-        <rect x="22" y="9" width="14" height="65" fill={ink} />
-      </svg>
-      <span className="sr-only">T</span>
-      astrology
-      <svg aria-hidden style={{ width: fs * 0.22, height: fs * 0.22, marginLeft: fs * 0.02 }} viewBox="-10 -10 20 20">
-        <path d="M0-10 2.4-2.4 10 0 2.4 2.4 0 10-2.4 2.4-10 0-2.4-2.4Z" fill="var(--accent)" stroke={ink} strokeWidth="0.8" />
-      </svg>
-    </p>
+        </g>
+      ))}
+    </svg>
   );
 }
 
