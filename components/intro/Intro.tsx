@@ -422,8 +422,19 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     const run = () => {
       if (!raf && visible && !document.hidden) raf = requestAnimationFrame(tick);
     };
+    // past the handoff the whole layer goes, straight from the scroll event: a fast flick (or iOS momentum)
+    // can carry the page past before the frame loop paints its last, cleared frame
+    const hideAt = (p: number) => {
+      const gone = p > 0.94;
+      st.style.visibility = gone ? "hidden" : "visible";
+      if (gone) root.style.setProperty("--intro-dock", "1");
+    };
+    hideAt(scrollYProgress.get());
+    const offHide = scrollYProgress.on("change", hideAt);
     const io = new IntersectionObserver(([e]) => {
       visible = e.isIntersecting;
+      if (!visible) st.style.visibility = "hidden";
+      else hideAt(scrollYProgress.get());
       if (!visible) vid.pause();
       run();
     });
@@ -434,6 +445,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     return () => {
       cancelAnimationFrame(raf);
       io.disconnect();
+      offHide();
       document.removeEventListener("visibilitychange", run);
       inputs.forEach((e) => window.removeEventListener(e, onInput));
       cleanup();
