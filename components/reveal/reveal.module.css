@@ -466,3 +466,63 @@
 @media (prefers-reduced-motion: reduce) {
   .twinkle { animation: none; }
 }
+
+/* Pack emblem: a total eclipse. Corona and diamond ring spin slowly and lean with --hx; the moon stays put. */
+.eclipseNight {
+  position: absolute;
+  inset: -28%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(4 4 10 / 0.85), rgb(4 4 10 / 0.5) 50%, transparent);
+}
+.eclipseTilt {
+  position: absolute;
+  inset: 0;
+  rotate: calc((var(--hx, 0.5) - 0.5) * 70deg);
+  transition: rotate 0.4s ease-out;
+}
+.streamers {
+  position: absolute;
+  inset: -22%;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 10deg, rgb(255 255 255 / 0.5) 0deg 1.5deg, transparent 1.5deg 9deg, rgb(255 255 255 / 0.22) 9deg 10deg, transparent 10deg 17deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 52%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 52%, transparent 100%);
+  filter: blur(1.5px);
+  animation: eclipseSpin 90s linear infinite;
+}
+.corona,
+.coronaRim {
+  position: absolute;
+  border-radius: 50%;
+  animation: eclipseSpin 22s linear infinite;
+}
+.corona {
+  inset: -4%;
+  background: conic-gradient(from 200deg, #ff7773, #ffed5f, #a8ff5f, #83fff7, #7894ff, #d875ff, #ff7773);
+  opacity: 0.9;
+}
+.coronaRim {
+  inset: 9%;
+  background: conic-gradient(from 20deg, #fff, var(--accent), #fff, #83fff7, #fff);
+  animation-duration: 34s;
+  animation-direction: reverse;
+}
+.moon {
+  position: absolute;
+  inset: 11.5%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 38%, #15151d, #050507 70%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset -6px -8px 18px rgb(255 255 255 / 0.03);
+}
+.diamond {
+  position: absolute;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: #fff;
+}
+@keyframes eclipseSpin {
+  to { rotate: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .corona, .coronaRim, .streamers { animation: none; }
+}
