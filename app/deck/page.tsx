@@ -266,7 +266,7 @@ export default function DeckPage() {
                           }}
                           className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-accent transition hover:text-ink disabled:opacity-40"
                         >
-                          Regret this card
+                          {(burn?.regretsLeft ?? 0) >= 2 ? "Regret this card" : "Last regret · 50 Stardust"}
                         </button>
                       )}
                       <button
@@ -284,7 +284,7 @@ export default function DeckPage() {
                   )}
                   {burnable && burn && armed === code && (
                     <div className="mt-4 flex flex-col items-center gap-3">
-                      <p className="max-w-[260px] text-center font-serif text-base italic leading-snug text-ink-2">{regretting ? regretLine(burn) : confirmLine(entry, burn)}</p>
+                      <p className="max-w-[260px] text-center font-serif text-base italic leading-snug text-ink-2">{regretting ? regretLine(burn, (cards?.filter((c) => c.minted).length ?? 0) <= 1, me) : confirmLine(entry, burn)}</p>
                       <BurnButton disabled={burning !== null} onProgress={(p) => heat(code, p)} onBurn={() => void doBurn(entry)} />
                       {burning !== code && (
                         <button
@@ -320,10 +320,12 @@ export default function DeckPage() {
 }
 
 /** What a regret gives back: the first brings a new card, the second 50 Stardust (docs/design/regret-burn.md). */
-function regretLine(burn: DeckBurn): string {
+function regretLine(burn: DeckBurn, lastCard: boolean, me: Me | null): string {
   const left = burn.regretsLeft ?? 0;
   if (left >= 2) return "Let it go and make a new card from different loves. You get one more regret after this.";
-  return "Let it go for 50 Stardust. This is your last regret.";
+  const days = me?.refillAt ? Math.max(1, Math.ceil((me.refillAt - Date.now()) / 86_400_000)) : null;
+  const wait = days ? `Your next card comes at the new moon, in ${days} day${days === 1 ? "" : "s"}.` : "Your next card comes at the new moon.";
+  return `Last regret, and it does not give you a new card: you get 50 Stardust instead. ${wait}${lastCard ? " Until then your deck will be empty." : ""}`;
 }
 
 /** The one plain line above the hold button. Never promises dust the burn won't pay. */
