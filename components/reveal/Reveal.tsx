@@ -28,6 +28,8 @@ export interface RevealProps {
   seeds?: SeedHint[];
   /** Dev/lab: jump straight to a phase once the result is in. */
   startAt?: "story" | "pack";
+  /** Handing off to the result page: the overlay fades while the card flies to the hero. */
+  leaving?: boolean;
 }
 
 type Phase = "reading" | "story" | "pack";
@@ -36,7 +38,7 @@ type Phase = "reading" | "story" | "pack";
  * The reveal: live "reading your taste" scene → Wrapped-style story → booster pack opening.
  * Fullscreen fixed overlay (z-60). Everything shown is read from the real agent trace and result.
  */
-export function Reveal({ events, result, running, error, onDone, onRetry, onBack, seeds, startAt }: RevealProps) {
+export function Reveal({ events, result, running, error, onDone, onRetry, onBack, seeds, startAt, leaving = false }: RevealProps) {
   const reduce = Boolean(useReducedMotion());
   const [phase, setPhase] = useState<Phase>(() => (result && !running && events.length === 0 ? "story" : "reading"));
 
@@ -97,7 +99,13 @@ export function Reveal({ events, result, running, error, onDone, onRetry, onBack
     : undefined;
 
   return (
-    <div className={s.stage} style={vars} role="dialog" aria-modal="true" aria-label="Your taste sign">
+    <div
+      className={s.stage}
+      style={leaving ? { ...vars, opacity: 0, pointerEvents: "none", transition: `opacity ${reduce ? 0.2 : 0.55}s ease` } : vars}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Your taste sign"
+    >
       <AnimatePresence mode="wait">
         {phase === "reading" && (
           <Reading
@@ -117,7 +125,7 @@ export function Reveal({ events, result, running, error, onDone, onRetry, onBack
           />
         )}
         {phase === "story" && result && card && <Story key="story" result={result} card={card} reduce={reduce} onFinish={() => setPhase("pack")} />}
-        {phase === "pack" && card && result && <Pack key="pack" card={card} loves={result.seeds.length} reduce={reduce} onDone={onDone} />}
+        {phase === "pack" && card && result && <Pack key="pack" card={card} loves={result.seeds.length} reduce={reduce} onDone={onDone} leaving={leaving} />}
       </AnimatePresence>
       {error && onBack && phase === "reading" && (
         <button

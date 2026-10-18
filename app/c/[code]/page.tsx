@@ -2,6 +2,7 @@
 
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { FlipCard } from "@/components/card/FlipCard";
 import { Sky } from "@/components/reveal/Sky";
@@ -12,7 +13,9 @@ import { BrandSheet } from "@/components/deck/BrandSheet";
 import { ShareSheet } from "@/components/card/ShareSheet";
 import { loadDeck } from "@/lib/deck";
 import { CursorArrow } from "@/components/CursorArrow";
+import { OwnedReading } from "@/components/results/OwnedReading";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
+import { forgetReading, latestCode, loadReading, type Reading } from "@/lib/readings";
 import type { StyleResult } from "@/lib/types";
 
 /** Digital twin of a printed or shared card: /c/<code>, the URL in the card-back QR. */
@@ -29,6 +32,13 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const [share, setShare] = useState(false);
   /** This device made the card: the reading it came from is saved here, or it sits in this device's or account's deck as a mint. */
   const [mine, setMine] = useState(false);
+  /** The reading behind this card, when this device minted it: the owner gets the full reading here, not just the card. */
+  const [reading, setReading] = useState<{ r: Reading & { result: StyleResult }; latest: boolean } | null>(null);
+  const router = useRouter();
+  useEffect(() => {
+    const r = loadReading(code);
+    setReading(r?.result ? { r: r as Reading & { result: StyleResult }, latest: latestCode() === code } : null);
+  }, [code]);
   // ?b=1 (from the deck or a share) opens the brand sheet straight away; ?share=1 (the laptop share sheet's QR) the share sheet.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -42,7 +52,8 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
     if (q.has("b") || q.has("share")) {
       q.delete("b");
       q.delete("share");
-      history.replaceState(history.state, "", window.location.pathname + (q.size ? `?${q}` : ""));
+      // a fresh state (not history.state, which carries Next's marker), so Next's router takes the cleaned URL as its own
+      history.replaceState({}, "", window.location.pathname + (q.size ? `?${q}` : ""));
     }
   }, []);
 
@@ -53,6 +64,8 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       const j = res?.ok ? ((await res.json().catch(() => null)) as { card: CardData | null } | null) : null;
       if (off) return;
       if (res?.status === 410) {
+        forgetReading(code);
+        setReading(null);
         setBurned(true);
         setCard(null);
         return;
@@ -64,10 +77,9 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       }
       // Not registered on the server yet: the minting device may still hold it.
       try {
-        const saved = JSON.parse(localStorage.getItem("tastrology:v1") ?? "null") as { result?: StyleResult } | null;
-        const local = saved?.result ? buildCard(saved.result) : null;
-        if (local && cardCode(local) === code) {
-          setCard(local);
+        const saved = loadReading(code);
+        if (saved?.result) {
+          setCard(buildCard(saved.result));
           setSource("device");
           return;
         }
@@ -83,13 +95,10 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   useEffect(() => {
     if (!card) return;
     let off = false;
-    try {
-      const saved = JSON.parse(localStorage.getItem("tastrology:v1") ?? "null") as { result?: StyleResult } | null;
-      if (saved?.result && cardCode(buildCard(saved.result)) === code) {
-        setMine(true);
-        return;
-      }
-    } catch {}
+    if (loadReading(code)) {
+      setMine(true);
+      return;
+    }
     loadDeck().then((d) => {
       if (!off && d.cards.some((c) => c.code === code && c.minted !== false)) setMine(true);
     });
@@ -108,6 +117,24 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const reduce = Boolean(useReducedMotion());
   const cardRef = useRef<HTMLDivElement>(null);
   const sky = useMemo(() => (card ? skyState(card.evolvesFrom, card.archetype) : null), [card]);
+
+  // The owner, on the device that minted it: the card's home is the whole reading (receipts, matches, capsule, re-plan).
+  // It shows straight away from this device; the server check only adds the verified mark, or takes it down if burned.
+  if (reading && !burned)
+    return (
+      <>
+        <OwnedReading
+          initial={reading.r}
+          latest={reading.latest}
+          onNew={() => router.push("/?new=1")}
+          verified={source ? source === "server" : undefined}
+          onPull={source === "server" ? () => setBrands(true) : undefined}
+          after={source === "server" ? <Passport code={code} /> : undefined}
+        />
+        {share && card && <ShareSheet card={card} mine linkable={source === "server"} onClose={() => setShare(false)} />}
+        {card && <BrandSheet code={code} card={card} open={brands} onClose={() => setBrands(false)} src="share" />}
+      </>
+    );
 
   return (
     <main className="relative mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-10 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:justify-center lg:gap-16">

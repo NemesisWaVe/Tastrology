@@ -51,7 +51,7 @@ function useViewport() {
  * and let rarity escalate the reveal. The only hint of what's inside before the flip is honest: the light that
  * leaks through the seam is the card's rarity colour.
  */
-export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: number; reduce: boolean; onDone: () => void }) {
+export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: CardData; loves: number; reduce: boolean; onDone: () => void; leaving?: boolean }) {
   const { w, h } = useViewport();
   // phones: a still sky behind the pack and no live blur, so the tear and the pull get the whole GPU
   const [phone, setPhone] = useState(false);
@@ -669,7 +669,9 @@ export function Pack({ card, loves, reduce, onDone }: { card: CardData; loves: n
                       </motion.button>
                     </div>
                   ) : (
-                    <motion.div initial={reduce ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+                    // layoutId: on "See your receipts" this card flies to the result hero (ResultsView), same id.
+                    // `leaving` re-renders it in that same commit so its last box is measured before it goes.
+                    <motion.div layoutId="minted-card" data-leaving={leaving || undefined} initial={reduce ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
                       <FlipCard card={card} width={cardW} idle print={!reduce} />
                     </motion.div>
                   )}

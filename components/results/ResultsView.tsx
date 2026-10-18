@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { motion } from "motion/react";
 import { BattleLink } from "@/components/battle/BattleLink";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { StyleResult } from "@/lib/types";
-import { buildCard, cardCode } from "@/lib/card";
+import { buildCard } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { FlipCard } from "@/components/card/FlipCard";
 import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
@@ -31,6 +31,10 @@ export function ResultsView({
   onReplan,
   pending = false,
   fight,
+  flight = false,
+  verified,
+  onPull,
+  after,
 }: {
   /** Set when the visitor arrived from someone's /vs link: answers that fighter. */
   fight?: { href: string; name: string };
@@ -40,6 +44,14 @@ export function ResultsView({
   onShare: () => void;
   onReplan?: () => void;
   pending?: boolean;
+  /** The card is flying in from the pack (shared layout): the hero skips its own rise so the card lands on a still page. */
+  flight?: boolean;
+  /** On the card's home (/c): the server holds it (true) or only this device does (false). */
+  verified?: boolean;
+  /** Opens this week's pull for the card (the brand sheet). */
+  onPull?: () => void;
+  /** Rendered right under the hero (the card page puts the passport here). */
+  after?: ReactNode;
 }) {
   const card = useMemo(() => buildCard(result), [result]);
   const [colRef, colW] = useWidth<HTMLDivElement>();
@@ -64,7 +76,7 @@ export function ResultsView({
     <div className="space-y-16 sm:space-y-24" style={tone}>
       {/* ------------------------------------------------------------ hero */}
       {/* translucent, so your sky shows faintly through the hero panel */}
-      <section ref={heroRef} className="rise relative isolate overflow-hidden rounded-[30px] border border-line bg-card/55 sm:rounded-[36px]">
+      <section ref={heroRef} className={`${flight ? "" : "rise "}relative isolate overflow-hidden rounded-[30px] border border-line bg-card/55 sm:rounded-[36px]`}>
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10"
@@ -79,9 +91,10 @@ export function ResultsView({
         <div className="grid gap-8 px-4 pb-6 pt-6 sm:px-8 sm:pb-10 sm:pt-10 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:gap-14 lg:px-12 lg:py-12">
           {/* card column */}
           <div className="mx-auto w-full max-w-[380px] lg:sticky lg:top-6 lg:self-start">
-            <div ref={colRef} className="w-full">
+            {/* layoutId: the same card the pack revealed, carried here instead of cut to */}
+            <motion.div ref={colRef} layoutId="minted-card" className="relative z-10 w-full">
               {colW > 0 ? <FlipCard card={card} width={Math.min(380, Math.round(colW))} flipped={showBack} onFlippedChange={setShowBack} /> : <div className="aspect-[63/88] w-full rounded-[18px] shimmer" />}
-            </div>
+            </motion.div>
             <p className="mt-4 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
               <span className="hidden sm:inline">hover</span>
               <span className="sm:hidden">tilt your phone</span> to catch the foil
@@ -107,6 +120,11 @@ export function ResultsView({
               <span className="font-mono text-[11px] text-ink-3">
                 № {card.serial} · {BRAND.cardSet}
               </span>
+              {verified !== undefined && (
+                <span className={`font-mono text-[10.5px] uppercase tracking-[0.18em] ${verified ? "text-good" : "text-warn"}`}>
+                  {verified ? "✓ Verified original" : "Saved on this device"}
+                </span>
+              )}
             </div>
 
             <h1 className="mt-4 font-serif text-[48px] leading-[0.9] tracking-[-0.02em] text-balance sm:text-[68px] lg:text-[76px]">{result.dna.name}</h1>
@@ -201,15 +219,17 @@ export function ResultsView({
               <a href="#receipt" className="underline-offset-4 hover:text-ink hover:underline">
                 Receipts ↓
               </a>
-              {result.mode !== "mock" && (
-                <Link href={`/c/${encodeURIComponent(cardCode(card))}`} className="underline-offset-4 hover:text-ink hover:underline">
-                  Card page ↗
-                </Link>
+              {onPull && (
+                <button type="button" onClick={onPull} className="underline-offset-4 hover:text-ink hover:underline">
+                  This week&apos;s pull ↗
+                </button>
               )}
             </div>
           </div>
         </div>
       </section>
+
+      {after}
 
       {/* ------------------------------------------------------------ section nav */}
       <nav

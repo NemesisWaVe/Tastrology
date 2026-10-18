@@ -24,6 +24,7 @@ import { whenAuthReady } from "@/lib/authBridge";
 import { buildCard, cardCode, proxied, SEASON } from "@/lib/card";
 import { burnFromDeck, claimDeviceDeck, loadDeck, type BurnReply, type DeckBurn, type DeckEntry } from "@/lib/deck";
 import { isPersonaRequest } from "@/lib/personas";
+import { forgetReading } from "@/lib/readings";
 import type { AgentRequest, StyleResult } from "@/lib/types";
 
 /** The card saved in this browser (last reading), if any. */
@@ -158,12 +159,9 @@ export default function DeckPage() {
       return;
     }
     setCards((cs) => cs?.filter((c) => c.code !== code) ?? cs);
-    // The sign saved in this browser was this card: forget it, so home doesn't bring it back and the deck doesn't re-file it.
-    if (savedCard()?.entry.code === code) {
-      try {
-        localStorage.removeItem("tastrology:v1");
-      } catch {}
-    }
+    // Forget its reading on this device (and the latest sign when it was this card), so home doesn't bring it back and
+    // the deck doesn't re-file it.
+    forgetReading(code);
     cardEls.current.delete(code);
     setBurning(null);
     setArmed(null);

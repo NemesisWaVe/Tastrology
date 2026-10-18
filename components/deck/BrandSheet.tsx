@@ -2,7 +2,9 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ReceiptRoll } from "@/components/card/ReceiptRoll";
+import { ShareSheet } from "@/components/card/ShareSheet";
 import {
   PulledSky,
   readDecoded,
@@ -204,7 +206,11 @@ export function BrandSheet({
   const [full, setFull] = useState<StyleResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const freshRef = useRef<HTMLElement>(null);
-  const [shared, setShared] = useState<string | null>(null);
+  /** One share flow everywhere: the card's share sheet, over this one. */
+  const [share, setShare] = useState(false);
+  useEffect(() => {
+    if (!open) setShare(false);
+  }, [open]);
   const onOpenedRef = useRef(onOpened);
   onOpenedRef.current = onOpened;
 
@@ -294,31 +300,6 @@ export function BrandSheet({
       block: "start",
     });
   }, [sealed, r, reduce]);
-
-  const sharePull = async () => {
-    const names = (
-      r?.drift?.entered.length ? r.drift.entered : (snap?.brands ?? [])
-    )
-      .slice(0, 3)
-      .map((b) => b.name);
-    const url = `${location.origin}/c/${code}?b=1`;
-    const text = `My taste pulled in ${names.join(", ")} this week.`;
-    try {
-      const png = await fetch(`/c/${encodeURIComponent(code)}/postcard`).then(
-        (x) => (x.ok ? x.blob() : null),
-      );
-      const file = png
-        ? new File([png], `tastrology-${code}.png`, { type: "image/png" })
-        : null;
-      if (file && navigator.canShare?.({ files: [file] }))
-        await navigator.share({ files: [file], text, url });
-      else if (navigator.share) await navigator.share({ text, url });
-      else {
-        await navigator.clipboard.writeText(`${text} ${url}`);
-        setShared("Link copied.");
-      }
-    } catch {}
-  };
 
   // Decoded signals (components/deck/PulledSky.tsx): remembered per card on this device.
   const [decoded, setDecoded] = useState<Set<string>>(new Set());
@@ -660,15 +641,13 @@ export function BrandSheet({
                 <div className="mt-8 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => void sharePull()}
+                    onClick={() => setShare(true)}
                     className="rounded-full border border-accent/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
                   >
-                    Share this week&apos;s pull
+                    {visitor ? "Share this card" : "Share your card"}
                   </button>
-                  {shared && (
-                    <span className="text-xs text-ink-3">{shared}</span>
-                  )}
                 </div>
+                {share && createPortal(<ShareSheet card={card} mine={!visitor} linkable onClose={() => setShare(false)} />, document.body)}
 
                 {silent.length > 0 && (
                   <p className="mt-8 text-sm text-ink-3">
