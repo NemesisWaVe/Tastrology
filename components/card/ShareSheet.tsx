@@ -23,8 +23,8 @@ const SPRING = { type: "spring" as const, stiffness: 500, damping: 28 };
 let fontCSS: Promise<string> | null = null;
 
 type Target = "insta" | "snap" | "x";
-/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR). */
-type Note = { kind: "phone"; url: string } | null;
+/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR), or paste the image into X. */
+type Note = { kind: "phone"; url: string } | { kind: "x"; intent: string; key: string } | null;
 
 /**
  * Share sheet: live preview of the export, then straight to a platform. X and Snapchat take the card's link (its
@@ -212,18 +212,26 @@ export function ShareSheet({
     setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(cardCode(card))}?share=1` });
   };
 
-  // X: the link carries the card. Its preview (app/c/[code]/opengraph-image.tsx) is drawn as the card itself, and X
-  // makes that whole image the tap target, so no picture is attached: an attached image would hide the link card. On a
-  // phone the X app's own scheme opens the compose box (x.com in Safari lands on a login page); the web intent is the
-  // fallback.
+  // X: a web intent can't attach a picture, so the PNG goes onto the clipboard in the tap and gets pasted into the post
+  // (the link stays in the text; its preview, app/c/[code]/opengraph-image.tsx, is the card). On a laptop the paste
+  // step shows first and the "Open X" button opens the post. On a phone the X app's own scheme opens the compose box
+  // (x.com in Safari lands on a login page); the web intent is the fallback.
   const postX = () => {
     sfx("tap");
     setErr(null);
     setNote(null);
     const text = `${caption} ${link("x")}`;
     const intent = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+    let copied = false;
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      try {
+        void navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]).catch(() => {});
+        copied = true;
+      } catch {}
+    }
+    if (!coarse.current && copied) return setNote({ kind: "x", intent, key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
     if (coarse.current) {
-      setDone("Opening X");
+      setDone(copied ? "Image copied · in X, tap the post and Paste" : "Opening X");
       const t = setTimeout(() => {
         if (document.visibilityState === "visible") location.href = intent;
       }, 1400);
@@ -332,9 +340,31 @@ export function ShareSheet({
 
 function NoteCard({ note, onSave, onClose }: { note: NonNullable<Note>; onSave: () => void; onClose: () => void }) {
   const code = useMemo(() => {
-    const m = qr(note.url);
+    const m = qr(note.kind === "phone" ? note.url : "-");
     return { q: m.length + 8, d: qrPath(m) };
   }, [note]);
+  if (note.kind === "x")
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={SPRING} className="relative flex items-center gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3 pr-9" data-share-note="x">
+        <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-ink px-2 font-mono text-[15px] font-semibold text-paper">{note.key}+V</span>
+        <div className="min-w-0 text-left">
+          <p className="font-serif text-[19px] italic leading-tight text-ink">Image copied</p>
+          <p className="mt-1 text-[12.5px] leading-snug text-ink-2">In the post, press {note.key}+V to attach your card.</p>
+          <button
+            onClick={() => {
+              window.open(note.intent, "_blank", "noopener,noreferrer");
+              onClose();
+            }}
+            className="mt-2 rounded-full bg-accent px-4 py-1.5 text-[13px] font-semibold text-black"
+          >
+            Open X →
+          </button>
+        </div>
+        <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
+          ✕
+        </button>
+      </motion.div>
+    );
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
