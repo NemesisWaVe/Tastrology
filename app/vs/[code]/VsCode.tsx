@@ -8,6 +8,7 @@ import { BattleStage } from "@/components/battle/BattleArena";
 import { Burned } from "@/components/card/Burned";
 import { Galaxies } from "@/components/battle/Galaxies";
 import { FlipCard } from "@/components/card/FlipCard";
+import { FriendChip } from "@/components/friends/FriendChip";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import type { BattleResult } from "@/lib/battle";
@@ -93,6 +94,7 @@ export function VsCode({ code }: { code: string }) {
           </div>
           <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
           <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
+          <FriendChip className="relative" />
         </>
       )}
     </main>

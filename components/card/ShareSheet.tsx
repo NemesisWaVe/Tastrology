@@ -6,6 +6,7 @@ import { getFontEmbedCSS, toBlob } from "html-to-image";
 import type { StyleResult } from "@/lib/types";
 import { buildCard, cardCode, type CardData } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
+import { playerCode } from "@/lib/player";
 import { sfx } from "@/lib/sound";
 import { HoloCard } from "./HoloCard";
 import { Sparkle } from "./Sigils";
@@ -132,9 +133,15 @@ export function ShareSheet({
       .catch(() => {});
   }, [linkable, code]);
 
+  // Your player code rides on links to your own card: every share is also a friend invite (/f/<code>, lib/friends.ts).
+  const [pc, setPc] = useState<string | null>(null);
+  useEffect(() => {
+    if (mine && linkable) void playerCode().then(setPc);
+  }, [mine, linkable]);
+
   const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${linkable ? "Can yours beat it?" : BRAND.question}`;
   /** The card page, tagged with where the visit came from. */
-  const link = (src: string) => (typeof window === "undefined" ? "" : linkable ? `${location.origin}/c/${encodeURIComponent(code)}?via=${src}` : location.origin);
+  const link = (src: string) => (typeof window === "undefined" ? "" : linkable ? `${location.origin}/c/${encodeURIComponent(code)}?via=${src}${pc ? `&f=${pc}` : ""}` : location.origin);
   /** The fight page: stories and snaps send viewers straight to it (mint yours, battle this one). */
   const fight = (src: string) => link(src).replace("/c/", "/vs/");
 

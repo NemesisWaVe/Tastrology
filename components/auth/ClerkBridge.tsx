@@ -5,6 +5,7 @@ import { SignIn, useAuth, useClerk } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { setBridge } from "@/lib/authBridge";
+import { forgetPlayerCode } from "@/lib/player";
 
 /**
  * Lives inside <ClerkProvider> (app/layout.tsx, only when accounts are on). Registers the auth bridge for plain
@@ -77,7 +78,10 @@ export function ClerkBridge() {
         listeners.current.add(cb);
         return () => listeners.current.delete(cb);
       },
-      signOut: () => clerk.signOut({ redirectUrl: "/" }),
+      signOut: () => {
+        forgetPlayerCode();
+        return clerk.signOut({ redirectUrl: "/" });
+      },
     });
     return () => setBridge(null);
   }, [isLoaded, clerk]);

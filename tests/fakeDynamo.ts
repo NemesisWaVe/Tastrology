@@ -84,6 +84,7 @@ export class FakeDynamo {
         const pk = vals[":pk"].S!;
         const pre = vals[":sk"].S!;
         const Items = [...this.items.values()].filter((i) => i.PK.S === pk && i.SK.S!.startsWith(pre)).sort((a, b) => a.SK.S!.localeCompare(b.SK.S!));
+        if (p.ScanIndexForward === false) Items.reverse();
         return { status: 200, json: { Items } };
       }
       case "DeleteItem": {

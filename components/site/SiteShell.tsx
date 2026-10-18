@@ -37,6 +37,9 @@ export function SiteNav() {
         <Link href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
           My deck
         </Link>
+        <Link href="/friends" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
+          Friends
+        </Link>
         <SoundToggle />
         <AuthNav />
         <Link href="/?new=1" className="hidden rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">

@@ -110,8 +110,8 @@ export async function ddbGet(PK: string, SK: string): Promise<Flat | null> {
   return r.status === "found" ? r.value : null;
 }
 
-/** Items under one partition whose sort key starts with `prefix`, in sort-key order. `cursor` pages on. */
-export async function ddbQuery(PK: string, prefix: string, limit: number, cursor?: string, attrs?: string[]): Promise<{ items: Flat[]; cursor?: string } | null> {
+/** Items under one partition whose sort key starts with `prefix`, in sort-key order (`desc` reverses it). `cursor` pages on. */
+export async function ddbQuery(PK: string, prefix: string, limit: number, cursor?: string, attrs?: string[], desc = false): Promise<{ items: Flat[]; cursor?: string } | null> {
   const payload: Record<string, unknown> = {
     KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
     ExpressionAttributeValues: marshal({ ":pk": PK, ":sk": prefix }),
@@ -119,6 +119,7 @@ export async function ddbQuery(PK: string, prefix: string, limit: number, cursor
     // Strongly consistent: a deck read right after a burn or an add must see it (costs 1 RCU per 4KB instead of 0.5).
     ConsistentRead: true,
   };
+  if (desc) payload.ScanIndexForward = false;
   if (attrs?.length) {
     payload.ProjectionExpression = attrs.map((_, i) => `#a${i}`).join(", ");
     payload.ExpressionAttributeNames = Object.fromEntries(attrs.map((a, i) => [`#a${i}`, a]));

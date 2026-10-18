@@ -9,6 +9,7 @@ import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { Burned } from "@/components/card/Burned";
 import { Passport } from "@/components/card/Passport";
+import { FriendChip } from "@/components/friends/FriendChip";
 import { BrandSheet } from "@/components/deck/BrandSheet";
 import { ShareSheet } from "@/components/card/ShareSheet";
 import { loadDeck } from "@/lib/deck";
@@ -198,6 +199,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
             ) : source === "server" ? (
               <Primary href={`/vs/${encodeURIComponent(code)}`} title="Fight this card" sub="mint yours, then battle it" />
             ) : null}
+            {!mine && <FriendChip className="mt-4" />}
             {source === "server" && (
               <Secondary onClick={() => setBrands(true)} title={mine ? "See what your taste pulled in" : "See what this taste pulled in"} sub="brands, and why each one" />
             )}
