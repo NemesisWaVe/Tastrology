@@ -46,7 +46,6 @@ export async function friendsOp(body: Record<string, unknown>): Promise<{ ok?: b
 const mono = "font-mono text-[10.5px] uppercase tracking-[0.2em]";
 const pill = "rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 transition hover:border-ink-3 hover:text-ink disabled:opacity-40";
 const lime = "rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper disabled:opacity-40";
-const OUTCOME = { won: "Won", lost: "Lost", tied: "Tied" } as const;
 const ADDED = { sent: "Request sent. You're friends once they accept.", added: "You're friends now.", pending: "Already asked. Waiting on them.", exists: "Already friends." } as const;
 const who = (b: { user?: string; name: string; pc: string }) => (b.user ? `@${b.user}` : b.name || b.pc);
 /** Panels: a faint glass sheet over the sky, and a lime-washed one for what needs you. */
@@ -222,7 +221,10 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   const incoming = d.requests?.incoming ?? [];
   const sent = d.requests?.sent ?? [];
   const open = (d.bouts ?? []).filter((b) => b.status === "open" || (b.status === "expired" && b.role === "out"));
-  const past = (d.bouts ?? []).filter((b) => b.status === "done" || b.status === "declined" || b.status === "cancelled").slice(0, 8);
+  // Fights that happened, with the running record; challenges that never happened collapse into one count.
+  const fights = (d.bouts ?? []).filter((b) => b.status === "done" && b.outcome);
+  const skipped = (d.bouts ?? []).filter((b) => b.status === "declined" || b.status === "cancelled").length;
+  const record = { won: fights.filter((b) => b.outcome === "won").length, lost: fights.filter((b) => b.outcome === "lost").length, tied: fights.filter((b) => b.outcome === "tied").length };
   const friendPcs = new Set((d.friends ?? []).map((f) => f.pc));
   const fighting = new Set((d.bouts ?? []).filter((b) => b.status === "open").map((b) => b.pc));
 
@@ -231,322 +233,358 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
       {/* Nebula light behind the page, so the panels sit in space rather than on black. */}
       <div aria-hidden className="pointer-events-none absolute -inset-x-[30vw] -top-60 bottom-0 -z-10 bg-[radial-gradient(40%_30%_at_80%_10%,rgba(120,80,220,0.16),transparent_70%),radial-gradient(35%_30%_at_10%_45%,rgba(20,120,120,0.14),transparent_70%),radial-gradient(30%_25%_at_70%_80%,rgba(198,255,61,0.05),transparent_70%)]" />
       <FriendSky me={me} friends={d.friends ?? []} incoming={incoming} sent={sent} fighting={fighting} onPick={pick} />
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-      <div className="flex flex-col gap-6">
-        {naming && (
-          <section className={`${lit} p-5 sm:p-6`}>
-            <p className={`${mono} text-accent`}>{me.user ? "Change your username" : "Pick your username"}</p>
-            <p className="mt-2 text-sm text-ink-2">
-              {me.user
-                ? d.rename?.fee
-                  ? `This change costs ${d.rename.fee} Stardust. Friends see the new name right away.`
-                  : `Your first change is free. After that each one costs ${d.rename?.cost ?? 50} Stardust.`
-                : "It's how friends find you and see you. Letters, numbers and _. Your email never shows."}
-            </p>
-            <form
-              className="mt-3 flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void saveName();
-              }}
-            >
-              <span className="flex min-w-0 flex-1 items-center rounded-full border border-line bg-paper px-4">
-                <span className="text-ink-3">@</span>
-                <input
-                  value={uname}
-                  onChange={(e) => setUname(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
-                  placeholder="yourname"
-                  aria-label="Username"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  className="min-w-0 flex-1 bg-transparent py-2.5 pl-1 text-ink outline-none placeholder:text-ink-3"
-                />
-              </span>
-              <button type="submit" disabled={uname.length < 3 || busy === "name"} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper disabled:opacity-40">
-                Save
-              </button>
-            </form>
-            {me.user && (
-              <button type="button" onClick={() => setEditName(false)} className={`${mono} mt-3 text-ink-3 hover:text-ink`}>
-                Keep @{me.user}
-              </button>
-            )}
-          </section>
-        )}
-        <section className={`${glass} p-5 sm:p-6`}>
-          {me.user && (
-            <p className="mb-4 flex items-baseline gap-3">
-              <span className="font-serif text-3xl italic">@{me.user}</span>
-              {!editName && (
-                <button type="button" onClick={() => setEditName(true)} className={`${mono} text-ink-3 hover:text-ink`}>
-                  {d.rename?.fee ? `Change · ${d.rename.fee} dust` : "Change · free once"}
+      {(incoming.length > 0 || open.length > 0) && (
+        <section className={`${lit} p-5 sm:p-6`}>
+          <div className="flex items-baseline justify-between">
+            <p className={`${mono} text-accent`}>Waiting on you</p>
+            {d.dustOn && d.dust !== null && <p className="font-mono text-xs tabular-nums text-ink-2">{d.dust} dust</p>}
+          </div>
+          <ul className="mt-3 flex flex-col divide-y divide-line/70">
+            {incoming.map((r) => (
+              <li key={r.pc} id={`fr-${r.pc}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl py-3">
+                <p className="text-sm">
+                  <b className="font-semibold">{who(r)}</b> wants to be friends
+                </p>
+                <span className="flex gap-2">
+                  <button type="button" disabled={busy !== null} onClick={() => void run(`ok${r.pc}`, { op: "accept-friend", pc: r.pc }, () => setNote(`You and ${who(r)} are friends now.`))} className={lime}>
+                    Accept
+                  </button>
+                  <button type="button" disabled={busy !== null} onClick={() => void run(`rq${r.pc}`, { op: "drop-request", pc: r.pc })} className={pill}>
+                    Decline
+                  </button>
+                </span>
+              </li>
+            ))}
+            {open.map((b) => (
+              <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <p className="text-sm">
+                  {b.role === "in" ? (
+                    <>
+                      <b className="font-semibold">{who(b)}</b> challenged you{b.stake ? <> for <span className="text-accent">{b.stake} dust</span>, blind draw</> : " to a friendly fight"}
+                    </>
+                  ) : b.status === "expired" ? (
+                    <>Your challenge to {who(b)} expired{b.stake ? `. Take your ${b.stake} dust back.` : "."}</>
+                  ) : (
+                    <>
+                      You challenged <b className="font-semibold">{who(b)}</b>
+                      {b.stake ? <> for <span className="text-accent">{b.stake}</span></> : ""} · waiting
+                    </>
+                  )}
+                </p>
+                <span className="flex gap-2">
+                  {b.role === "in" && (
+                    <button type="button" disabled={busy !== null} onClick={() => void run(b.id, { op: "accept", id: b.id }, (j) => j.a && j.b && (location.href = `/vs/${j.a}?vs=${j.b}`))} className={lime}>
+                      {busy === b.id ? "Fighting…" : "Fight"}
+                    </button>
+                  )}
+                  <button type="button" disabled={busy !== null} onClick={() => void run(`${b.id}x`, { op: "decline", id: b.id })} className={pill}>
+                    {b.role === "in" ? "Decline" : b.status === "expired" ? "Close" : "Cancel"}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+        <div className="flex flex-col gap-6">
+          {naming && (
+            <section className={`${lit} p-5 sm:p-6`}>
+              <p className={`${mono} text-accent`}>{me.user ? "Change your username" : "Pick your username"}</p>
+              <p className="mt-2 text-sm text-ink-2">
+                {me.user
+                  ? d.rename?.fee
+                    ? `This change costs ${d.rename.fee} Stardust. Friends see the new name right away.`
+                    : `Your first change is free. After that each one costs ${d.rename?.cost ?? 50} Stardust.`
+                  : "It's how friends find you and see you. Letters, numbers and _. Your email never shows."}
+              </p>
+              <form
+                className="mt-3 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void saveName();
+                }}
+              >
+                <span className="flex min-w-0 flex-1 items-center rounded-full border border-line bg-paper px-4">
+                  <span className="text-ink-3">@</span>
+                  <input
+                    value={uname}
+                    onChange={(e) => setUname(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
+                    placeholder="yourname"
+                    aria-label="Username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    className="min-w-0 flex-1 bg-transparent py-2.5 pl-1 text-ink outline-none placeholder:text-ink-3"
+                  />
+                </span>
+                <button type="submit" disabled={uname.length < 3 || busy === "name"} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper disabled:opacity-40">
+                  Save
+                </button>
+              </form>
+              {me.user && (
+                <button type="button" onClick={() => setEditName(false)} className={`${mono} mt-3 text-ink-3 hover:text-ink`}>
+                  Keep @{me.user}
                 </button>
               )}
-            </p>
+            </section>
           )}
-          <p className={`${mono} text-ink-3`}>Your player code</p>
-          <p className="mt-2 font-mono text-4xl tracking-[0.18em] text-accent">{me.pc}</p>
-          <p className="mt-2 text-sm text-ink-2">Share it, or let them scan. They send a request; you accept.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void shareInvite()} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper">
-              {copied ? "Invite link copied" : "Invite a friend"}
-            </button>
-            <button type="button" onClick={() => setShowQr((v) => !v)} className={pill}>
-              {showQr ? "Hide QR" : "Show QR"}
-            </button>
-          </div>
-          {showQr && invite && (
-            <div className="mt-4 flex justify-center">
-              <InviteQr url={invite} />
-            </div>
-          )}
-          <div className="mt-6 border-t border-line/70 pt-5">
-            <p className={`${mono} text-ink-3`}>You fight with</p>
-            {me.card ? (
-              <p className="mt-1.5 font-serif text-2xl italic">{me.name}</p>
-            ) : (
-              <p className="mt-1.5 text-sm text-ink-2">
-                No card yet. <Link href="/?new=1" className="text-accent underline underline-offset-4">Mint one</Link> to fight.
-              </p>
-            )}
-            {deck.length > 1 && (
-              <select
-                value={me.card}
-                disabled={busy === "card"}
-                onChange={(e) => void run("card", { op: "card", card: e.target.value })}
-                className="mt-3 w-full rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink"
-              >
-                {deck.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.card.archetype} · {c.card.rarityLabel}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </section>
 
-        <section className={`${glass} p-5 sm:p-6`}>
-          <p className={`${mono} text-ink-3`}>Add a friend</p>
-          <form
-            className="mt-3 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run("add", { op: "add", pc: code }, (j) => {
-                setCode("");
-                setNote(ADDED[j.status as keyof typeof ADDED] ?? "Done.");
-              });
-            }}
-          >
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^0-9A-Za-z_@]/g, "").slice(0, 21))}
-              placeholder="@username or code"
-              aria-label="Friend's username or player code"
-              autoCapitalize="none"
-              autoCorrect="off"
-              className="min-w-0 flex-1 rounded-full border border-line bg-paper px-4 py-2.5 font-mono text-ink placeholder:text-ink-3"
-            />
-            <button type="submit" disabled={code.replace("@", "").length < 3 || busy === "add" || !me.user} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper disabled:opacity-40">
-              Ask
-            </button>
-          </form>
-          {sent.length > 0 && (
-            <ul className="mt-4 flex flex-col gap-2">
-              {sent.map((r) => (
-                <li key={r.pc} id={`fr-${r.pc}`} className="flex items-center justify-between gap-3 rounded-full text-sm text-ink-2">
-                  <span className="min-w-0 truncate">
-                    <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-[#d875ff] align-middle shadow-[0_0_8px_#d875ff]" />
-                    Asked {who(r)} · forming
-                  </span>
-                  <button type="button" disabled={busy !== null} onClick={() => void run(`rq${r.pc}`, { op: "drop-request", pc: r.pc })} className={`${mono} text-ink-3 hover:text-ink`}>
-                    Withdraw
+          {/* Your pass: who you are, the code friends need, and the card you fight with, torn off into a stub for adding people. */}
+          <section className="relative overflow-hidden rounded-[26px] border border-white/[0.08] bg-[linear-gradient(155deg,#17171e,#0b0b0f_70%)] shadow-[0_30px_80px_-40px_rgba(0,0,0,0.9)]">
+            <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[conic-gradient(from_200deg,rgba(198,255,61,0.18),rgba(131,255,247,0.12),rgba(216,117,255,0.14),rgba(198,255,61,0.18))] opacity-60 blur-3xl" />
+            <div className="relative p-6">
+              <div className="flex items-center justify-between">
+                <p className={`${mono} text-accent`}>Player pass</p>
+                <p className={`${mono} text-ink-3`}>Set 01</p>
+              </div>
+              <div className="mt-4 flex items-baseline gap-3">
+                <p className="min-w-0 truncate font-serif text-[34px] italic leading-none text-ink">{me.user ? `@${me.user}` : "No name yet"}</p>
+                {me.user && !editName && (
+                  <button type="button" onClick={() => setEditName(true)} className={`${mono} shrink-0 text-ink-3 transition hover:text-ink`}>
+                    {d.rename?.fee ? `Rename · ${d.rename.fee} dust` : "Rename · free once"}
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        {note && (
-          <p className="text-sm text-ink-2" role="status">
-            {note}
-          </p>
-        )}
-      </div>
+                )}
+              </div>
+              <div className="mt-6 flex items-end justify-between gap-4">
+                <div>
+                  <p className={`${mono} text-ink-3`}>Code</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(me.pc).catch(() => {});
+                      setNote("Code copied.");
+                    }}
+                    title="Copy code"
+                    className="mt-1 font-mono text-[40px] leading-none tracking-[0.16em] text-accent transition hover:brightness-110"
+                  >
+                    {me.pc}
+                  </button>
+                </div>
+                <button type="button" onClick={() => setShowQr((v) => !v)} aria-pressed={showQr} className={`${mono} shrink-0 rounded-full border border-line px-3 py-1.5 text-ink-2 transition hover:text-ink`}>
+                  {showQr ? "Hide QR" : "QR"}
+                </button>
+              </div>
+              {showQr && invite && (
+                <div className="mt-5 flex justify-center">
+                  <InviteQr url={invite} />
+                </div>
+              )}
+              <button type="button" onClick={() => void shareInvite()} className="mt-6 w-full rounded-full bg-accent py-3 font-semibold text-paper transition hover:brightness-105">
+                {copied ? "Invite link copied" : "Invite a friend"}
+              </button>
+            </div>
 
-      <div className="flex flex-col gap-6">
-        {(incoming.length > 0 || open.length > 0) && (
-          <section className={`${lit} p-5 sm:p-6`}>
-            <div className="flex items-baseline justify-between">
-              <p className={`${mono} text-accent`}>Waiting on you</p>
+            {/* The tear line. */}
+            <div aria-hidden className="relative h-0 border-t border-dashed border-white/[0.12]">
+              <span className="absolute -left-3 -top-3 h-6 w-6 rounded-full bg-paper" />
+              <span className="absolute -right-3 -top-3 h-6 w-6 rounded-full bg-paper" />
+            </div>
+
+            <div className="relative p-6">
+              <p className={`${mono} text-ink-3`}>Fights as</p>
+              {me.card ? (
+                <p className="mt-1.5 font-serif text-[22px] italic leading-snug text-ink">{me.name}</p>
+              ) : (
+                <p className="mt-1.5 text-sm text-ink-2">
+                  No card yet. <Link href="/?new=1" className="text-accent underline underline-offset-4">Mint one</Link> to fight.
+                </p>
+              )}
+              {deck.length > 1 && (
+                <label className="mt-3 flex items-center gap-2 text-xs text-ink-3">
+                  Swap
+                  <select
+                    value={me.card}
+                    disabled={busy === "card"}
+                    onChange={(e) => void run("card", { op: "card", card: e.target.value })}
+                    className="min-w-0 flex-1 rounded-full border border-line bg-paper px-3 py-1.5 text-sm text-ink-2"
+                  >
+                    {deck.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.card.archetype} · {c.card.rarityLabel}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <form
+                className="mt-6 flex items-center gap-2 rounded-full border border-line bg-paper/70 p-1 pl-4 focus-within:border-accent/50"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run("add", { op: "add", pc: code }, (j) => {
+                    setCode("");
+                    setNote(ADDED[j.status as keyof typeof ADDED] ?? "Done.");
+                  });
+                }}
+              >
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/[^0-9A-Za-z_@]/g, "").slice(0, 21))}
+                  placeholder="Add by @username or code"
+                  aria-label="Friend's username or player code"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-ink outline-none placeholder:text-ink-3"
+                />
+                <button type="submit" disabled={code.replace("@", "").length < 3 || busy === "add" || !me.user} className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper disabled:opacity-30">
+                  Ask
+                </button>
+              </form>
+              {note && (
+                <p className="mt-3 text-sm text-ink-2" role="status">
+                  {note}
+                </p>
+              )}
+              {sent.length > 0 && (
+                <ul className="mt-4 flex flex-col gap-2">
+                  {sent.map((r) => (
+                    <li key={r.pc} id={`fr-${r.pc}`} className="flex items-center justify-between gap-3 text-sm text-ink-2">
+                      <span className="min-w-0 truncate">
+                        <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-[#d875ff] align-middle shadow-[0_0_8px_#d875ff]" />
+                        {who(r)} · forming
+                      </span>
+                      <button type="button" disabled={busy !== null} onClick={() => void run(`rq${r.pc}`, { op: "drop-request", pc: r.pc })} className={`${mono} text-ink-3 hover:text-ink`}>
+                        Withdraw
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <section className={`${glass} p-2`}>
+            <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
+              <p className={`${mono} text-ink-3`}>
+                Your stars <span className="text-ink-2">· {d.friends?.length ?? 0}</span>
+              </p>
               {d.dustOn && d.dust !== null && <p className="font-mono text-xs tabular-nums text-ink-2">{d.dust} dust</p>}
             </div>
-            <ul className="mt-3 flex flex-col divide-y divide-line/70">
-              {incoming.map((r) => (
-                <li key={r.pc} id={`fr-${r.pc}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl py-3">
-                  <p className="text-sm">
-                    <b className="font-semibold">{who(r)}</b> wants to be friends
-                  </p>
-                  <span className="flex gap-2">
-                    <button type="button" disabled={busy !== null} onClick={() => void run(`ok${r.pc}`, { op: "accept-friend", pc: r.pc }, () => setNote(`You and ${who(r)} are friends now.`))} className={lime}>
-                      Accept
-                    </button>
-                    <button type="button" disabled={busy !== null} onClick={() => void run(`rq${r.pc}`, { op: "drop-request", pc: r.pc })} className={pill}>
-                      Decline
-                    </button>
-                  </span>
-                </li>
-              ))}
-              {open.map((b) => (
-                <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <p className="text-sm">
-                    {b.role === "in" ? (
-                      <>
-                        <b className="font-semibold">{who(b)}</b> challenged you{b.stake ? <> for <span className="text-accent">{b.stake} dust</span>, blind draw</> : " to a friendly fight"}
-                      </>
-                    ) : b.status === "expired" ? (
-                      <>Your challenge to {who(b)} expired{b.stake ? `. Take your ${b.stake} dust back.` : "."}</>
-                    ) : (
-                      <>
-                        You challenged <b className="font-semibold">{who(b)}</b>
-                        {b.stake ? <> for <span className="text-accent">{b.stake}</span></> : ""} · waiting
-                      </>
-                    )}
-                  </p>
-                  <span className="flex gap-2">
-                    {b.role === "in" && (
-                      <button
-                        type="button"
-                        disabled={busy !== null}
-                        onClick={() => void run(b.id, { op: "accept", id: b.id }, (j) => j.a && j.b && (location.href = `/vs/${j.a}?vs=${j.b}`))}
-                        className={lime}
-                      >
-                        {busy === b.id ? "Fighting…" : "Fight"}
-                      </button>
-                    )}
-                    <button type="button" disabled={busy !== null} onClick={() => void run(`${b.id}x`, { op: "decline", id: b.id })} className={pill}>
-                      {b.role === "in" ? "Decline" : b.status === "expired" ? "Close" : "Cancel"}
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section>
-          <p className={`${mono} text-ink-3`}>Friends · {d.friends?.length ?? 0}</p>
-          {!d.friends?.length ? (
-            <p className="mt-3 max-w-md text-ink-2">No one yet. Send your invite or share a card. When they ask and you accept, you can fight.</p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-3">
-              {d.friends.map((f) => {
-                const lvl = levelOf(f.days ?? 0);
-                const tint = SKY_TINT[lvl];
-                const bd = bond(f.days ?? 0);
-                return (
-                <li key={f.pc} id={`fr-${f.pc}`} className={`${glass} p-4`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <span aria-hidden className="relative mt-1.5 h-3 w-3 shrink-0 rounded-full bg-white" style={{ boxShadow: `0 0 0 3px ${tint}33, 0 0 18px 2px ${tint}` }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-serif text-xl italic">{who(f)}</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-3">
-                        <Presence seen={f.seen} />
-                        {f.name ? `Fights with ${f.name}` : "No card yet"}
-                      </p>
-                      <p className={`${mono} mt-1.5 text-ink-3`}>
-                        <span style={{ color: tint }}>{lvl} friend</span> · {f.days ?? 0} day{f.days === 1 ? "" : "s"} fought · {f.pc}
-                      </p>
-                      <div className="mt-2 flex items-center gap-3">
-                        <span className="h-[3px] w-28 overflow-hidden rounded-full bg-white/[0.07]">
-                          <span className="block h-full rounded-full" style={{ width: `${bd.pct * 100}%`, background: tint, boxShadow: `0 0 8px ${tint}` }} />
-                        </span>
-                        <span className="text-[11px] text-ink-3">{bd.next ? `${bd.left} more day${bd.left === 1 ? "" : "s"} to ${bd.next}` : "As close as it gets"}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${who(f)}`}
-                      onClick={() => confirm(`Remove ${who(f)} from your friends?`) && void run(`rm${f.pc}`, { op: "remove", pc: f.pc })}
-                      className="px-1 text-lg leading-none text-ink-3 hover:text-ink"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {me.card && f.card ? (
-                      <button type="button" disabled={busy !== null} onClick={() => void challenge(f.pc, 0)} className={lime}>
-                        Challenge
-                      </button>
-                    ) : (
-                      <span className="text-xs text-ink-3">{me.card ? "They need a card to fight." : "Mint a card to fight."}</span>
-                    )}
-                    {d.dustOn && (
-                      <button type="button" onClick={() => setBetFor(betFor === f.pc ? null : f.pc)} className={pill}>
-                        Bet Stardust
-                      </button>
-                    )}
-                  </div>
-                  {betFor === f.pc && (
-                    <div className="mt-3 rounded-xl bg-paper/70 p-3">
-                      <p className="text-xs text-ink-2">They have to accept. Then one card is drawn at random from each deck; the winner takes both stakes, a tie refunds.</p>
-                      <div className="mt-2 flex gap-2">
-                        {(d.stakes ?? []).map((s) => (
-                          <button key={s} type="button" disabled={busy !== null || (d.dust ?? 0) < s} onClick={() => void challenge(f.pc, s)} className={pill}>
-                            {s}
+            {!d.friends?.length ? (
+              <p className="px-4 pb-5 pt-2 text-sm text-ink-2">No one yet. Send your invite or share a card; every friend you add is born in the sky above.</p>
+            ) : (
+              <ul className="flex flex-col">
+                {d.friends.map((f) => {
+                  const lvl = levelOf(f.days ?? 0);
+                  const tint = SKY_TINT[lvl];
+                  const bd = bond(f.days ?? 0);
+                  return (
+                    <li key={f.pc} id={`fr-${f.pc}`} className="group rounded-2xl px-3 py-3 transition hover:bg-white/[0.03]">
+                      <div className="flex items-center gap-3">
+                        <Avatar f={f} tint={tint} />
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-2">
+                            <span className="truncate font-serif text-[19px] italic leading-tight">{who(f)}</span>
+                            <Presence seen={f.seen} />
+                          </p>
+                          <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+                            <span style={{ color: tint }}>{lvl}</span> · {f.days ?? 0}d fought{f.cards !== undefined ? ` · ${f.cards} card${f.cards === 1 ? "" : "s"}` : ""}
+                          </p>
+                          <span className="mt-1.5 block h-[2px] w-full max-w-[9rem] overflow-hidden rounded-full bg-white/[0.07]" title={bd.next ? `${bd.left} more day${bd.left === 1 ? "" : "s"} to ${bd.next}` : "As close as it gets"}>
+                            <span className="block h-full rounded-full" style={{ width: `${bd.pct * 100}%`, background: tint, boxShadow: `0 0 6px ${tint}` }} />
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {me.card && f.card ? (
+                            <button type="button" disabled={busy !== null} onClick={() => void challenge(f.pc, 0)} className={lime}>
+                              Fight
+                            </button>
+                          ) : null}
+                          {d.dustOn && me.card && f.card && (
+                            <button type="button" onClick={() => setBetFor(betFor === f.pc ? null : f.pc)} aria-pressed={betFor === f.pc} className={pill}>
+                              Bet
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${who(f)}`}
+                            onClick={() => confirm(`Remove ${who(f)} from your friends?`) && void run(`rm${f.pc}`, { op: "remove", pc: f.pc })}
+                            className="px-1.5 text-lg leading-none text-ink-3 transition hover:text-ink sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                          >
+                            ×
                           </button>
-                        ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {past.length > 0 && (
-          <section>
-            <p className={`${mono} text-ink-3`}>Recent fights</p>
-            <ul className="mt-2 flex flex-col divide-y divide-line/70">
-              {past.map((b) => (
-                <li key={b.id} className="flex items-center justify-between gap-3 py-3 text-sm text-ink-2">
-                  <span className="min-w-0 truncate">
-                    {b.status === "done" && b.outcome ? (
-                      <>
-                        <b className={b.outcome === "won" ? "text-accent" : "text-ink"}>
-                          {OUTCOME[b.outcome]}
-                          {b.stake ? ` ${b.outcome === "won" ? `+${b.stake}` : b.outcome === "lost" ? `−${b.stake}` : "±0"}` : ""}
-                        </b>{" "}
-                        vs {who(b)}
-                      </>
-                    ) : (
-                      <>
-                        {b.status === "declined" ? "Declined" : "Cancelled"} · {who(b)}
-                      </>
-                    )}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-4">
-                    {b.a && b.b && (
-                      <Link href={`/vs/${b.a}?vs=${b.b}`} className={`${mono} text-ink-3 underline decoration-dotted underline-offset-4 hover:text-accent`}>
-                        Watch
-                      </Link>
-                    )}
-                    {b.status === "done" && friendPcs.has(b.pc) && (
-                      <button type="button" disabled={busy !== null || (b.stake > 0 && (d.dust ?? 0) < b.stake)} onClick={() => void challenge(b.pc, b.stake)} className={`${mono} text-accent hover:underline disabled:opacity-40`}>
-                        Rematch
-                      </button>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
+                      {!(me.card && f.card) && <p className="mt-2 pl-[52px] text-xs text-ink-3">{me.card ? "They need a card to fight." : "Mint a card to fight."}</p>}
+                      {betFor === f.pc && (
+                        <div className="mt-3 ml-[52px] rounded-xl bg-paper/70 p-3">
+                          <p className="text-xs text-ink-2">Blind draw: one random card from each deck. Winner takes both stakes; a tie refunds. They have to accept.</p>
+                          <div className="mt-2 flex gap-2">
+                            {(d.stakes ?? []).map((s) => (
+                              <button key={s} type="button" disabled={busy !== null || (d.dust ?? 0) < s} onClick={() => void challenge(f.pc, s)} className={pill}>
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
-        )}
+
+          {(fights.length > 0 || skipped > 0) && (
+            <section className={`${glass} p-5`}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className={`${mono} text-ink-3`}>Fight log</p>
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em]">
+                  <span className="text-accent">{record.won}W</span> <span className="text-ink-2">{record.lost}L</span> <span className="text-ink-3">{record.tied}T</span>
+                </p>
+              </div>
+              <ul className="mt-3 flex flex-col gap-1.5">
+                {fights.slice(0, 6).map((b) => (
+                  <li key={b.id} className="flex items-center gap-3 rounded-xl px-1 py-1.5 text-sm">
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-semibold ${b.outcome === "won" ? "bg-accent text-paper" : b.outcome === "lost" ? "bg-white/[0.06] text-ink-2" : "border border-line text-ink-3"}`}
+                    >
+                      {b.outcome === "won" ? "W" : b.outcome === "lost" ? "L" : "T"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-ink-2">
+                      vs <span className="text-ink">{who(b)}</span>
+                      {b.stake ? <span className={`ml-2 font-mono text-xs ${b.outcome === "won" ? "text-accent" : "text-ink-3"}`}>{b.outcome === "won" ? `+${b.stake}` : b.outcome === "lost" ? `−${b.stake}` : "±0"}</span> : null}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      {b.a && b.b && (
+                        <Link href={`/vs/${b.a}?vs=${b.b}`} className={`${mono} text-ink-3 transition hover:text-ink`}>
+                          Replay
+                        </Link>
+                      )}
+                      {friendPcs.has(b.pc) && (
+                        <button type="button" disabled={busy !== null || (b.stake > 0 && (d.dust ?? 0) < b.stake)} onClick={() => void challenge(b.pc, b.stake)} className={`${mono} text-accent hover:underline disabled:opacity-40`}>
+                          Rematch
+                        </button>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {skipped > 0 && <p className="mt-3 text-xs text-ink-3">{skipped} challenge{skipped === 1 ? "" : "s"} declined or cancelled</p>}
+            </section>
+          )}
+        </div>
       </div>
     </div>
-    </div>
+  );
+}
+
+/** Their account photo, or their initial, ringed in the colour of how close you are. */
+function Avatar({ f, tint }: { f: Friend; tint: string }) {
+  return (
+    <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border-[1.5px]" style={{ borderColor: tint, boxShadow: `0 0 14px -4px ${tint}` }}>
+      {f.img ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`${f.img}?width=80`} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center bg-paper font-serif text-lg italic" style={{ color: tint }}>
+          {who(f).replace(/^@/, "").slice(0, 1).toUpperCase()}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -555,16 +593,11 @@ function Presence({ seen }: { seen?: number }) {
   const ago = seen ? Date.now() - seen : Infinity;
   if (ago < 150_000)
     return (
-      <span className="flex shrink-0 items-center gap-1.5 text-good">
+      <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase tracking-[0.14em] text-good">
         <span className="h-1.5 w-1.5 rounded-full bg-good shadow-[0_0_8px_var(--good)]" />
-        Online ·
+        Online
       </span>
     );
   const t = !seen ? null : ago < 3_600_000 ? `${Math.round(ago / 60_000)}m` : ago < 86_400_000 ? `${Math.round(ago / 3_600_000)}h` : `${Math.round(ago / 86_400_000)}d`;
-  return (
-    <span className="flex shrink-0 items-center gap-1.5">
-      <span className="h-1.5 w-1.5 rounded-full bg-ink-3/60" />
-      {t ? `Seen ${t} ago ·` : "Offline ·"}
-    </span>
-  );
+  return t ? <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3" title={`Seen ${t} ago`}>{t}</span> : null;
 }
