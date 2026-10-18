@@ -9,6 +9,8 @@ import { skyState } from "@/components/reveal/traceModel";
 import { Burned } from "@/components/card/Burned";
 import { Passport } from "@/components/card/Passport";
 import { BrandSheet } from "@/components/deck/BrandSheet";
+import { ShareSheet } from "@/components/card/ShareSheet";
+import { loadDeck } from "@/lib/deck";
 import { CursorArrow } from "@/components/CursorArrow";
 import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
@@ -25,6 +27,11 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const [burned, setBurned] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [brands, setBrands] = useState(false);
+  const [share, setShare] = useState(false);
+  /** This device made the card: the reading it came from is saved here, or it sits in this device's or account's deck as a mint. */
+  const [mine, setMine] = useState(false);
+  /** The full reading behind the card, when this device still has it (unlocks the Receipt and Square layouts). */
+  const [reading, setReading] = useState<StyleResult | null>(null);
   // ?b=1 (from the deck or a share) opens the brand sheet straight away.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("b") === "1") setBrands(true);
@@ -63,6 +70,25 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       off = true;
     };
   }, [code, attempt]);
+
+  useEffect(() => {
+    if (!card) return;
+    let off = false;
+    try {
+      const saved = JSON.parse(localStorage.getItem("tastrology:v1") ?? "null") as { result?: StyleResult } | null;
+      if (saved?.result && cardCode(buildCard(saved.result)) === code) {
+        setReading(saved.result);
+        setMine(true);
+        return;
+      }
+    } catch {}
+    loadDeck().then((d) => {
+      if (!off && d.cards.some((c) => c.code === code && c.minted !== false)) setMine(true);
+    });
+    return () => {
+      off = true;
+    };
+  }, [card, code]);
 
   const retry = () => {
     setCard(undefined);
@@ -138,16 +164,33 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
                 className="mt-6 flex w-full items-center justify-between rounded-2xl border border-accent/50 bg-accent/10 px-5 py-4 text-left transition hover:bg-accent/20"
               >
                 <span>
-                  <span className="block font-serif text-xl italic text-ink">See what your taste pulled in</span>
+                  <span className="block font-serif text-xl italic text-ink">{mine ? "See what your taste pulled in" : "See what this taste pulled in"}</span>
                   <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">brands, and why each one</span>
                 </span>
                 <span aria-hidden className="text-2xl text-accent">→</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setShare(true)}
+              className="mt-3 flex w-full items-center justify-between rounded-2xl border border-line bg-card/60 px-5 py-4 text-left transition hover:border-accent/50"
+            >
+              <span>
+                <span className="block font-serif text-xl italic text-ink">{mine ? "Share your card" : "Share this card"}</span>
+                <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">story, snap, or x</span>
+              </span>
+              <span aria-hidden className="text-2xl text-ink-2">↗</span>
+            </button>
             {source === "server" && <Passport code={code} />}
             <CTA />
           </section>
-          <BrandSheet code={code} card={card} open={brands} onClose={() => setBrands(false)} src="share" />
+          {share &&
+            (reading ? (
+              <ShareSheet result={reading} linkable={source === "server"} onClose={() => setShare(false)} />
+            ) : (
+              <ShareSheet card={card} mine={mine} linkable={source === "server"} onClose={() => setShare(false)} />
+            ))}
+          <BrandSheet code={code} card={card} open={brands} onClose={() => setBrands(false)} src="share" visitor={!mine} />
         </>
       )}
     </main>

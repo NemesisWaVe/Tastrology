@@ -29,9 +29,18 @@ type Target = "insta" | "snap" | "x";
  * phone's share sheet, so on a phone it hands the PNG to the sheet (pick Instagram → Story); without one it saves
  * the PNG and opens Instagram's story camera.
  * `linkable`: the card is filed on the server (live readings only), so /c/<code> resolves for whoever taps it.
+ * From a card page (/c/<code>) there may be no reading on hand, only the card: then it shares the Story layout,
+ * which needs nothing else. `mine` false (a visitor sharing someone's card) changes "I pulled" to "Spotted".
  */
-export function ShareSheet({ result, onClose, linkable = false }: { result: StyleResult; onClose: () => void; linkable?: boolean }) {
-  const card = useMemo(() => buildCard(result), [result]);
+export function ShareSheet({
+  result,
+  card: given,
+  onClose,
+  linkable = false,
+  mine = true,
+}: { onClose: () => void; linkable?: boolean; mine?: boolean } & ({ result: StyleResult; card?: undefined } | { card: CardData; result?: undefined })) {
+  const card = useMemo(() => given ?? buildCard(result!), [given, result]);
+  const formats = (result ? Object.keys(SIZE) : ["story"]) as Format[];
   const [fmt, setFmt] = useState<Format>("story");
   const [busy, setBusy] = useState<null | "share" | "save" | Target>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -84,7 +93,31 @@ export function ShareSheet({ result, onClose, linkable = false }: { result: Styl
     return blob;
   }, [size]);
 
-  const caption = `I pulled a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}`;
+  // Phones only open the share sheet straight after a tap, and a render takes a second or two: by then iOS refuses
+  // (NotAllowedError) and Instagram never sees the image. So each layout is rendered as soon as it's on screen and the
+  // tap shares the finished PNG at once.
+  const blobs = useRef<Partial<Record<Format, Blob>>>({});
+  const pending = useRef<Partial<Record<Format, Promise<Blob>>>>({});
+  const prepare = useCallback(
+    (f: Format) => {
+      pending.current[f] ??= render().then(
+        (b) => ((blobs.current[f] = b), b),
+        (e) => {
+          delete pending.current[f];
+          throw e;
+        },
+      );
+      return pending.current[f]!;
+    },
+    [render],
+  );
+  useEffect(() => {
+    if (blobs.current[fmt]) return;
+    const t = setTimeout(() => prepare(fmt).catch(() => {}), 450);
+    return () => clearTimeout(t);
+  }, [fmt, prepare]);
+
+  const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}`;
   const link = (src: string) => {
     if (typeof window === "undefined") return "";
     return linkable ? `${location.origin}/c/${encodeURIComponent(cardCode(card))}?s=${src}` : location.origin;
@@ -101,27 +134,49 @@ export function ShareSheet({ result, onClose, linkable = false }: { result: Styl
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  const go = async (mode: "share" | "save" | "insta") => {
-    setBusy(mode);
+  const go = (mode: "share" | "save" | "insta") => {
     setErr(null);
     setDone(null);
+    const ready = blobs.current[fmt];
+    // Ready: hand it over inside this tap (no await before navigator.share).
+    if (ready) return deliver(mode, ready);
+    setBusy(mode);
+    prepare(fmt).then(
+      (b) => deliver(mode, b, true),
+      (e) => {
+        setErr((e as Error).message || "Couldn't render the image");
+        setBusy(null);
+      },
+    );
+  };
+
+  const deliver = async (mode: "share" | "save" | "insta" | "x", blob: Blob, late = false) => {
+    setBusy(mode);
     try {
-      const blob = await render();
       const file = new File([blob], fileName, { type: "image/png" });
-      if (mode !== "save" && navigator.canShare?.({ files: [file] })) {
+      // Phones only: laptops (Windows, macOS) also say they can share files, but their share dialog doesn't reach Instagram.
+      if (mode !== "save" && canShare && navigator.canShare?.({ files: [file] })) {
         try {
           // Instagram drops the image when text rides along on some phones, so the story share sends the file alone.
-          await navigator.share(mode === "insta" ? { files: [file] } : { files: [file], title: BRAND.name, text: caption });
-          setDone(mode === "insta" ? "Pick Instagram, then Story" : "Shared");
+          await navigator.share(
+            mode === "insta" ? { files: [file] } : mode === "x" ? { files: [file], text: `${caption} ${link("x")}` } : { files: [file], title: BRAND.name, text: caption },
+          );
+          setDone(mode === "insta" ? "Pick Instagram, then Story" : mode === "x" ? "Pick X: the image rides along" : "Shared");
         } catch (e) {
-          if ((e as Error).name !== "AbortError") throw e;
+          const name = (e as Error).name;
+          // The render outlived the tap: the PNG is ready now, so the next tap goes straight through.
+          if (name === "NotAllowedError" && late) setDone("Image ready · tap again to share");
+          else if (name !== "AbortError") throw e;
         }
       } else if (mode === "insta") {
         save(blob);
         if (coarse.current) {
           setDone("Saved. Opening Instagram: add it from your camera roll");
           setTimeout(() => (location.href = "instagram://story-camera"), 600);
-        } else setDone("Saved. Instagram only posts stories from the phone app, so send this to your phone");
+        } else {
+          window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer");
+          setDone("Saved. Stories are phone-only; on instagram.com, Create → drop the PNG in to post it");
+        }
       } else {
         save(blob);
         setDone(`Saved ${size.out[0]}×${size.out[1]} PNG · ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
@@ -134,16 +189,32 @@ export function ShareSheet({ result, onClose, linkable = false }: { result: Styl
   };
 
   // X and Snapchat open from the click itself (no await first), so the browser doesn't block the new tab.
+  // X only shows a link's preview image when it feels like it, so the image goes into the post itself: on a phone the
+  // PNG, caption and link go through the share sheet (pick X); on desktop the PNG is put on the clipboard first and
+  // pasting it into the post attaches it.
   const openLink = (t: "snap" | "x") => {
     sfx("tap");
     setErr(null);
+    const ready = blobs.current[fmt];
+    if (t === "x" && canShare && ready) {
+      void deliver("x", ready);
+      return;
+    }
+    let pasted = false;
+    if (t === "x" && !coarse.current && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      try {
+        void navigator.clipboard.write([new ClipboardItem({ "image/png": ready ?? prepare(fmt) })]).catch(() => {});
+        pasted = true;
+      } catch {}
+    }
     const u = link(t);
     const href =
       t === "x"
         ? `https://x.com/intent/post?text=${encodeURIComponent(caption)}&url=${encodeURIComponent(u)}`
         : `https://www.snapchat.com/share?link=${encodeURIComponent(u)}`;
     window.open(href, "_blank", "noopener,noreferrer");
-    setDone(linkable ? `Opened ${t === "x" ? "X" : "Snapchat"} · the link previews as your card` : `Opened ${t === "x" ? "X" : "Snapchat"}`);
+    if (pasted) return setDone(`Image copied · paste it into your post (${/Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘" : "Ctrl"}+V)`);
+    setDone(linkable ? `Opened ${t === "x" ? "X" : "Snapchat"} · the link previews as ${mine ? "your" : "the"} card` : `Opened ${t === "x" ? "X" : "Snapchat"}`);
   };
 
   const copy = async () => {
@@ -163,7 +234,7 @@ export function ShareSheet({ result, onClose, linkable = false }: { result: Styl
       >
         <div className="flex w-full items-center justify-between gap-3">
           <div className="inline-flex rounded-full border border-line bg-card p-1 text-[12.5px]" role="tablist">
-            {(Object.keys(SIZE) as Format[]).map((f) => (
+            {formats.map((f) => (
               <button
                 key={f}
                 role="tab"
@@ -186,8 +257,8 @@ export function ShareSheet({ result, onClose, linkable = false }: { result: Styl
         <div className="relative overflow-hidden rounded-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-line" style={{ width: size.w * scale, height: size.h * scale }}>
           <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0", width: size.w, height: size.h }}>
             {fmt === "story" ? (
-              <Story ref={node} card={card} />
-            ) : fmt === "receipt" ? (
+              <Story ref={node} card={card} mine={mine} />
+            ) : !result ? null : fmt === "receipt" ? (
               <Receipt ref={node} card={card} result={result} />
             ) : (
               <Square ref={node} card={card} result={result} />
@@ -397,7 +468,7 @@ function TopBrands({ result, vertical = false }: { result: StyleResult; vertical
   );
 }
 
-const Story = forwardRef<HTMLDivElement, { card: CardData }>(function Story({ card }, ref) {
+const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean }>(function Story({ card, mine = true }, ref) {
   const [t1, t2] = card.types;
   const a = t1?.a ?? "#a78bfa";
   const b = (t2 ?? t1)?.b ?? "#22d3ee";
@@ -422,7 +493,7 @@ const Story = forwardRef<HTMLDivElement, { card: CardData }>(function Story({ ca
 
         <div className="mt-auto flex w-full flex-col items-center text-center">
           <p className="font-serif text-[25px] leading-[1.08]" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
-            I pulled a <span style={{ color: a }}>{card.rarityLabel}</span>.
+            {mine ? "I pulled" : "Spotted"} a <span style={{ color: a }}>{card.rarityLabel}</span>.
             <br />
             <span className="italic text-ink-2">{BRAND.question}</span>
           </p>

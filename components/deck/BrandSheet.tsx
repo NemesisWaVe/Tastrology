@@ -180,6 +180,7 @@ export function BrandSheet({
   src = "deck",
   sealed = false,
   owned = false,
+  visitor = false,
   onOpened,
 }: {
   code: string;
@@ -192,6 +193,8 @@ export function BrandSheet({
   /** The viewer minted this card: opening breaks the seal and may pay the weekly bonus (lib/brandOpen.ts). */
   owned?: boolean;
   onOpened?: (dust: number) => void;
+  /** Someone else's card (a scanned QR or a shared link): the copy talks about "this taste", not "your". */
+  visitor?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const [r, setR] = useState<Reply | null>(null);
@@ -417,7 +420,7 @@ export function BrandSheet({
     <header className="flex items-start justify-between gap-4">
       <div className="min-w-0">
         <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-accent">
-          Pulled by your taste
+          {visitor ? "Pulled by this taste" : "Pulled by your taste"}
         </p>
         <h2 className="mt-1 truncate font-serif text-3xl italic leading-tight">
           {card.archetype}
@@ -622,7 +625,7 @@ export function BrandSheet({
                       )}
                       {r.drift.left.length > 0 && (
                         <p className="mt-3 text-sm text-ink-3">
-                          Left your orbit:{" "}
+                          {visitor ? "Left its orbit" : "Left your orbit"}:{" "}
                           {r.drift.left
                             .slice(0, 3)
                             .map((b) => b.name)
@@ -640,7 +643,7 @@ export function BrandSheet({
                 {receipt && (
                   <div className="mt-10">
                     <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">
-                      Your receipt
+                      {visitor ? "The receipt" : "Your receipt"}
                     </h3>
                     <ReceiptRoll
                       card={card}
