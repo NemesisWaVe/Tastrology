@@ -22,44 +22,43 @@ const INK2 = "#b9b8c0";
 const INK3 = "#7d7c86";
 const LIME = "#c6ff3d";
 
-type Font = { name: string; data: ArrayBuffer; style: "normal" | "italic"; weight: 400 | 500 | 600 | 700 };
-let fonts: Promise<Font[]> | null = null;
+type Font = { name: string; data: Buffer; style: "normal" | "italic"; weight: 400 | 500 | 600 | 700 };
 
-/** Google Fonts serves TrueType to a plain fetch (no browser UA), which is what the renderer reads. */
-async function gfont(query: string): Promise<{ style: string; weight: number; data: ArrayBuffer }[]> {
-  const css = await fetch(`https://fonts.googleapis.com/css2?family=${query}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.text());
-  // Each @font-face says its own style and weight (the italic doesn't always come second).
-  const faces = [...css.matchAll(/@font-face\s*{([^}]+)}/g)].map((m) => ({
-    style: /font-style:\s*(\w+)/.exec(m[1])?.[1] ?? "normal",
-    weight: Number(/font-weight:\s*(\d+)/.exec(m[1])?.[1] ?? 400),
-    url: /src: url\((https:[^)]+\.ttf)\)/.exec(m[1])?.[1],
-  }));
-  return Promise.all(
-    faces
-      .filter((x) => x.url)
-      .map(async (x) => ({ style: x.style, weight: x.weight, data: await fetch(x.url!, { signal: AbortSignal.timeout(3000) }).then((r) => r.arrayBuffer()) })),
-  );
-}
-function loadFonts(): Promise<Font[]> {
-  fonts ??= Promise.all([gfont("Instrument+Serif:ital@0;1"), gfont("Bricolage+Grotesque:wght@600;700"), gfont("JetBrains+Mono:wght@500")])
-    .then((sets): Font[] =>
-      sets.flatMap((set, i) =>
-        set.map((x) => ({
-          name: ["Serif", "Sans", "Mono"][i],
-          data: x.data,
-          style: x.style === "italic" ? ("italic" as const) : ("normal" as const),
-          weight: x.weight as Font["weight"],
-        })),
-      ),
-    )
-    .catch(() => {
-      fonts = null; // try again on the next request
+/** Bundled TrueType (OFL fonts, ./og-fonts): read from disk, not fetched, so a cold render stays inside X's patience. */
+const FACES: [file: string, name: string, weight: Font["weight"], style: Font["style"]][] = [
+  ["InstrumentSerif-400-normal.ttf", "Serif", 400, "normal"],
+  ["InstrumentSerif-400-italic.ttf", "Serif", 400, "italic"],
+  ["BricolageGrotesque-600-normal.ttf", "Sans", 600, "normal"],
+  ["BricolageGrotesque-700-normal.ttf", "Sans", 700, "normal"],
+  ["JetBrainsMono-500-normal.ttf", "Mono", 500, "normal"],
+];
+let fonts: Font[] | null = null;
+function loadFonts(): Font[] {
+  if (fonts) return fonts;
+  const dir = join(process.cwd(), "app/c/[code]/og-fonts");
+  fonts = FACES.flatMap(([file, name, weight, style]) => {
+    try {
+      return [{ name, data: readFileSync(join(dir, file)), weight, style }];
+    } catch {
       return [];
-    });
+    }
+  });
   return fonts;
 }
 
-/** The card's seed art as data URLs (Qloo's CDN only, JPEG/PNG only, 2.5s each); anything else is skipped. */
+/** A card colour at an alpha. Type colours come as hex or as hsl()/rgb(), and the renderer rejects "hsl(...)88". */
+function alpha(c: string, a: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(c);
+  if (hex) return `#${hex[1]}${Math.round(a * 255).toString(16).padStart(2, "0")}`;
+  const fn = /^(hsl|rgb)a?\(([^)]+)\)$/i.exec(c.trim());
+  if (fn) {
+    const parts = fn[2].replace(/\s*\/.*$/, "").split(/[\s,]+/).filter(Boolean);
+    return `${fn[1].toLowerCase()}a(${parts.join(", ")}, ${a})`;
+  }
+  return c;
+}
+
+/** The card's seed art as data URLs (Qloo's CDN only, JPEG/PNG only, 1.5s each); anything else is skipped. */
 async function artOf(card: CardData): Promise<string[]> {
   const raw = card.art
     .map((a) => {
@@ -74,7 +73,7 @@ async function artOf(card: CardData): Promise<string[]> {
   const got = await Promise.all(
     raw.map(async (u) => {
       try {
-        const r = await fetch(u, { signal: AbortSignal.timeout(2500) });
+        const r = await fetch(u, { signal: AbortSignal.timeout(1500) });
         const type = r.headers.get("content-type") ?? "";
         if (!r.ok || !/^image\/(jpeg|png)/.test(type)) return null;
         const buf = Buffer.from(await r.arrayBuffer());
@@ -139,11 +138,11 @@ export default async function Image({ params }: { params: Promise<{ code: string
           color: INK,
           fontFamily: sans,
           backgroundColor: "#07070a",
-          backgroundImage: `radial-gradient(60% 80% at 22% 50%, ${a}55, transparent 70%), radial-gradient(50% 60% at 100% 0%, ${b}40, transparent 70%), radial-gradient(40% 50% at 70% 100%, ${a}30, transparent 70%)`,
+          backgroundImage: `radial-gradient(60% 80% at 22% 50%, ${alpha(a, 0.33)}, transparent 70%), radial-gradient(50% 60% at 100% 0%, ${alpha(b, 0.25)}, transparent 70%), radial-gradient(40% 50% at 70% 100%, ${alpha(a, 0.19)}, transparent 70%)`,
         }}
       >
         {/* the card */}
-        <div style={{ display: "flex", marginLeft: 70, transform: "rotate(-5deg)", padding: 7, borderRadius: 30, backgroundImage: frame, boxShadow: `0 30px 80px rgba(0,0,0,0.7), 0 0 70px ${a}55` }}>
+        <div style={{ display: "flex", marginLeft: 70, transform: "rotate(-5deg)", padding: 7, borderRadius: 30, backgroundImage: frame, boxShadow: `0 30px 80px rgba(0,0,0,0.7), 0 0 70px ${alpha(a, 0.33)}` }}>
           <div style={{ width: 392, height: 548, display: "flex", flexDirection: "column", borderRadius: 24, backgroundColor: "#121016", padding: 18 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: mono, fontSize: 12, letterSpacing: 2, color: INK2 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -158,14 +157,14 @@ export default async function Image({ params }: { params: Promise<{ code: string
             <div style={{ display: "flex", marginTop: 2, fontFamily: serif, fontStyle: "italic", fontSize: card.archetype.length > 28 ? 27 : 32, lineHeight: 1.05 }}>{card.archetype}</div>
 
             {/* art window */}
-            <div style={{ display: "flex", position: "relative", marginTop: 12, height: 190, borderRadius: 14, overflow: "hidden", backgroundImage: `linear-gradient(135deg, ${a}66, ${b}66)` }}>
+            <div style={{ display: "flex", position: "relative", marginTop: 12, height: 190, borderRadius: 14, overflow: "hidden", backgroundImage: `linear-gradient(135deg, ${alpha(a, 0.4)}, ${alpha(b, 0.4)})` }}>
               <div style={{ display: "flex", flexWrap: "wrap", width: "100%", height: "100%" }}>
                 {tiles.map((src, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img key={i} src={src} alt="" style={{ width: tiles.length === 1 ? "100%" : "50%", height: tiles.length > 2 ? "50%" : "100%", objectFit: "cover" }} />
                 ))}
               </div>
-              <div style={{ display: "flex", position: "absolute", inset: 0, backgroundImage: `linear-gradient(160deg, ${a}40, rgba(10,8,14,0.55) 60%, ${b}55)` }} />
+              <div style={{ display: "flex", position: "absolute", inset: 0, backgroundImage: `linear-gradient(160deg, ${alpha(a, 0.25)}, rgba(10,8,14,0.55) 60%, ${alpha(b, 0.33)})` }} />
               {stars.length > 1 && (
                 <svg width="356" height="190" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", left: 0, top: 0 }}>
                   <polyline points={stars.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")} fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="0.7" />
@@ -184,7 +183,7 @@ export default async function Image({ params }: { params: Promise<{ code: string
             {/* big three */}
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               {big.map(([k, ty]) => (
-                <div key={k} style={{ display: "flex", flexDirection: "column", flex: 1, padding: "8px 10px", borderRadius: 12, border: `1px solid ${ty.a}88`, backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <div key={k} style={{ display: "flex", flexDirection: "column", flex: 1, padding: "8px 10px", borderRadius: 12, border: `1px solid ${alpha(ty.a, 0.53)}`, backgroundColor: "rgba(255,255,255,0.04)" }}>
                   <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: 2, color: INK2 }}>{k.toUpperCase()}</span>
                   <span style={{ marginTop: 3, fontSize: 15, fontWeight: 600, lineHeight: 1.1 }}>{ty.name}</span>
                 </div>

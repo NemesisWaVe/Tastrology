@@ -122,6 +122,20 @@ export function ShareSheet({
     return () => clearTimeout(t);
   }, [fmt, prepare]);
 
+  // Warm the link preview while the sheet is open: the first render of /c/<code>/opengraph-image takes seconds, and
+  // X's crawler gives up sooner and shows an empty box. The page names the exact (hashed) image URL X will ask for.
+  useEffect(() => {
+    if (!linkable) return;
+    const page = `/c/${encodeURIComponent(cardCode(card))}`;
+    fetch(page)
+      .then((r) => r.text())
+      .then((html) => {
+        const m = /property="og:image" content="([^"]+)"/.exec(html);
+        if (m) void fetch(m[1].replace(/&amp;/g, "&"), { mode: "no-cors" }).catch(() => {});
+      })
+      .catch(() => {});
+  }, [linkable, card]);
+
   const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}`;
   const link = (src: string) => {
     if (typeof window === "undefined") return "";
