@@ -14,6 +14,9 @@ export async function GET(request: Request) {
   if (!(await allow(`search:${clientId(request.headers)}`, 120, 10 * 60 * 1000)))
     return Response.json({ results: [], error: "Too many searches. Give it a minute." }, { status: 429 });
   try {
+    // vibes=only: the Vibes tab, tags alone (no entity search, one Qloo call). vibes=1: a few mixed into "everything".
+    if (url.searchParams.get("vibes") === "only")
+      return Response.json({ results: [], vibes: await searchVibes(q, 6).catch(() => []) }, { headers: { "cache-control": "public, max-age=300" } });
     const wantVibes = url.searchParams.get("vibes") === "1" && !kinds.length && q.length >= 3;
     const [results, vibes] = await Promise.all([searchEntities(q, kinds.length ? kinds : SEED_KINDS, 10), wantVibes ? searchVibes(q).catch(() => []) : []]);
     return Response.json(

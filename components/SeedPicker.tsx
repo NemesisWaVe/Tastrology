@@ -38,7 +38,7 @@ export const KIND_ICON: Record<string, string> = {
   vibe: "∿",
 };
 
-const FILTERS: (EntityKind | "all")[] = ["all", "artist", "movie", "tv_show", "book", "place", "podcast", "videogame"];
+const FILTERS: (EntityKind | "vibe")[] = ["vibe", "artist", "movie", "tv_show", "book", "place", "podcast", "videogame"];
 const TRY = ["Frank Ocean", "Aftersun", "Hades", "Fleabag", "ramen", "shoegaze", "The Secret History"];
 const MAX = 8;
 const VIBES_MAX = 2;
@@ -63,7 +63,8 @@ function dedupe(xs: Seed[]): Seed[] {
 /** Qloo-backed autocomplete. Seeds come back with real Qloo entity ids. */
 export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: Seed[]) => void }) {
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState<EntityKind | "all">("all");
+  // "all" = no chip pressed: named things plus a few vibes. Tapping a pressed chip goes back to it.
+  const [kind, setKind] = useState<EntityKind | "vibe" | "all">("all");
   const [hits, setHits] = useState<Seed[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -85,14 +86,14 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind !== "all" ? `&types=${kind}` : "&vibes=1"}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind === "vibe" ? "&vibes=only" : kind !== "all" ? `&types=${kind}` : "&vibes=1"}`);
         const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[] };
         if (id === req.current) {
           const ents = dedupe(data.results ?? []);
-          const vs: Seed[] = (data.vibes ?? []).slice(0, 2).map((v) => ({ id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` }));
+          const vs: Seed[] = (data.vibes ?? []).slice(0, kind === "vibe" ? 6 : 2).map((v) => ({ id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` }));
           // A vibe that matches the words exactly ("ramen") goes first; otherwise it follows the top named hits.
           const exact = vs.filter((v) => norm(v.name) === norm(q));
-          const rest = exact.length ? [] : vs;
+          const rest = kind === "vibe" ? vs.filter((v) => !exact.includes(v)) : exact.length ? [] : vs;
           // With the vibe on offer, places that are only called "Ramen" are noise, not what was meant.
           const named = exact.length ? ents.filter((e) => !(e.kind === "place" && norm(e.name) === norm(q))) : ents;
           setHits([...exact, ...named.slice(0, 3), ...rest, ...named.slice(3)].slice(0, 7));
@@ -145,13 +146,28 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         {FILTERS.map((k) => (
           <button
             key={k}
-            onClick={() => setKind(k)}
+            onClick={() => setKind((cur) => (cur === k ? "all" : k))}
             aria-pressed={kind === k}
             className={`shrink-0 rounded-full border px-3 py-1.5 text-[12px] transition ${
-              kind === k ? "border-ink bg-ink text-paper" : "border-line text-ink-2 hover:border-ink-3 hover:text-ink"
+              k === "vibe"
+                ? kind === k
+                  ? "border-transparent font-semibold text-paper"
+                  : "border-transparent font-semibold"
+                : kind === k
+                  ? "border-ink bg-ink text-paper"
+                  : "border-line text-ink-2 hover:border-ink-3 hover:text-ink"
             }`}
+            style={
+              k === "vibe"
+                ? kind === k
+                  ? { background: "var(--holo)" }
+                  : { background: "linear-gradient(#0c0c11, #0c0c11) padding-box, var(--holo) border-box" }
+                : undefined
+            }
           >
-            {k === "all" ? "Anything" : (
+            {k === "vibe" ? (
+              <span style={kind === k ? undefined : { backgroundImage: "var(--holo)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>∿ Vibes</span>
+            ) : (
               <>
                 <span className="mr-1 opacity-60">{KIND_ICON[k]}</span>
                 {KIND_LABEL[k]}
@@ -160,6 +176,20 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
           </button>
         ))}
       </div>
+      <p className="-mt-1 mb-3 text-[12.5px] text-ink-3">
+        Don&apos;t know what your taste is?{" "}
+        <button
+          type="button"
+          onClick={() => {
+            setKind("vibe");
+            input.current?.focus();
+          }}
+          className="font-semibold"
+          style={{ backgroundImage: "var(--holo)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
+        >
+          Go with your vibes.
+        </button>
+      </p>
 
       <div className="relative">
         <div className="group relative flex items-center rounded-2xl border border-line bg-black/30 transition focus-within:border-accent/70 focus-within:shadow-[0_0_0_4px_rgba(198,255,61,0.08)]">
@@ -198,7 +228,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
               }
               if (e.key === "Escape") setOpen(false);
             }}
-            placeholder={full ? "That's plenty: 8 max" : "Search anything you love…"}
+            placeholder={full ? "That's plenty: 8 max" : kind === "vibe" ? "ramen, shoegaze, hiking, vintage…" : "Search anything you love…"}
             disabled={full}
             className="w-full min-w-0 bg-transparent px-3 py-4 text-[16px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-50"
             aria-label="Search Qloo for something you love"
