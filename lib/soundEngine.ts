@@ -7,7 +7,7 @@ import { type ScrubMaterial, setEngine, type Sfx, type SfxOpts } from "./sound";
  * short decays, a little stereo. See docs/design/sound.md. Off by default; persisted in localStorage.
  */
 const KEY = "tastrology:sound";
-const MASTER = 0.35;
+const MASTER = 0.7;
 const PENTA = [0, 2, 4, 7, 9]; // major pentatonic semitones
 
 let ctx: AudioContext | null = null;
@@ -43,9 +43,9 @@ function ensure(): AudioContext | null {
     master = c.createGain();
     master.gain.value = MASTER;
     const comp = c.createDynamicsCompressor();
-    comp.threshold.value = -20;
+    comp.threshold.value = -14;
     comp.knee.value = 24;
-    comp.ratio.value = 3;
+    comp.ratio.value = 4;
     comp.attack.value = 0.005;
     comp.release.value = 0.2;
     master.connect(comp).connect(c.destination);
@@ -228,7 +228,7 @@ function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
       [12, 7, 0].forEach((st, k) => tone(c, t + k * 0.07, pent(392, st), 0.7, 0.05 * gv, { attack: 0.02, send: 0.6, pan: (k - 1) * 0.3 }));
       break;
     case "flake": // a fleck of foil: a tiny bright click
-      noise(c, t, 0.014, 0.05 * gv, { type: "highpass", f0: 6000 + (Math.random() - 0.5) * 600, attack: 0.001, send: 0.04, pan: (Math.random() - 0.5) * 0.5 });
+      noise(c, t, 0.014, 0.1 * gv, { type: "highpass", f0: 6000 + (Math.random() - 0.5) * 600, attack: 0.001, send: 0.04, pan: (Math.random() - 0.5) * 0.5 });
       break;
     case "scratchDone": // foil cleared: a reverse whoosh, a soft thock, then a chord that climbs with the streak
       noise(c, t, 0.14, 0.18 * gv, { type: "bandpass", f0: 600, f1: 5000, q: 0.9, attack: 0.11, send: 0.25 });
@@ -320,7 +320,7 @@ function scrubMove(speed: number, x: number, cover: number) {
   if (!sc || !c) return;
   const t = c.currentTime;
   const v = Math.min(1, Math.max(0, speed));
-  const target = 0.22 * Math.pow(v, 0.7) * sc.gj * sc.m.gv;
+  const target = 0.4 * Math.pow(v, 0.7) * sc.gj * sc.m.gv;
   sc.g.gain.setTargetAtTime(target, t, target > sc.s ? 0.015 : 0.04);
   sc.bp.frequency.setTargetAtTime((sc.m.f * sc.det + 2600 * v) * (1 + 0.25 * cover), t, 0.03);
   sc.pan.pan.setTargetAtTime((x - 0.5) * 0.6, t, 0.05);
@@ -334,7 +334,7 @@ function scrubMove(speed: number, x: number, cover: number) {
   let n = 0;
   while (sc.next < t + 0.03 && n++ < 6) {
     const at = Math.max(t, sc.next);
-    noise(c, at, 0.006 + Math.random() * 0.008, (0.04 + Math.random() * 0.06) * sc.m.gv, {
+    noise(c, at, 0.006 + Math.random() * 0.008, (0.08 + Math.random() * 0.1) * sc.m.gv, {
       type: "bandpass",
       f0: (sc.m.g0 + Math.random() * (sc.m.g1 - sc.m.g0)) * sc.det,
       q: 3,
