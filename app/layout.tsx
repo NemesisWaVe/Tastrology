@@ -61,6 +61,8 @@ const CLERK_LOOK = {
     fontFamily: "var(--nf-display), system-ui, sans-serif",
     borderRadius: "14px",
   },
+  // Still on Clerk's development instance (production needs a domain we own): hide its "Development mode" badges.
+  layout: { unsafe_disableDevelopmentModeWarnings: true },
   // Username changes go through /friends (one free, then Stardust) and closing an account through /account (it
   // clears friends and bouts first), so Clerk's own profile hides both.
   elements: {
