@@ -38,3 +38,48 @@ export async function isAdmin(userId: string | null): Promise<boolean> {
   adminCache.set(userId, { admin, until: Date.now() + 5 * 60 * 1000 });
   return admin;
 }
+
+const nameCache = new Map<string, { u: string | null; until: number }>();
+
+/** The Clerk username (picked at sign-up), lowercased; null if none; undefined if Clerk couldn't be read. Cached a minute. */
+export async function clerkUsername(userId: string): Promise<string | null | undefined> {
+  if (!clerkOn()) return undefined;
+  const hit = nameCache.get(userId);
+  if (hit && hit.until > Date.now()) return hit.u;
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const u = (await (await clerkClient()).users.getUser(userId)).username?.toLowerCase() || null;
+    nameCache.set(userId, { u, until: Date.now() + 60_000 });
+    return u;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Writes the username to Clerk. "taken" when another Clerk account has it; "off" when Clerk usernames aren't enabled. */
+export async function setClerkUsername(userId: string, username: string): Promise<"ok" | "taken" | "off" | "error"> {
+  if (!clerkOn()) return "off";
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    await (await clerkClient()).users.updateUser(userId, { username });
+    nameCache.set(userId, { u: username, until: Date.now() + 60_000 });
+    return "ok";
+  } catch (e) {
+    const code = (e as { errors?: { code?: string }[] })?.errors?.[0]?.code ?? "";
+    if (code === "form_identifier_exists" || code === "form_username_exists") return "taken";
+    if (code.startsWith("form_param") || code.includes("not_allowed") || code.includes("unknown")) return "off";
+    return "error";
+  }
+}
+
+export async function deleteClerkUser(userId: string): Promise<boolean> {
+  if (!clerkOn()) return false;
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    await (await clerkClient()).users.deleteUser(userId);
+    nameCache.delete(userId);
+    return true;
+  } catch {
+    return false;
+  }
+}

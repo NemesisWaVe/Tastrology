@@ -35,8 +35,10 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 
 export interface Player {
   pc: string;
-  /** Unique @username, chosen once on the friends page (lowercase a-z, 0-9, _). */
+  /** Unique @username (lowercase a-z, 0-9, _): picked at Clerk sign-up and mirrored here, where friends look it up. */
   user?: string;
+  /** Times the username was changed after the first pick: the first change is free, then each costs RENAME_DUST. */
+  renames?: number;
   name: string;
   card: string;
   rarity: string;
@@ -87,7 +89,16 @@ async function ownCards(uid: string): Promise<DeckCard[] | null> {
 }
 
 const toPlayer = (it: Flat | null): Player | null =>
-  it && str(it.pc) ? { pc: str(it.pc), ...(str(it.user) ? { user: str(it.user) } : {}), name: str(it.name), card: str(it.card), rarity: str(it.rarity) || "common" } : null;
+  it && str(it.pc)
+    ? {
+        pc: str(it.pc),
+        ...(str(it.user) ? { user: str(it.user) } : {}),
+        ...(Number(it.renames) ? { renames: Number(it.renames) } : {}),
+        name: str(it.name),
+        card: str(it.card),
+        rarity: str(it.rarity) || "common",
+      }
+    : null;
 
 /** Your player profile, made on first use. Picks your rarest card as your fighter until you choose one. */
 export async function ensurePlayer(uid: string): Promise<Player | null> {
@@ -161,6 +172,37 @@ const edge = (p: Player & { uid: string }, at: number) => ({ uid: p.uid, pc: p.p
 export const USERNAME = /^[a-z0-9_]{3,20}$/;
 const RESERVED = new Set(["admin", "tastrology", "support", "help", "official", "mod", "moderator", "staff", "qloo", "root", "system"]);
 export const normUser = (raw: string) => raw.trim().replace(/^@/, "").toLowerCase();
+
+export const FREE_RENAMES = 1;
+export const RENAME_DUST = 50;
+/** What changing your username costs now: the first pick and the first change are free. */
+export const renameFee = (me: Player) => (me.user && (me.renames ?? 0) >= FREE_RENAMES ? RENAME_DUST : 0);
+
+/** Whether a username can be yours: well formed, not reserved, and not held by another account. */
+export async function nameFree(uid: string, raw: string): Promise<"ok" | "bad" | "taken" | "error"> {
+  const u = normUser(raw);
+  if (!USERNAME.test(u) || RESERVED.has(u) || blocked(u.replace(/_/g, " "))) return "bad";
+  const st = await ddbGetStatus(`NAME#${u}`, "META");
+  if (st.status === "error") return "error";
+  const owner = st.status === "found" ? str(st.value.uid) : "";
+  return owner && owner !== uid ? "taken" : "ok";
+}
+
+/** Counts a change and takes its fee in one transaction (the fee is 0 for the free change). */
+export async function chargeRename(uid: string, fee: number): Promise<"ok" | "empty" | "error"> {
+  const now = Date.now();
+  const count: TxOp = { update: { PK: U(uid), SK: "PLAYER" }, set: "ADD renames :one", values: { ":one": 1 } };
+  const ops: TxOp[] = fee
+    ? [
+        { update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust - :f, v = v + :one", condition: "dust >= :f", values: { ":f": fee, ":one": 1 } },
+        { put: { PK: U(uid), SK: `LEDGER#dust#rename#${now.toString(36)}`, delta: -fee, unit: "dust", reason: "rename", at: now }, condition: "attribute_not_exists(PK)" },
+        count,
+      ]
+    : [count];
+  const r = await ddbTransact(ops);
+  if (!r) return "error";
+  return r.ok ? "ok" : r.reasons[0] === CCF ? "empty" : "error";
+}
 
 /** The account behind an @username, for adding by name. */
 export async function lookupUser(raw: string): Promise<(Player & { uid: string }) | null> {
@@ -440,4 +482,34 @@ export async function closeBout(uid: string, sk: string): Promise<"closed" | "go
     return "closed";
   }
   return r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : "error";
+}
+
+/* ------------------------------------------------------------ leaving */
+
+/**
+ * Takes a player out of everyone's world before the account is deleted: open bouts are closed (stakes go back to
+ * whoever put them up), requests and friendships are dropped on both sides, and the username and player code are freed.
+ * Cards stay where they are: a shared card page carries no account details.
+ */
+export async function wipePlayer(uid: string): Promise<boolean> {
+  const me = toPlayer(await ddbGet(U(uid), "PLAYER"));
+  if (!me) return true;
+  const [bouts, reqs, sent, friends] = await Promise.all([
+    ddbQuery(U(uid), "BOUT#", 200, undefined, ["SK", "status"]),
+    ddbQuery(U(uid), "REQ#", 50, undefined, ["pc"]),
+    ddbQuery(U(uid), "SENT#", 50, undefined, ["pc"]),
+    ddbQuery(U(uid), "FRIEND#", FRIENDS_MAX, undefined, ["pc"]),
+  ]);
+  if (!bouts || !reqs || !sent || !friends) return false;
+  const res = await Promise.all([
+    ...bouts.items.filter((b) => b.status === "open").map((b) => closeBout(uid, str(b.SK)).then((r) => r !== "error")),
+    ...[...reqs.items, ...sent.items].map((r) => dropRequest(uid, me, str(r.pc))),
+    ...friends.items.map((f) => removeFriend(uid, me, str(f.pc))),
+  ]);
+  const del = await Promise.all([
+    me.user ? ddbDelete(`NAME#${me.user}`, "META", { condition: "uid = :me", values: { ":me": uid } }) : "deleted",
+    ddbDelete(`PLAYER#${me.pc}`, "META"),
+    ddbDelete(U(uid), "PLAYER"),
+  ]);
+  return !res.includes(false) && !del.includes("error");
 }

@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -123,6 +123,51 @@ describe("friends", () => {
     await setFighter("ann", a, cards[1]);
     expect((await listFriends("bo"))![0]).toMatchObject({ card: cards[1], name: names[1] });
     expect(await setFighter("ann", a, "9999-ZZZZ")).toBeNull();
+  });
+});
+
+describe("accounts", () => {
+  it("makes the first change free, then charges Stardust for each one", async () => {
+    const [a] = await pair();
+    wallet("ann", 60);
+    expect(renameFee(a)).toBe(0);
+    const named = { ...a, user: "ann" };
+    expect(renameFee(named)).toBe(0);
+    expect(await chargeRename("ann", 0)).toBe("ok");
+    const once = (await ensurePlayer("ann"))!;
+    expect(once.renames).toBe(1);
+    expect(renameFee({ ...once, user: "ann" })).toBe(RENAME_DUST);
+    expect(await chargeRename("ann", RENAME_DUST)).toBe("ok");
+    expect(dust("ann")).toBe(10);
+    expect(await chargeRename("ann", RENAME_DUST)).toBe("empty");
+    expect((await ensurePlayer("ann"))!.renames).toBe(2);
+  });
+
+  it("checks a name is free before Clerk is asked", async () => {
+    const [a] = await pair();
+    await setUsername("ann", a, "ann_k");
+    expect(await nameFree("bo", "@ANN_K")).toBe("taken");
+    expect(await nameFree("ann", "ann_k")).toBe("ok");
+    expect(await nameFree("bo", "admin")).toBe("bad");
+    expect(await nameFree("bo", "bo_b")).toBe("ok");
+  });
+
+  it("clears a closing account out of friends, requests and open fights, and frees its name and code", async () => {
+    const [a, b] = await pair();
+    own("cy", 0);
+    const c = (await ensurePlayer("cy"))!;
+    await addFriend("cy", c, a.pc);
+    await setUsername("ann", a, "ann_k");
+    wallet("bo", 50);
+    await openBout("bo", b, a.pc, 25);
+    expect(dust("bo")).toBe(25);
+    expect(await wipePlayer("ann")).toBe(true);
+    expect(dust("bo")).toBe(50);
+    expect(await listFriends("bo")).toEqual([]);
+    expect((await listRequests("cy"))!.sent).toEqual([]);
+    expect(await lookupUser("ann_k")).toBeNull();
+    expect(await lookupPlayer(a.pc)).toBeNull();
+    expect((await listBouts("bo"))![0].status).toBe("declined");
   });
 });
 

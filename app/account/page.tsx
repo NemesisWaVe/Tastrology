@@ -144,6 +144,8 @@ export default function AccountPage() {
               </button>
             </div>
           </section>
+
+          <CloseAccount onDone={() => void bridge?.signOut().finally(() => (location.href = "/"))} />
         </div>
       )}
     </SiteShell>
@@ -170,6 +172,61 @@ function StardustPanel({ s }: { s: NonNullable<Me["stardust"]> }) {
       {s.economy && (
         <div className="mt-6">
           <StardustTable e={s.economy} weekLeft={s.weekLeft} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Closing the account: friends, requests and open fights are cleared first, then the account itself goes. */
+function CloseAccount({ onDone }: { onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true);
+    setErr(null);
+    const r = await fetch("/api/account", { method: "DELETE" }).catch(() => null);
+    const j = (await r?.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (j?.ok) return onDone();
+    setErr(j?.error ?? "Couldn't reach the server.");
+    setBusy(false);
+  };
+  return (
+    <section className="rounded-3xl border border-line bg-card p-6 sm:col-span-2">
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Close account</p>
+      {!open ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+          <p className="max-w-xl text-sm text-ink-2">Removes you from your friends&apos; lists, returns any Stardust riding on open fights, and frees your username.</p>
+          <button onClick={() => setOpen(true)} className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
+            Close account
+          </button>
+        </div>
+      ) : (
+        <div className="mt-3">
+          <p className="max-w-xl text-sm text-ink-2">
+            This can&apos;t be undone. Your deck, credits and Stardust go with it. Cards you already shared stay readable at their links, with no name on them.
+          </p>
+          <p className="mt-4 text-sm text-ink-2">
+            Type <span className="font-mono text-ink">close</span> to confirm.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value.toLowerCase())}
+              aria-label="Type close to confirm"
+              autoCapitalize="none"
+              className="min-w-0 flex-1 rounded-full border border-line bg-paper px-4 py-2 font-mono text-ink"
+            />
+            <button onClick={() => void go()} disabled={typed !== "close" || busy} className="rounded-full border border-bad/60 px-5 py-2 text-sm font-semibold text-bad disabled:opacity-40">
+              {busy ? "Closing" : "Close for good"}
+            </button>
+            <button onClick={() => setOpen(false)} className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 hover:text-ink">
+              Keep it
+            </button>
+          </div>
+          {err && <p className="mt-3 text-sm text-bad">{err}</p>}
         </div>
       )}
     </section>

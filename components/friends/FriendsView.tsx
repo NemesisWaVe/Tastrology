@@ -19,6 +19,8 @@ type Data = {
   dustOn?: boolean;
   dust?: number | null;
   stakes?: number[];
+  /** What a username change costs now (0 while the free one is unused). */
+  rename?: { fee: number; free: number; cost: number };
   inbox?: number | null;
   error?: string;
 };
@@ -203,7 +205,13 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
         {naming && (
           <section className="rounded-[22px] border border-accent/50 bg-accent/5 p-5 sm:p-6">
             <p className={`${mono} text-accent`}>{me.user ? "Change your username" : "Pick your username"}</p>
-            <p className="mt-2 text-sm text-ink-2">It&apos;s how friends find you and see you. Letters, numbers and _.</p>
+            <p className="mt-2 text-sm text-ink-2">
+              {me.user
+                ? d.rename?.fee
+                  ? `This change costs ${d.rename.fee} Stardust. Friends see the new name right away.`
+                  : `Your first change is free. After that each one costs ${d.rename?.cost ?? 50} Stardust.`
+                : "It's how friends find you and see you. Letters, numbers and _. Your email never shows."}
+            </p>
             <form
               className="mt-3 flex gap-2"
               onSubmit={(e) => {
@@ -240,7 +248,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
               <span className="font-serif text-3xl italic">@{me.user}</span>
               {!editName && (
                 <button type="button" onClick={() => setEditName(true)} className={`${mono} text-ink-3 hover:text-ink`}>
-                  Change
+                  {d.rename?.fee ? `Change · ${d.rename.fee} dust` : "Change · free once"}
                 </button>
               )}
             </p>

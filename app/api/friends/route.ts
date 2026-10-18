@@ -1,6 +1,6 @@
-import { clerkOn, currentUserId } from "@/lib/auth";
+import { clerkOn, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, acceptFriend, addFriend, BOUT_SK, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
 import { TWIN_CODE } from "@/lib/twins";
@@ -30,12 +30,29 @@ export async function GET(request: Request) {
   if (!uid) return json({ on: true, signedIn: false });
   // Live updates: the page polls this one counter and reloads only when it moves.
   if (q.get("ping")) return json({ n: await inboxCount(uid) });
-  const me = await ensurePlayer(uid);
-  if (!me) return json({ error: "Couldn't reach the server." }, 503);
-  if (q.get("whoami")) return json({ on: true, signedIn: true, me });
+  const me0 = await ensurePlayer(uid);
+  if (!me0) return json({ error: "Couldn't reach the server." }, 503);
+  if (q.get("whoami")) return json({ on: true, signedIn: true, me: me0 });
+  const me = await syncName(uid, me0);
   const dOn = dustOn();
   const [inbox, friends, requests, bouts, ds] = await Promise.all([inboxCount(uid), listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
-  return json({ on: true, signedIn: true, inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES });
+  return json({ on: true, signedIn: true, inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES, rename: { fee: renameFee(me), free: FREE_RENAMES, cost: RENAME_DUST } });
+}
+
+/**
+ * Clerk holds the username people pick at sign-up; this table holds the copy friends look up. A first visit claims
+ * the Clerk name here, an older name picked here is written back to Clerk, and a change made outside our rename flow
+ * (which charges after the free one) is put back.
+ */
+async function syncName(uid: string, me: Player): Promise<Player> {
+  const cu = await clerkUsername(uid);
+  if (cu === undefined || cu === me.user) return me;
+  if (cu && !me.user) {
+    const r = await setUsername(uid, me, cu);
+    return r.ok ? r.me : me;
+  }
+  if (me.user) await setClerkUsername(uid, me.user);
+  return me;
 }
 
 type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string; user?: string };
@@ -53,9 +70,28 @@ export async function POST(request: Request) {
 
   switch (b.op) {
     case "username": {
-      const r = await setUsername(uid, me, String(b.user ?? ""));
+      // Clerk first (it guards uniqueness across every account), then our copy; the fee is taken last, once it worked.
+      const u = normUser(String(b.user ?? ""));
       const msg = { bad: "3 to 20 letters, numbers or _, and nothing rude.", taken: "That username is taken.", error: "Couldn't reach the server." } as const;
-      return r.ok ? json({ ok: true, me: r.me }) : json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);
+      if (u === me.user) return json({ ok: true, me });
+      const fee = renameFee(me);
+      if (fee) {
+        if (!dustOn()) return json({ error: "You've used your one change." }, 400);
+        if (((await dustStatus(uid).catch(() => null))?.dust ?? 0) < fee) return json({ error: `Changing again costs ${fee} Stardust.` }, 400);
+      }
+      const free = await nameFree(uid, u);
+      if (free !== "ok") return json({ error: msg[free] }, free === "error" ? 503 : 400);
+      const c = await setClerkUsername(uid, u);
+      if (c === "taken") return json({ error: msg.taken }, 400);
+      if (c === "error") return json({ error: msg.error }, 503);
+      const r = await setUsername(uid, me, u);
+      if (!r.ok) {
+        if (c === "ok" && me.user) await setClerkUsername(uid, me.user);
+        return json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);
+      }
+      if (!me.user) return json({ ok: true, me: r.me });
+      await chargeRename(uid, fee);
+      return json({ ok: true, me: { ...r.me, renames: (me.renames ?? 0) + 1 } });
     }
     case "add": {
       if (!me.user) return json({ error: "Pick your username first." }, 400);

@@ -61,4 +61,10 @@ const CLERK_LOOK = {
     fontFamily: "var(--nf-display), system-ui, sans-serif",
     borderRadius: "14px",
   },
+  // Username changes go through /friends (one free, then Stardust) and closing an account through /account (it
+  // clears friends and bouts first), so Clerk's own profile hides both.
+  elements: {
+    profileSection__username: { display: "none" },
+    profileSection__danger: { display: "none" },
+  },
 };
