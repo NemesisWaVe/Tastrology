@@ -123,6 +123,9 @@ export default function DeckPage() {
   const [armed, setArmed] = useState<string | null>(null);
   const [burning, setBurning] = useState<string | null>(null);
   const counterRef = useRef<HTMLDivElement>(null);
+  // While a burn plays and the header counter is off screen, a copy docks at the top so the dust has somewhere to land.
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [dock, setDock] = useState(false);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
 
   /** Hold heat: the edges char inward and the foil runs hot. */
@@ -148,8 +151,16 @@ export default function DeckPage() {
     if (!reduce) playBurnSound();
     const el = cardEls.current.get(code);
     const colors = [...card.types.flatMap((t) => [t.a, t.b]), RARITY_GLOW[card.rarity], RARITY_GLOW[card.rarity]];
-    const fx = el ? dissolve(el, { target: burn?.dustOn ? counterRef.current : null, colors, reduce }) : null;
+    let target: HTMLElement | null = burn?.dustOn ? counterRef.current : null;
+    const tr = target?.getBoundingClientRect();
+    if (target && tr && (tr.bottom < 8 || tr.top > window.innerHeight - 8)) {
+      setDock(true);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      target = dockRef.current ?? target;
+    }
+    const fx = el ? dissolve(el, { target, colors, reduce }) : null;
     const [res] = await Promise.all([burnFromDeck(code, regret), fx?.done]);
+    setTimeout(() => setDock(false), 1400);
     if (!res.httpOk || !res.status) {
       fx?.restore();
       heat(code, 0);
@@ -205,6 +216,11 @@ export default function DeckPage() {
         {burn?.on && !local && (
           <div className="mt-6 flex flex-wrap items-center gap-4">
             {burn.dustOn && <DustCounter ref={counterRef} value={burn.dust ?? 0} weekLeft={burn.weekLeft} reduce={reduce} />}
+            {burn.dustOn && dock && (
+              <div className="fixed inset-x-0 top-20 z-[70] flex justify-center">
+                <DustCounter ref={dockRef} value={burn.dust ?? 0} weekLeft={null} reduce={reduce} />
+              </div>
+            )}
           </div>
         )}
 

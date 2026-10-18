@@ -139,6 +139,8 @@ export function dissolve(el: HTMLElement, opts: { target?: HTMLElement | null; c
       const ms = now - t0;
       const dt = Math.min(48, now - last) / 16.67;
       last = now;
+      const live = opts.target?.getBoundingClientRect();
+      const aim = live ? { x: live.left + live.width / 2, y: live.top + live.height / 2 } : { x: tx, y: ty };
 
       // Card: shudder + flash while it cracks, then the burn mask eats it bottom-up.
       const crack = Math.min(1, ms / CRACK_MS);
@@ -241,8 +243,11 @@ export function dissolve(el: HTMLElement, opts: { target?: HTMLElement | null; c
           alive++;
           const e = smooth(k);
           const u = 1 - e;
-          let x = u * u * p.x0 + 2 * u * e * p.cx + e * e * p.x1;
-          const y = u * u * p.y0 + 2 * u * e * p.cy + e * e * p.y1;
+          // The counter is aimed at where it is now, not where it was when the burn began (scrolls, layout shifts).
+          const x1 = tr ? aim.x + (p.x1 - tx) : p.x1;
+          const y1 = tr ? aim.y + (p.y1 - ty) : p.y1;
+          let x = u * u * p.x0 + 2 * u * e * p.cx + e * e * x1;
+          const y = u * u * p.y0 + 2 * u * e * p.cy + e * e * y1;
           x += Math.sin(p.seed + k * 9) * p.wob * (1 - k);
           ctx.globalAlpha = tr ? (k < 0.85 ? 1 : (1 - k) / 0.15) : 1 - k;
           ctx.fillStyle = p.color;
