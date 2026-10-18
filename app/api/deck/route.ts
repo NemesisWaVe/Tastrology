@@ -1,4 +1,5 @@
 import { clerkOn } from "@/lib/auth";
+import { styled } from "@/lib/cardStyle";
 import { previewDust, REGRETS_MAX, regretOn, regretWhy } from "@/lib/burn";
 import { ddbConfigured, ddbGet, ddbPutIfAbsent, ddbQuery } from "@/lib/ddb";
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
       });
     } catch {}
   }
+  await Promise.all(cards.map(async (c) => (c.card = await styled(c.code, c.card, c.minted).catch(() => c.card))));
   cards.sort((a, b) => b.addedAt - a.addedAt);
   const ds = dust ? await dustStatus(owner).catch(() => null) : null;
   const burn = { on: canBurn, dustOn: dust, dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null, regretsLeft: rOn ? Math.max(0, REGRETS_MAX - used) : 0 };

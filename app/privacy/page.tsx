@@ -87,7 +87,7 @@ export default function Page() {
       </Sec>
 
       <Sec n={6} title="Children">
-        <p>Accounts are for people 18 and over. If we learn a child has signed up, we delete the account.</p>
+        <p>Accounts are for people 13 and over. We ask for a birth year before the sign-up form and keep only the answer on your device. If we learn a child under 13 has signed up, we delete the account and its data.</p>
       </Sec>
 
       <Sec n={7} title="Security">

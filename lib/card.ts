@@ -32,6 +32,12 @@ export interface CardData {
   rarity: Rarity;
   /** Minted with a regret credit: shown as a "Second draw" mark. */
   secondDraw?: boolean;
+  /** Display extras from CARD#<code> STYLE (lib/cardStyle.ts), never part of the code. */
+  living?: boolean;
+  /** Holo and Secret only: the order it was pulled in its tier ("Secret Rare #4"). */
+  rarityNo?: number;
+  /** Territories its brands were recast into. */
+  recasts?: string[];
   rarityLabel: string;
   serial: string;
   /** `cut`: the love whose removal costs this brand the most affinity points (leave-one-out re-query). */

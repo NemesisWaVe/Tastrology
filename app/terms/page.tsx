@@ -28,8 +28,9 @@ export default function Page() {
 
       <Sec n={2} title="Who can use it">
         <p>
-          You need to be <strong>18 or older</strong> to create an account. Demo readings of the sample personas need no account. Don&apos;t use
-          Tastrology where the law forbids it.
+          You need to be <strong>13 or older</strong> to create an account, and older if your country sets a higher age for using services
+          like this on your own. Anything that costs money needs someone 18 or older to pay; if you&apos;re under 18, ask a parent or guardian.
+          Demo readings of the sample personas need no account. Don&apos;t use Tastrology where the law forbids it.
         </p>
       </Sec>
 

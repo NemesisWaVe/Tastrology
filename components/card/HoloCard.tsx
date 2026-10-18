@@ -140,7 +140,7 @@ export const HoloCard = forwardRef<
 
     return (
       <div className={`${s.scene} ${className}`} style={{ width }}>
-        <div ref={root} className={`${s.card} ${s[card.rarity]}`} style={style} data-rarity={card.rarity} data-print={print ? "1" : undefined}>
+        <div ref={root} className={`${s.card} ${s[card.rarity]}`} style={style} data-rarity={card.rarity} data-living={card.living || card.rarity === "holo" || card.rarity === "secret" ? "1" : undefined} data-print={print ? "1" : undefined}>
           <DotoFont />
           <CardFace card={card} />
           <div className={s.frameShine} aria-hidden />
@@ -167,10 +167,12 @@ function CardFace({ card }: { card: CardData }) {
         <span className={s.serial}>
           <b className={s.dots}>№{card.serial}</b> {BRAND.cardSet}
           {card.secondDraw && <> · 2nd draw</>}
+          {!!card.recasts?.length && <> · recast ×{card.recasts.length}</>}
         </span>
         <span className={`${s.rarity} ${s.heroRarity}`}>
           <i>{GEMS[card.rarity]}</i>
           {card.rarityLabel}
+          {card.rarityNo ? ` #${card.rarityNo}` : ""}
         </span>
       </header>
 

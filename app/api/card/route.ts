@@ -1,5 +1,6 @@
 import { allow, clientId } from "@/lib/ratelimit";
 import { getTwinStatus, TWIN_CODE } from "@/lib/twins";
+import { styled } from "@/lib/cardStyle";
 
 export const runtime = "nodejs";
 
@@ -16,5 +17,5 @@ export async function GET(request: Request) {
   if (status === "error") return Response.json({ card: null, error: "unavailable" }, { status: 503, headers: { "cache-control": "no-store", "retry-after": "5" } });
   if (!card) return Response.json({ card: null }, { status: 404, headers: { "cache-control": "public, max-age=60, s-maxage=60" } });
   // Not immutable any more: a burn has to reach the CDN within minutes, not a year.
-  return Response.json({ card }, { headers: { "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=60" } });
+  return Response.json({ card: await styled(code, card).catch(() => card) }, { headers: { "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=60" } });
 }

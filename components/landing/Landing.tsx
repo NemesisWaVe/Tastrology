@@ -1,5 +1,6 @@
 "use client";
 
+import { HallOfRares } from "./HallOfRares";
 import { Mark } from "@/components/site/Mark";
 import { ReactLenis, useLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
@@ -139,6 +140,7 @@ function LandingBody({ onStart, touch = false }: { onStart: (req: AgentRequest) 
         />
         <Marquee />
         <PersonaDeck onStart={onStart} />
+        <HallOfRares />
         <BringYourOwn onStart={onStart} />
         <Receipts result={shown} />
       </main>

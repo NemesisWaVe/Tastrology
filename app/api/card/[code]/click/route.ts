@@ -5,7 +5,7 @@ import { TWIN_CODE } from "@/lib/twins";
 export const runtime = "nodejs";
 
 const BRAND_ID = /^[A-Za-z0-9_-]{4,64}$/;
-const SRC = new Set(["deck", "share", "receipt", "results", "drift"]);
+const SRC = new Set(["deck", "share", "receipt", "results", "drift", "recast"]);
 
 /**
  * Counts a brand click-out (docs/design/brand-return-data.md §4): totals by day, brand, card and source. No user ids,

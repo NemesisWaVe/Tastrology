@@ -4,7 +4,12 @@ const LABEL = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secr
 
 /** What each card retires for and what Stardust buys. Same numbers the burn route pays (lib/economy.ts). */
 export function StardustTable({ e, dust, weekLeft }: { e: Economy; dust?: number | null; weekLeft?: number | null }) {
-  const spend = [e.pack !== null && { k: "Battle Pack", v: e.pack, note: "3 strangers to fight, one a day" }, e.reading !== null && { k: "Extra reading", v: e.reading, note: "a new card now" }].filter(
+  const spend = [
+    e.recast !== null && { k: "Recast", v: e.recast, note: "your card, read into a new territory of brands" },
+    e.pack !== null && { k: "Battle Pack", v: e.pack, note: "3 strangers to fight, one a day" },
+    e.living !== null && { k: "Living sigils", v: e.living, note: "your card's sigils breathe and turn" },
+    e.reading !== null && { k: "Extra reading", v: e.reading, note: "a new card now" },
+  ].filter(
     (x): x is { k: string; v: number; note: string } => Boolean(x),
   );
   const max = Math.max(...e.retire.map((r) => r.dust));
@@ -28,6 +33,13 @@ export function StardustTable({ e, dust, weekLeft }: { e: Economy; dust?: number
               <span className="w-12 text-right font-mono text-sm tabular-nums">{e.regretDust}</span>
             </li>
           )}
+          <li className="flex items-center gap-4 py-2.5">
+            <span className="flex-1 text-[14px] text-ink-2">
+              Keep it instead: every month a Holo pays <span className="text-accent">{e.dividend.holo}</span>, a Secret{" "}
+              <span className="text-accent">{e.dividend.secret}</span>
+            </span>
+            <span className="w-12 text-right font-mono text-sm tabular-nums text-ink-3">/mo</span>
+          </li>
           <li className="flex items-center gap-4 py-2.5 text-ink-3">
             <span className="flex-1 text-[14px]">Second draw, or a card bought with Stardust</span>
             <span className="w-12 text-right font-mono text-sm tabular-nums">0</span>

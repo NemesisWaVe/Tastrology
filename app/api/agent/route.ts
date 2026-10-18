@@ -20,6 +20,7 @@ import { registerFighter, toSheet } from "@/lib/fighters";
 import { dropLease, leaseHeld, takeLease } from "@/lib/runLease";
 import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
+import { numberCard } from "@/lib/cardStyle";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
 
@@ -151,6 +152,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         if (minter) await fileOwnMint(minter, code, card).catch(() => {});
         // Real people's fresh cards stock the Battle Pack pool (personas stay out).
         if (minter) bg(addToPool(code, card.rarity));
+        if (minter) bg(numberCard(code, card.rarity));
         bg(recordMint(code, SEASON, card.rarityScore));
       }
       // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of

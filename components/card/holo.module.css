@@ -813,10 +813,75 @@
   opacity: calc(var(--o) * 0.75);
 }
 .holo .faceFoil {
-  opacity: calc(var(--o) * 0.55);
+  opacity: calc(var(--o) * 0.7);
 }
 .secret .faceFoil {
-  opacity: calc(var(--o) * 0.5);
+  opacity: calc(var(--o) * 0.65);
+}
+
+/* Living sigils: the sign sigils breathe and the type sigils turn. Built into Holo and Secret, bought with Stardust
+   for any other card (lib/cardStyle.ts). */
+.card[data-living] .sigil {
+  animation: sigilBreathe 3.6s ease-in-out infinite;
+}
+.card[data-living] .typeSigil {
+  animation: sigilTurn 16s linear infinite;
+}
+@keyframes sigilBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0.5cqw var(--c1));
+  }
+  50% {
+    transform: scale(1.16);
+    filter: drop-shadow(0 0 1.7cqw var(--c1));
+  }
+}
+@keyframes sigilTurn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The crest: Holo and Secret only, never sold. The rosette wakes up, turns and takes the tier's metal. */
+.holo .rosette,
+.secret .rosette {
+  opacity: 0.5;
+  stroke-width: 0.24;
+  animation: crest 70s linear infinite;
+}
+.holo .rosette {
+  animation:
+    crest 70s linear infinite,
+    crestHue 9s linear infinite;
+}
+.secret .rosette {
+  stroke: #f8dc84;
+  filter: drop-shadow(0 0 0.6cqw rgb(252 211 77 / 0.55));
+}
+@keyframes crest {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes crestHue {
+  0%,
+  100% {
+    stroke: #ff7773;
+  }
+  20% {
+    stroke: #ffed5f;
+  }
+  40% {
+    stroke: #a8ff5f;
+  }
+  60% {
+    stroke: #83fff7;
+  }
+  80% {
+    stroke: #d875ff;
+  }
 }
 .secret .faceFoil::after {
   content: "";
@@ -1358,6 +1423,9 @@
   .card[data-print] .heroRarity,
   .node,
   .foilSeal,
+  .rosette,
+  .card[data-living] .sigil,
+  .card[data-living] .typeSigil,
   .backSheen,
   .backCard::before {
     animation: none !important;

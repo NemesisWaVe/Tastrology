@@ -11,8 +11,9 @@ export class FakeDynamo {
   calls: string[] = [];
   private k = (key: Item) => `${key.PK.S}|${key.SK.S}`;
 
-  private cond(expr: string | undefined, item: Item | undefined, vals: Item = {}): boolean {
+  private cond(expr: string | undefined, item: Item | undefined, vals: Item = {}, names: Record<string, string> = {}): boolean {
     if (!expr) return true;
+    expr = expr.replace(/#\w+/g, (n) => names[n] ?? n);
     if (/\s+OR\s+/.test(expr)) return expr.split(/\s+OR\s+/).some((e) => this.cond(e, item, vals));
     return expr.split(/\s+AND\s+/).every((c) => {
       c = c.trim();
@@ -108,7 +109,7 @@ export class FakeDynamo {
           const v = (b.ExpressionAttributeValues ?? {}) as Item;
           const key = (b.Item ?? b.Key) as Item;
           const cur = this.items.get(this.k(key));
-          if (!this.cond(b.ConditionExpression as string, cur, v)) return "ConditionalCheckFailed";
+          if (!this.cond(b.ConditionExpression as string, cur, v, (b.ExpressionAttributeNames ?? {}) as Record<string, string>)) return "ConditionalCheckFailed";
           if (kind === "Put") staged.set(this.k(key), b.Item as Item);
           else if (kind === "Update") staged.set(this.k(key), this.apply(cur ?? { ...key }, b.UpdateExpression as string, v, (b.ExpressionAttributeNames ?? {}) as Record<string, string>));
           else if (kind === "Delete") staged.delete(this.k(key));

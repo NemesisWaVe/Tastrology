@@ -1,5 +1,6 @@
 "use client";
 
+import { AgeBlocked, AgeGate, useAgeOk } from "./AgeGate";
 import { SignIn, useAuth, useClerk } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { setBridge } from "@/lib/authBridge";
@@ -12,6 +13,7 @@ export function ClerkBridge() {
   const clerk = useClerk();
   const { isLoaded, isSignedIn } = useAuth();
   const [open, setOpen] = useState(false);
+  const [age, setAge] = useAgeOk();
   const [back, setBack] = useState("/");
   const onClose = useRef<(() => void) | undefined>(undefined);
   const signedIn = useRef(false);
@@ -85,7 +87,13 @@ export function ClerkBridge() {
       <button aria-label="Close" onClick={dismiss} className="absolute inset-0 bg-paper/80 backdrop-blur-sm" />
       <div className="relative flex flex-col items-center gap-4">
         <p className="max-w-sm text-center font-serif text-2xl italic leading-tight text-ink">Sign in and the stars start reading.</p>
-        <SignIn routing="hash" withSignUp forceRedirectUrl={back} signUpForceRedirectUrl={back} />
+        {age === "ok" ? (
+          <SignIn routing="hash" withSignUp forceRedirectUrl={back} signUpForceRedirectUrl={back} />
+        ) : age === "no" ? (
+          <AgeBlocked />
+        ) : age === null ? (
+          <AgeGate onAnswer={setAge} />
+        ) : null}
         <button onClick={dismiss} className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
           Not now
         </button>

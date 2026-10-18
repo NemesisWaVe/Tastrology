@@ -5,6 +5,7 @@ import { deckMax } from "@/lib/deckCap";
 import { deviceId, deviceIdsOn, newDevice } from "@/lib/device";
 import { dustOn, dustStatus, rates } from "@/lib/stardust";
 import { economy } from "@/lib/economy";
+import { payDividend } from "@/lib/dividend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export async function GET(request: Request) {
   let cookie: string | undefined;
   if (!device && on && deviceIdsOn()) ({ id: device, cookie } = newDevice());
   const dOn = dustOn();
+  const div = dOn ? await payDividend(userId).catch(() => null) : null;
   const [w, ds] = await Promise.all([on ? wallet(userId, device) : null, dOn ? dustStatus(userId).catch(() => null) : null]);
   const res = Response.json(
     {
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
       deckMax: deckMax(),
       // Burning (docs/design/burn.md): available to every signed-in account with a deck; dust and its rates only with credits on.
       burnOn: ddbConfigured(),
-      stardust: dOn ? { dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null, rates: rates(), economy: economy() } : null,
+      stardust: dOn ? { dust: ds?.dust ?? null, weekLeft: ds?.weekLeft ?? null, rates: rates(), economy: economy(), dividend: div } : null,
       refCode: null,
       refs: { pending: 0, qualified: 0, needed: REFS_NEEDED },
       promo: { eligible: false, claimed: false, slotsLeft: null },

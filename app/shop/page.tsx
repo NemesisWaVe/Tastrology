@@ -1,3 +1,4 @@
+import { Atelier } from "@/components/shop/Atelier";
 import { BattlePack } from "@/components/shop/BattlePack";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -44,6 +45,7 @@ export default function ShopPage() {
       </ul>
 
       <BattlePack />
+      <Atelier />
 
       <p className="mt-10 max-w-xl font-mono text-[11px] leading-relaxed text-ink-3">
         Every account starts with one free card and gets another each new moon. Demo personas and repeat readings never cost anything.{" "}
