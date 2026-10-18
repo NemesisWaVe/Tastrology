@@ -58,7 +58,8 @@ export function ShareSheet({
     sfx("whoosh");
     try {
       const f = new File([new Blob(["x"], { type: "image/png" })], "x.png", { type: "image/png" });
-      coarse.current = window.matchMedia("(pointer: coarse)").matches;
+      // A phone by its user agent: touchscreen laptops report a coarse pointer too, and their share dialogs reach no app.
+      coarse.current = /iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent);
       setCanShare(Boolean(navigator.canShare?.({ files: [f] })) && coarse.current);
     } catch {
       setCanShare(false);
@@ -222,25 +223,37 @@ export function ShareSheet({
     setNote(null);
     const text = `${caption} ${link("x")}`;
     const intent = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
-    let copied = false;
+    // A phone by its user agent, not by touch: touchscreen laptops report a coarse pointer too.
+    const phone = /iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent);
+    // Started inside the tap (Safari needs that); a blob still rendering goes in as a promise.
+    let write: Promise<void> | null = null;
     if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
       try {
-        void navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]).catch(() => {});
-        copied = true;
+        write = navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]);
       } catch {}
     }
-    if (!coarse.current && copied) return setNote({ kind: "x", intent, key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
-    if (coarse.current) {
-      setDone(copied ? "Image copied · in X, tap the post and Paste" : "Opening X");
-      const t = setTimeout(() => {
-        if (document.visibilityState === "visible") location.href = intent;
-      }, 1400);
-      window.addEventListener("pagehide", () => clearTimeout(t), { once: true });
-      location.href = `twitter://post?message=${encodeURIComponent(text)}`;
-      return;
+    if (!phone) {
+      if (write) {
+        write.catch(() => setNote(null));
+        return setNote({ kind: "x", intent, key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
+      }
+      window.open(intent, "_blank", "noopener,noreferrer");
+      return setDone(linkable ? "Opened X · the card shows as the link's preview" : "Opened X");
     }
-    window.open(intent, "_blank", "noopener,noreferrer");
-    setDone(linkable ? "Opened X · the card shows as the link's preview" : "Opened X");
+    // Phone: leave for the X app only once the copy has landed (leaving earlier cancels it and the old clipboard,
+    // often the link, is what pastes). No automatic x.com fallback: it fired under Safari's "Open in X?" prompt.
+    const open = () => (location.href = `twitter://post?message=${encodeURIComponent(text)}`);
+    setDone("Copying the image…");
+    (write ?? Promise.reject(new Error("no clipboard"))).then(
+      () => {
+        setDone("Image copied · in X, tap the post and Paste");
+        open();
+      },
+      () => {
+        setDone("Couldn't copy the image here · opening X with the link");
+        open();
+      },
+    );
   };
 
   const copy = async () => {
