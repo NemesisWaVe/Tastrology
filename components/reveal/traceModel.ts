@@ -67,6 +67,8 @@ export interface Folded {
   ablated: string[];
   critique?: Extract<SceneData, { kind: "critique" }>;
   bridges: { id: string; name: string; kind: string }[];
+  /** Vibes picked next to the loves, with what each was read as. */
+  vibes?: { name: string; via: string[] }[];
   /** Kind of the newest beat applied. */
   last?: SceneData["kind"];
 }
@@ -83,6 +85,7 @@ export function foldBeats(beats: SceneData[]): Folded {
       f.ablated.push(b.seed);
     } else if (b.kind === "critique") f.critique = b;
     else if (b.kind === "bridges") f.bridges = b.bridges;
+    else if (b.kind === "vibes") f.vibes = b.vibes;
   }
   return f;
 }

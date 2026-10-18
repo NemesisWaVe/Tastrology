@@ -12,7 +12,7 @@ import s from "./reveal.module.css";
 const EASE = [0.2, 0.7, 0.2, 1] as const;
 
 /** How long each beat holds the stage. A finished run (or a replay) plays the backlog fast instead. */
-const DWELL: Record<SceneData["kind"], number> = { seeds: 1000, tags: 1700, brands: 1600, ablation: 1150, critique: 1900, bridges: 1300 };
+const DWELL: Record<SceneData["kind"], number> = { seeds: 1000, tags: 1700, brands: 1600, ablation: 1150, critique: 1900, bridges: 1300, vibes: 900 };
 
 /**
  * Plays streamed scene data one beat at a time, so a burst (prefetched steps, parallel calls, a cached replay)
@@ -227,6 +227,7 @@ function useActivity(active: ToolEvent | undefined, seeds: SeedNode[], done: boo
 function Constellation({ m, done, reduce }: { m: SceneModel; done: boolean; reduce: boolean }) {
   const n = Math.max(1, m.seeds.length);
   const { lit, out, note } = useActivity(m.active, m.seeds, done);
+  const vibes = (m.beats.filter((b) => b.kind === "vibes").pop() as Extract<SceneData, { kind: "vibes" }> | undefined)?.vibes ?? [];
   const pos = m.seeds.map((seed, i) => {
     const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
     const r = seed.odd ? 45 : 35;
@@ -312,6 +313,23 @@ function Constellation({ m, done, reduce }: { m: SceneModel; done: boolean; redu
           </motion.div>
         );
       })}
+
+      {/* Vibes: dashed rainbow satellites at the sides, each with what it was read as. */}
+      {vibes.slice(0, 2).map((v, i) => (
+        <motion.div
+          key={v.name}
+          className="absolute top-1/2 w-[30%] -translate-y-1/2 text-center"
+          style={i === 0 ? { left: "-14%" } : { right: "-14%" }}
+          initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : 0.3 + i * 0.12 }}
+        >
+          <span className="vibeChip inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold">
+            <span className="vibeText truncate">∿ {v.name}</span>
+          </span>
+          <p className="mt-1 truncate font-mono text-[8px] uppercase tracking-[0.18em] text-ink-3">{v.via.length ? `via ${v.via[0]}` : "vibe"}</p>
+        </motion.div>
+      ))}
 
       {note && (
         <motion.span

@@ -206,6 +206,7 @@ async function resolveSeeds(st: RunState) {
   }
   st.ledger.record(st.seeds);
   st.emit({ type: "data", data: { kind: "seeds", seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind, image: s.image })) } });
+  if (st.req.vibes?.length) st.emit({ type: "data", data: { kind: "vibes", vibes: st.req.vibes.map((v) => ({ name: v.name, via: st.vibeVia[v.id] ?? [] })) } });
   st.done.add("resolve");
   st.emit({ type: "step", id: "resolve", label: "Seeds resolved", status: "done", detail: st.seeds.map((s) => s.name).join(" · ") });
   if (st.seeds.length < 2) throw new Error("Need at least 2 seeds that Qloo recognises.");

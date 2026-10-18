@@ -159,7 +159,9 @@ export type SceneData =
   /** One leave-one-out call: how far each top brand's affinity fell without `seed`. */
   | { kind: "ablation"; seed: string; drops: Record<string, number> }
   | { kind: "critique"; kept: string[]; rejected: { id: string; why: "fluke" | "budget" }[]; strongest?: string; inert: string[] }
-  | { kind: "bridges"; bridges: { id: string; name: string; kind: string }[] };
+  | { kind: "bridges"; bridges: { id: string; name: string; kind: string }[] }
+  /** The vibes picked next to the loves, and what each was read as (lib/vibes.ts). */
+  | { kind: "vibes"; vibes: { name: string; via: string[] }[] };
 
 export type TraceEvent =
   | { type: "step"; id: string; label: string; status: "run" | "done" | "warn"; detail?: string }
