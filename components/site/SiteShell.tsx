@@ -26,18 +26,19 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
 export function SiteNav() {
   return (
     <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-4 py-3 backdrop-blur-md sm:px-6">
-      <Link href="/" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
+      <Link href="/" aria-label={BRAND.name} className="flex shrink-0 items-center gap-2 font-display text-lg font-bold tracking-tight">
         <Mark size={34} />
-        {BRAND.name}
+        {/* Phones: the mark alone, so the links and avatar fit on one line. */}
+        <span className="hidden sm:inline">{BRAND.name}</span>
       </Link>
-      <span className="flex items-center gap-4">
-        <Link href="/shop" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
+      <span className="flex items-center gap-3 sm:gap-4">
+        <Link href="/shop" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Shop
         </Link>
-        <Link href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
+        <Link href="/deck" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           My deck
         </Link>
-        <Link href="/friends" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">
+        <Link href="/friends" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Friends
         </Link>
         <SoundToggle />
