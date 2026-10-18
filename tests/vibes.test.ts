@@ -55,8 +55,8 @@ describe("vibes", () => {
     const v = [{ id: "urn:tag:cuisine:qloo:ramen", name: "Ramen" }];
     expect(typeof normalizeRequest({ seeds: one, vibes: v })).toBe("object");
     expect(normalizeRequest({ seeds: one })).toMatch(/between 2 and 8/);
-    expect(normalizeRequest({ seeds: [...seeds, { id: "x1", name: "Brazzers", kind: "movie" }] })).toMatch(/can't go on a card/);
-    expect(normalizeRequest({ seeds, goal: "a strip club" })).toMatch(/can't go on a card/);
-    expect(normalizeRequest({ seeds, vibes: [{ id: "urn:tag:genre:media:hentai", name: "Hentai" }] })).toMatch(/can't go on a card/);
+    expect(normalizeRequest({ seeds: [...seeds, { id: "x1", name: "Brazzers", kind: "movie" }] })).toMatch(/doesn't go on public cards/);
+    expect(normalizeRequest({ seeds, goal: "a strip club" })).toMatch(/doesn't go on public cards/);
+    expect(normalizeRequest({ seeds, vibes: [{ id: "urn:tag:genre:media:hentai", name: "Hentai" }] })).toMatch(/doesn't go on public cards/);
   });
 });

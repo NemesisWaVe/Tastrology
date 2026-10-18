@@ -1,6 +1,6 @@
 import { searchEntities } from "@/lib/qloo";
 import { searchVibes } from "@/lib/vibes";
-import { blocked, clean } from "@/lib/guard";
+import { blocked, care, clean, nearest } from "@/lib/guard";
 import { allow, clientId } from "@/lib/ratelimit";
 import { SEED_KINDS, type EntityKind } from "@/lib/types";
 
@@ -12,7 +12,9 @@ export async function GET(request: Request) {
   const kinds = (url.searchParams.get("types") ?? "").split(",").filter((k): k is EntityKind => SEED_KINDS.includes(k as EntityKind));
   if (q.length < 2) return Response.json({ results: [] });
   // The content guard (lib/guard.ts): explicit searches get nothing back, and explicit results are dropped.
-  if (blocked(q)) return Response.json({ results: [], vibes: [], blocked: true }, { headers: { "cache-control": "public, max-age=300" } });
+  // A blocked search still leads somewhere: the nearest clean neighbours, or a help line when someone may be struggling.
+  if (blocked(q))
+    return Response.json({ results: [], vibes: [], blocked: true, care: care(q), suggest: care(q) ? [] : nearest(q) }, { headers: { "cache-control": "public, max-age=300" } });
   // Own bucket: typing in autocomplete must not eat into the agent-run allowance.
   if (!(await allow(`search:${clientId(request.headers)}`, 120, 10 * 60 * 1000)))
     return Response.json({ results: [], error: "Too many searches. Give it a minute." }, { status: 429 });

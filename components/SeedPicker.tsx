@@ -83,6 +83,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   const [active, setActive] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // A search the content guard stopped (lib/guard.ts): where to go instead, or a help line.
+  const [off, setOff] = useState<{ care: boolean; suggest: string[] } | null>(null);
   const req = useRef(0);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
@@ -99,6 +101,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     if (q.trim().length < 2) {
       setHits([]);
       setLoading(false);
+      setOff(null);
       return;
     }
     const id = ++req.current;
@@ -106,8 +109,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind === "vibe" ? "&vibes=only" : kind !== "all" ? `&types=${kind}` : "&vibes=1"}`);
-        const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[]; blocked?: boolean };
-        if (data.blocked && id === req.current) setNote("That one can't go on a card. Try something else.");
+        const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[]; blocked?: boolean; care?: boolean; suggest?: string[] };
+        if (id === req.current) setOff(data.blocked ? { care: Boolean(data.care), suggest: data.suggest ?? [] } : null);
         if (id === req.current) {
           const ents = dedupe(data.results ?? []);
           const vs: Seed[] = (data.vibes ?? []).slice(0, kind === "vibe" ? 6 : 2).map((v) => ({ id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` }));
@@ -322,6 +325,40 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
       <p className="mt-2 min-h-[16px] px-1 text-[12px] text-warn" role="status" aria-live="polite">
         {note}
       </p>
+      {off && q.trim().length >= 2 && (
+        <div className="mb-2 rounded-2xl border border-line bg-black/30 px-4 py-3 text-[13px] text-ink-2" role="status">
+          {off.care ? (
+            <>
+              <p>If things feel heavy right now, you don&apos;t have to carry it alone. Free, confidential support is a message away.</p>
+              <a href="https://findahelpline.com" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-semibold text-accent underline underline-offset-4">
+                Find a helpline near you
+              </a>
+            </>
+          ) : (
+            <>
+              <p>That one doesn&apos;t go on public cards.{off.suggest.length ? " Closest we can read:" : " Try something else you love."}</p>
+              {off.suggest.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {off.suggest.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setQ(t);
+                        setOpen(true);
+                        input.current?.focus();
+                      }}
+                      className="rounded-full border border-accent/50 px-3 py-1 text-[12px] text-accent hover:bg-accent hover:text-paper"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex min-h-[44px] flex-wrap content-start gap-2">
         <AnimatePresence initial={false} mode="popLayout">
