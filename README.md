@@ -202,7 +202,7 @@ npm test
 
 Mock mode needs nothing: a synthetic taste graph and the deterministic planner run the full experience offline.
 
-To go live, fill in `.env.local` (every variable is documented in `.env.example`):
+To go live, fill in `.env.local` (`.env.example` documents the Qloo, LLM, cache and S3 settings):
 
 | What | Variables |
 |---|---|
