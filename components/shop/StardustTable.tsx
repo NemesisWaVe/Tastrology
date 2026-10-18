@@ -6,7 +6,7 @@ const LABEL = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secr
 export function StardustTable({ e, dust, weekLeft }: { e: Economy; dust?: number | null; weekLeft?: number | null }) {
   const spend = [
     e.recast !== null && { k: "Recast", v: e.recast, note: "your card, read into a new territory of brands" },
-    e.pack !== null && { k: "Battle Pack", v: e.pack, note: "1 stranger's card to fight, one a day" },
+    e.pack !== null && { k: "Battle Pack", v: e.pack, note: "From this price; one stranger's card, one pack a day" },
     e.living !== null && { k: "Living sigils", v: e.living, note: "your card's sigils breathe and turn" },
     e.reading !== null && { k: "Extra reading", v: e.reading, note: "a new card now" },
   ].filter(

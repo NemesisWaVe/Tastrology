@@ -43,3 +43,18 @@ describe("battle packs", () => {
     expect((await openPack("u2", NOW + 86_400_000)).status).toBe("poor");
   });
 });
+
+describe("pack tiers", () => {
+  it("publishes tables that add up, with the boosts in order", async () => {
+    const { PACKS, PACK_KINDS, tierFor } = await import("@/lib/packs");
+    for (const k of PACK_KINDS) expect(PACKS[k].odds.reduce((a, o) => a + o.p, 0)).toBeCloseTo(1);
+    const p = (k: keyof typeof PACKS, t: string) => PACKS[k].odds.find((o) => o.tier === t)!.p;
+    expect(p("star", "secret")).toBe(0.02);
+    expect(p("supernova", "secret") - p("star", "secret")).toBeCloseTo(0.03);
+    expect(p("supernova", "holo")).toBeCloseTo(3 * p("star", "holo"));
+    expect(p("flare", "holo")).toBeGreaterThan(p("star", "holo"));
+    expect(PACKS.star.dust).toBeLessThan(PACKS.flare.dust);
+    expect(PACKS.flare.dust).toBeLessThan(PACKS.supernova.dust);
+    expect(tierFor(0.99, PACKS.supernova.odds)).toBe("secret");
+  });
+});

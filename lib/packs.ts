@@ -13,15 +13,40 @@ import { burnedAt, getTwin } from "./twins";
  *   USER#<id>        LEDGER#pack#<day>   -PACK_DUST
  * Contents are fixed per account per UTC day, so there is nothing to re-roll. Stardust is never sold (legal review).
  */
-export const PACK_DUST = 25;
 export const PACK_SIZE = 1;
-/** Published odds per slot. Shown on the shop page. */
-export const PACK_ODDS: { tier: Rarity; p: number }[] = [
-  { tier: "common", p: 0.7 },
-  { tier: "rare", p: 0.22 },
-  { tier: "holo", p: 0.06 },
-  { tier: "secret", p: 0.02 },
-];
+type Odds = { tier: Rarity; p: number }[];
+
+/**
+ * Three packs, all one card, all Stardust only, and one pack a day across all three (scarcity is the point).
+ * Star: the same odds as minting your own card. Flare: a little brighter. Supernova: holo three times as likely,
+ * secret still hard (+3 points). Every table is published on the shop page.
+ */
+export const PACKS = {
+  star: { name: "Star Pack", dust: 25, blurb: "Same odds as your own first pull.", odds: [
+    { tier: "common", p: 0.7 },
+    { tier: "rare", p: 0.22 },
+    { tier: "holo", p: 0.06 },
+    { tier: "secret", p: 0.02 },
+  ] as Odds },
+  flare: { name: "Flare Pack", dust: 60, blurb: "Brighter odds across the board.", odds: [
+    { tier: "common", p: 0.58 },
+    { tier: "rare", p: 0.29 },
+    { tier: "holo", p: 0.1 },
+    { tier: "secret", p: 0.03 },
+  ] as Odds },
+  supernova: { name: "Supernova Pack", dust: 120, blurb: "Holo three times as likely. Secret still rare.", odds: [
+    { tier: "common", p: 0.43 },
+    { tier: "rare", p: 0.34 },
+    { tier: "holo", p: 0.18 },
+    { tier: "secret", p: 0.05 },
+  ] as Odds },
+} as const;
+export type PackKind = keyof typeof PACKS;
+export const PACK_KINDS = Object.keys(PACKS) as PackKind[];
+export const isPackKind = (k: unknown): k is PackKind => typeof k === "string" && k in PACKS;
+/** The base pack, for places that show one price and one table. */
+export const PACK_DUST = PACKS.star.dust;
+export const PACK_ODDS: Odds = PACKS.star.odds;
 const TIERS: Rarity[] = ["common", "rare", "holo", "secret"];
 const CCF = "ConditionalCheckFailed";
 
@@ -42,9 +67,9 @@ function stream(seed: string) {
   };
 }
 
-export function tierFor(x: number): Rarity {
+export function tierFor(x: number, odds: Odds = PACK_ODDS): Rarity {
   let acc = 0;
-  for (const o of PACK_ODDS) {
+  for (const o of odds) {
     acc += o.p;
     if (x < acc) return o.tier;
   }
@@ -52,7 +77,7 @@ export function tierFor(x: number): Rarity {
 }
 
 /** Draws today's codes for an account: tier by the published odds, then a card from that tier (falling back to the nearest tier with cards). */
-export async function drawPack(userId: string, day: string): Promise<string[] | null> {
+export async function drawPack(userId: string, day: string, kind: PackKind = "star"): Promise<string[] | null> {
   const rand = stream(`${userId}|${day}`);
   const mine = await ddbQuery(`OWNER#${userId}`, "CARD#", 50, undefined, ["code"]);
   if (!mine) return null;
@@ -67,7 +92,7 @@ export async function drawPack(userId: string, day: string): Promise<string[] | 
   };
   const out: string[] = [];
   for (let slot = 0; slot < PACK_SIZE; slot++) {
-    const want = tierFor(rand());
+    const want = tierFor(rand(), PACKS[kind].odds);
     const order = [want, ...TIERS.filter((t) => t !== want).sort((a, b) => Math.abs(TIERS.indexOf(a) - TIERS.indexOf(want)) - Math.abs(TIERS.indexOf(b) - TIERS.indexOf(want)))];
     for (const t of order) {
       const free = (await pool(t)).filter((c) => !skip.has(c) && !out.includes(c));
@@ -85,24 +110,25 @@ export async function drawPack(userId: string, day: string): Promise<string[] | 
   return out;
 }
 
-export type PackResult = { status: "opened" | "dup"; day: string; codes: string[] } | { status: "poor" | "empty" | "error" };
+export type PackResult = { status: "opened" | "dup"; day: string; codes: string[]; kind: PackKind } | { status: "poor" | "empty" | "error" };
 
-/** Opens today's pack for PACK_DUST. One a day; a second call the same day returns the same pack and charges nothing. */
-export async function openPack(userId: string, now = Date.now()): Promise<PackResult> {
+/** Opens today's pack. One a day of any kind; a second call the same day returns that pack and charges nothing. */
+export async function openPack(userId: string, now = Date.now(), kind: PackKind = "star"): Promise<PackResult> {
   const day = utcDay(now);
+  const cost = PACKS[kind].dust;
   const prior = await ddbGet(`USER#${userId}`, `PACK#${day}`);
-  if (prior) return { status: "dup", day, codes: String(prior.codes).split(",").filter(Boolean) };
-  const codes = await drawPack(userId, day);
+  if (prior) return { status: "dup", day, codes: String(prior.codes).split(",").filter(Boolean), kind: isPackKind(prior.kind) ? prior.kind : "star" };
+  const codes = await drawPack(userId, day, kind);
   if (!codes) return { status: "error" };
   if (!codes.length) return { status: "empty" };
   const r = await ddbTransact([
-    { update: { PK: `USER#${userId}`, SK: "WALLET" }, set: "SET dust = dust - :cost, v = v + :one", condition: "dust >= :cost", values: { ":cost": PACK_DUST, ":one": 1 } },
-    { put: { PK: `USER#${userId}`, SK: `PACK#${day}`, codes: codes.join(","), at: now }, condition: "attribute_not_exists(PK)" },
-    { put: { PK: `USER#${userId}`, SK: `LEDGER#pack#${day}`, delta: -PACK_DUST, unit: "dust", reason: "pack", ref: day, at: now }, condition: "attribute_not_exists(PK)" },
+    { update: { PK: `USER#${userId}`, SK: "WALLET" }, set: "SET dust = dust - :cost, v = v + :one", condition: "dust >= :cost", values: { ":cost": cost, ":one": 1 } },
+    { put: { PK: `USER#${userId}`, SK: `PACK#${day}`, codes: codes.join(","), kind, at: now }, condition: "attribute_not_exists(PK)" },
+    { put: { PK: `USER#${userId}`, SK: `LEDGER#pack#${day}`, delta: -cost, unit: "dust", reason: `pack:${kind}`, ref: day, at: now }, condition: "attribute_not_exists(PK)" },
   ]);
   if (!r) return { status: "error" };
-  if (r.ok) return { status: "opened", day, codes };
-  if (r.reasons[1] === CCF) return openPack(userId, now);
+  if (r.ok) return { status: "opened", day, codes, kind };
+  if (r.reasons[1] === CCF) return openPack(userId, now, kind);
   return r.reasons[0] === CCF ? { status: "poor" } : { status: "error" };
 }
 

@@ -45,7 +45,7 @@ export default function OddsPage() {
             Season {SEASON} key fingerprint (sha256): {commitment(SEASON)}
           </p>
         )}
-        <p>Cards minted before rolls keep the tier their taste score gave them. Battle Packs use the same table.</p>
+        <p>Cards minted before rolls keep the tier their taste score gave them. The Star Pack uses the same table; the Flare and Supernova packs publish their boosted tables on the shop page.</p>
         <p>
           <b className="text-ink">Money never buys a chance.</b> Battle Packs and any boosted packs cost earned Stardust only, and Stardust is never
           sold. If paid items arrive, they&apos;ll be things you see before you buy, they won&apos;t roll, and a card bought with money earns no
