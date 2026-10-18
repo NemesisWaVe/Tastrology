@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { BattleLink } from "@/components/battle/BattleLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StyleResult } from "@/lib/types";
-import { buildCard } from "@/lib/card";
+import { buildCard, cardCode } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { FlipCard } from "@/components/card/FlipCard";
 import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
@@ -172,32 +173,39 @@ export function ResultsView({
               ))}
             </div>
 
+            {/* One lime move: answer the challenge when there is one, otherwise share. The rest are quiet links. */}
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <button
-                onClick={onShare}
-                className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-accent px-6 py-3.5 text-[15px] font-semibold text-black shadow-[0_10px_40px_-12px_rgba(198,255,61,0.7)] transition hover:brightness-110 active:scale-[0.98]"
-              >
-                <span aria-hidden className="absolute inset-0 -translate-x-full bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.6),transparent)] transition duration-700 group-hover:translate-x-full" />
-                <Sparkle className="h-3.5 w-3.5" />
-                Share my sign
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowBack((b) => !b)}
-                aria-pressed={showBack}
-                className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink"
-              >
-                {showBack ? "Front ⟲" : "Back ⟲"}
-              </button>
-              <a href="#receipt" className="rounded-full border border-line px-5 py-3.5 text-[14px] text-ink-2 transition hover:border-ink-3 hover:text-ink">
-                See the receipts ↓
-              </a>
               {fight && (
-                <a href={fight.href} className="rounded-full bg-accent px-5 py-3.5 text-[14px] font-semibold text-paper">
+                <a href={fight.href} className="rounded-full bg-accent px-6 py-3.5 text-[15px] font-semibold text-black shadow-[0_10px_40px_-12px_rgba(198,255,61,0.7)] transition hover:brightness-110">
                   Fight {fight.name}
                 </a>
               )}
+              <button
+                onClick={onShare}
+                className={
+                  fight
+                    ? "inline-flex items-center gap-2 rounded-full border border-line px-5 py-3.5 text-[14px] text-ink transition hover:border-ink-3"
+                    : "group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-accent px-6 py-3.5 text-[15px] font-semibold text-black shadow-[0_10px_40px_-12px_rgba(198,255,61,0.7)] transition hover:brightness-110 active:scale-[0.98]"
+                }
+              >
+                {!fight && <span aria-hidden className="absolute inset-0 -translate-x-full bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.6),transparent)] transition duration-700 group-hover:translate-x-full" />}
+                <Sparkle className="h-3.5 w-3.5" />
+                Share your card
+              </button>
               <BattleLink />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2">
+              <button type="button" onClick={() => setShowBack((b) => !b)} aria-pressed={showBack} className="underline-offset-4 hover:text-ink hover:underline">
+                {showBack ? "Front ⟲" : "Flip ⟲"}
+              </button>
+              <a href="#receipt" className="underline-offset-4 hover:text-ink hover:underline">
+                Receipts ↓
+              </a>
+              {result.mode !== "mock" && (
+                <Link href={`/c/${encodeURIComponent(cardCode(card))}`} className="underline-offset-4 hover:text-ink hover:underline">
+                  Card page ↗
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -220,7 +228,7 @@ export function ResultsView({
               {label}
             </a>
           ))}
-          <button onClick={onShare} className="shrink-0 rounded-full bg-ink px-3 py-1.5 font-medium text-paper sm:px-3.5">
+          <button onClick={onShare} className="shrink-0 rounded-full bg-accent px-3 py-1.5 font-semibold text-black sm:px-3.5">
             Share
           </button>
         </div>

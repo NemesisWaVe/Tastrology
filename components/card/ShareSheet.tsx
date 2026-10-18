@@ -4,36 +4,36 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "r
 import { AnimatePresence, motion } from "motion/react";
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import type { StyleResult } from "@/lib/types";
-import { buildCard, cardCode, proxied, type CardData } from "@/lib/card";
+import { buildCard, cardCode, type CardData } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { sfx } from "@/lib/sound";
-import { HoloCard, glyph } from "./HoloCard";
-import { Sigil, Sparkle } from "./Sigils";
-import { ReceiptBody, ReceiptPaper } from "./Receipt";
+import { HoloCard } from "./HoloCard";
+import { Sparkle } from "./Sigils";
 import { qr, qrPath } from "./qr";
 
-type Format = "story" | "receipt" | "square";
-const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label: string; for: string }> = {
-  story: { w: 360, h: 640, out: [1080, 1920], label: "Story", for: "IG / TikTok stories" },
-  receipt: { w: 360, h: 640, out: [1080, 1920], label: "Receipt", for: "stories, or the group chat" },
-  square: { w: 400, h: 400, out: [1080, 1080], label: "Square", for: "feeds & group chats" },
-};
+/** One export everywhere: the 9:16 story (1080x1920), which also posts fine as a snap or a saved image. */
+const SIZE = { w: 360, h: 640, out: [1080, 1920] as const };
 
 const SPRING = { type: "spring" as const, stiffness: 500, damping: 28 };
 let fontCSS: Promise<string> | null = null;
 
-type Target = "insta" | "snap" | "x";
-/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR), or paste the image into X. */
-type Note = { kind: "phone"; url: string } | { kind: "x"; intent: string; key: string } | { kind: "sticker"; app: "insta" | "snap" } | null;
+type App = "insta" | "snap";
+/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR), or where the copied
+ *  link goes in the app (a Link sticker, the paperclip). */
+type Note = { kind: "phone"; url: string } | { kind: "sticker"; app: App } | null;
+
+const PHONE = /iPhone|iPad|iPod|Android|Mobi/i;
 
 /**
- * Share sheet: live preview of the export, then straight to a platform. X and Snapchat take the card's link (its
- * preview image is the card, app/c/[code]/opengraph-image.tsx). Instagram has no way in from the web except the
- * phone's share sheet, so on a phone it hands the PNG to the sheet (pick Instagram → Story); without one it saves
- * the PNG and opens Instagram's story camera.
- * `linkable`: the card is filed on the server (live readings only), so /c/<code> resolves for whoever taps it.
- * From a card page (/c/<code>) there may be no reading on hand, only the card: then it shares the Story layout,
- * which needs nothing else. `mine` false (a visitor sharing someone's card) changes "I pulled" to "Spotted".
+ * Share sheet, the same on the result page and on /c/<code>: a live preview of the story image, then straight to a
+ * platform.
+ * - Instagram and Snapchat only post from the phone apps and take no link from the web: on a phone the PNG goes
+ *   through the phone's share sheet with the fight link (/vs/<code>) on the clipboard for a Link sticker or the
+ *   paperclip; on a laptop a QR opens this card on the phone with the sheet up.
+ * - X and Copy share the card page link (/c/<code>), whose preview image is the full card
+ *   (app/c/[code]/opengraph-image.tsx) and whose page leads visitors to the fight.
+ * `linkable`: the card is filed on the server (live readings), so its links resolve for whoever taps them.
+ * `mine` false (a visitor sharing someone's card) changes "I pulled" to "Spotted".
  */
 export function ShareSheet({
   result,
@@ -43,24 +43,23 @@ export function ShareSheet({
   mine = true,
 }: { onClose: () => void; linkable?: boolean; mine?: boolean } & ({ result: StyleResult; card?: undefined } | { card: CardData; result?: undefined })) {
   const card = useMemo(() => given ?? buildCard(result!), [given, result]);
-  const formats = (result ? Object.keys(SIZE) : ["story"]) as Format[];
-  const [fmt, setFmt] = useState<Format>("story");
-  const [busy, setBusy] = useState<null | "share" | "save" | Target>(null);
+  const code = cardCode(card);
+  const [busy, setBusy] = useState<null | "save" | App>(null);
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
   const [note, setNote] = useState<Note>(null);
   const [vp, setVp] = useState({ w: 400, h: 800 });
   const node = useRef<HTMLDivElement>(null);
-  const coarse = useRef(false);
+  const phone = useRef(false);
 
   useEffect(() => {
     sfx("whoosh");
     try {
       const f = new File([new Blob(["x"], { type: "image/png" })], "x.png", { type: "image/png" });
       // A phone by its user agent: touchscreen laptops report a coarse pointer too, and their share dialogs reach no app.
-      coarse.current = /iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent);
-      setCanShare(Boolean(navigator.canShare?.({ files: [f] })) && coarse.current);
+      phone.current = PHONE.test(navigator.userAgent);
+      setCanShare(Boolean(navigator.canShare?.({ files: [f] })) && phone.current);
     } catch {
       setCanShare(false);
     }
@@ -78,9 +77,9 @@ export function ShareSheet({
     };
   }, [onClose]);
 
-  const size = SIZE[fmt];
-  const scale = Math.min(1, (Math.min(vp.w, 460) - 32) / size.w, (vp.h - 210) / size.h);
-  const fileName = `tastrology-${card.archetype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${fmt}.png`;
+  // The preview gives way to a step card so the tiles stay on screen.
+  const scale = Math.min(1, (Math.min(vp.w, 460) - 32) / SIZE.w, (vp.h - (note ? 430 : 250)) / SIZE.h);
+  const fileName = `tastrology-${card.archetype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
 
   const render = useCallback(async (): Promise<Blob> => {
     const el = node.current;
@@ -90,7 +89,7 @@ export function ShareSheet({
       [...el.querySelectorAll("img")].map((img) => (img.complete ? Promise.resolve() : new Promise((r) => ((img.onload = r), (img.onerror = r))))),
     );
     fontCSS ??= getFontEmbedCSS(el).catch(() => "");
-    const opts = { pixelRatio: size.out[0] / size.w, width: size.w, height: size.h, backgroundColor: "#07070a", fontEmbedCSS: await fontCSS, cacheBust: false, includeQueryParams: true, filter: (n: HTMLElement) => !n.dataset?.exportSkip };
+    const opts = { pixelRatio: SIZE.out[0] / SIZE.w, width: SIZE.w, height: SIZE.h, backgroundColor: "#07070a", fontEmbedCSS: await fontCSS, cacheBust: false, includeQueryParams: true, filter: (n: HTMLElement) => !n.dataset?.exportSkip };
     // Early passes warm the image/font cache: WebKit (every iPhone browser) drops some images from the first draws
     // without failing, so it gets three passes; elsewhere a second pass only if the first came out thin.
     const webkit = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Android/.test(navigator.userAgent));
@@ -98,56 +97,49 @@ export function ShareSheet({
     for (let i = 0; i < (webkit ? 2 : 1); i++) if (webkit || !blob || blob.size < 60_000) blob = (await toBlob(el, opts)) ?? blob;
     if (!blob) throw new Error("Render failed");
     return blob;
-  }, [size]);
+  }, []);
 
   // Phones only open the share sheet straight after a tap, and a render takes a second or two: by then iOS refuses
-  // (NotAllowedError) and Instagram never sees the image. So each layout is rendered as soon as it's on screen and the
+  // (NotAllowedError) and Instagram never sees the image. So the image is rendered as soon as the sheet is up and the
   // tap shares the finished PNG at once.
-  const blobs = useRef<Partial<Record<Format, Blob>>>({});
-  const pending = useRef<Partial<Record<Format, Promise<Blob>>>>({});
-  const prepare = useCallback(
-    (f: Format) => {
-      pending.current[f] ??= render().then(
-        (b) => ((blobs.current[f] = b), b),
-        (e) => {
-          delete pending.current[f];
-          throw e;
-        },
-      );
-      return pending.current[f]!;
-    },
-    [render],
-  );
+  const blob = useRef<Blob | null>(null);
+  const pending = useRef<Promise<Blob> | null>(null);
+  const prepare = useCallback(() => {
+    pending.current ??= render().then(
+      (b) => (blob.current = b),
+      (e) => {
+        pending.current = null;
+        throw e;
+      },
+    );
+    return pending.current;
+  }, [render]);
   useEffect(() => {
-    if (blobs.current[fmt]) return;
-    const t = setTimeout(() => prepare(fmt).catch(() => {}), 450);
+    const t = setTimeout(() => prepare().catch(() => {}), 450);
     return () => clearTimeout(t);
-  }, [fmt, prepare]);
+  }, [prepare]);
 
   // Warm the link preview while the sheet is open: the first render of /c/<code>/opengraph-image takes seconds, and
   // X's crawler gives up sooner and shows an empty box. The page names the exact (hashed) image URL X will ask for.
   useEffect(() => {
     if (!linkable) return;
-    const page = `/c/${encodeURIComponent(cardCode(card))}`;
-    fetch(page)
+    fetch(`/c/${encodeURIComponent(code)}`)
       .then((r) => r.text())
       .then((html) => {
         const m = /property="og:image" content="([^"]+)"/.exec(html);
         if (m) void fetch(m[1].replace(/&amp;/g, "&"), { mode: "no-cors" }).catch(() => {});
       })
       .catch(() => {});
-  }, [linkable, card]);
+  }, [linkable, code]);
 
-  const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}`;
-  const link = (src: string) => {
-    if (typeof window === "undefined") return "";
-    return linkable ? `${location.origin}/c/${encodeURIComponent(cardCode(card))}?via=${src}` : location.origin;
-  };
-  // Stories and snaps send viewers straight to the fight (/vs/<code>: mint yours, battle this one).
+  const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${linkable ? "Can yours beat it?" : BRAND.question}`;
+  /** The card page, tagged with where the visit came from. */
+  const link = (src: string) => (typeof window === "undefined" ? "" : linkable ? `${location.origin}/c/${encodeURIComponent(code)}?via=${src}` : location.origin);
+  /** The fight page: stories and snaps send viewers straight to it (mint yours, battle this one). */
   const fight = (src: string) => link(src).replace("/c/", "/vs/");
 
-  const save = (blob: Blob) => {
-    const url = URL.createObjectURL(blob);
+  const save = (b: Blob) => {
+    const url = URL.createObjectURL(b);
     const a = document.createElement("a");
     a.href = url;
     a.download = fileName;
@@ -157,121 +149,89 @@ export function ShareSheet({
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  const go = (mode: "share" | "save" | "insta" | "snap") => {
+  const go = (mode: "save" | App) => {
     setErr(null);
     setDone(null);
     setNote(null);
-    const ready = blobs.current[fmt];
     // Ready: hand it over inside this tap (no await before navigator.share).
-    if (ready) return deliver(mode, ready);
+    if (blob.current) return deliver(mode, blob.current);
     setBusy(mode);
-    prepare(fmt).then(
+    prepare().then(
       (b) => deliver(mode, b, true),
       (e) => {
-        setErr((e as Error).message || "Couldn't render the image");
+        setErr((e as Error).message || "Couldn't make the image");
         setBusy(null);
       },
     );
   };
 
-  const deliver = async (mode: "share" | "save" | "insta" | "snap", blob: Blob, late = false) => {
+  const deliver = async (mode: "save" | App, b: Blob, late = false) => {
     setBusy(mode);
     try {
-      const file = new File([blob], fileName, { type: "image/png" });
-      // Phones only: laptops (Windows, macOS) also say they can share files, but their share dialog doesn't reach Instagram.
+      const file = new File([b], fileName, { type: "image/png" });
       if (mode !== "save" && canShare && navigator.canShare?.({ files: [file] })) {
-        // The phone decides the sheet's order (most-messaged people first), so say where to look before it opens.
-        const app = mode === "insta" ? "Instagram → Stories" : mode === "snap" ? "Snapchat" : null;
-        // Neither app takes a link from a share, so the card's link goes onto the clipboard in the same tap: paste it
-        // into a Link sticker (Instagram) or the paperclip (Snapchat). Not awaited, so the share keeps the tap.
-        const linked = Boolean(app && linkable && navigator.clipboard?.writeText);
-        if (linked) void navigator.clipboard.writeText(fight(mode)).catch(() => {});
-        if (app)
-          setDone(
-            linked
-              ? mode === "insta"
-                ? "Link copied · in Stories add a Link sticker, paste, rename it \"Fight my card\", place it under the card"
-                : "Link copied · in Snapchat tap the paperclip and paste"
-              : `In the row of apps: ${app}`,
-          );
+        // The phone orders its sheet (most-messaged people first), so say where to look before it opens.
+        setDone(mode === "insta" ? "Pick Instagram, then Stories" : "Pick Snapchat");
         try {
-          // Instagram and Snapchat take the picture as the post itself, and drop it on some phones when text rides
-          // along, so those shares send the file alone.
-          await navigator.share(app ? { files: [file] } : { files: [file], title: BRAND.name, text: caption });
-          if (!app) setDone("Shared");
+          // Instagram and Snapchat take the picture as the post itself and drop it on some phones when text rides along.
+          await navigator.share({ files: [file] });
         } catch (e) {
           const name = (e as Error).name;
           // The render outlived the tap: the PNG is ready now, so the next tap goes straight through.
           if (name === "NotAllowedError" && late) setDone("Image ready · tap again to share");
           else if (name !== "AbortError") throw e;
         }
-      } else if (mode === "insta" || mode === "snap") {
-        save(blob);
-        if (coarse.current && mode === "insta") {
-          setDone("Saved. Opening Instagram: add it from your camera roll");
-          setTimeout(() => (location.href = "instagram://story-camera"), 600);
-        } else setDone("Saved. Add it from your camera roll");
       } else {
-        save(blob);
-        setDone(`Saved ${size.out[0]}×${size.out[1]} PNG · ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+        save(b);
+        if (mode === "insta" && phone.current) {
+          setDone("Saved · opening Instagram, add it from your camera roll");
+          setTimeout(() => (location.href = "instagram://story-camera"), 600);
+        } else setDone(mode === "save" ? "Image saved" : "Saved · add it from your camera roll");
       }
     } catch (e) {
-      setErr((e as Error).message || "Couldn't render the image");
+      setErr((e as Error).message || "Couldn't make the image");
     } finally {
       setBusy(null);
     }
   };
 
-  // Stories and snaps only post from the phone apps. On a phone the PNG goes through the share sheet; on a laptop the
-  // sheet shows a QR that opens this card on the phone with the share sheet up (/c/<code>?share=1), plus a plain save.
-  const toPhone = (mode: "insta" | "snap") => {
+  // On a phone: the fight link goes onto the clipboard in this tap and the step card says where it goes before the
+  // share sheet covers everything; its button starts the share. On a laptop: a QR that opens this card on the phone
+  // with the sheet up (/c/<code>?share=1).
+  const toApp = (app: App) => {
     sfx("tap");
     setErr(null);
     setDone(null);
-    // Neither app takes a link from the web, so the link goes onto the clipboard now and a step card says where it
-    // goes (a Link sticker, the paperclip) before the share sheet hides everything; its button starts the share.
     if (canShare) {
       if (linkable && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(fight(mode)).catch(() => {});
-        return setNote({ kind: "sticker", app: mode });
+        void navigator.clipboard.writeText(fight(app)).catch(() => {});
+        return setNote({ kind: "sticker", app });
       }
-      return go(mode);
+      return go(app);
     }
     if (!linkable) return go("save");
-    setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(cardCode(card))}?share=1` });
+    setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(code)}?share=1` });
   };
 
-  // X: the link's preview (app/c/[code]/opengraph-image.tsx) is the full card, tappable. On a laptop the PNG also goes
-  // onto the clipboard and the paste step shows before "Open X". On a phone, Safari won't put an image on the clipboard,
-  // so the X app's own scheme opens the compose box with the link alone and the preview carries the card.
+  // X takes the link alone: its preview is the full card and opens the card page when tapped (an attached image would
+  // replace that preview). On a phone the X app's own scheme opens the compose box (x.com in Safari lands on a login).
   const postX = () => {
     sfx("tap");
     setErr(null);
     setNote(null);
     const text = `${caption} ${link("x")}`;
-    const intent = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
-    // A phone by its user agent, not by touch: touchscreen laptops report a coarse pointer too.
-    if (/iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent)) {
-      setDone(linkable ? "Opening X · the link shows as your card" : "Opening X");
+    if (PHONE.test(navigator.userAgent)) {
+      setDone("Opening X");
       location.href = `twitter://post?message=${encodeURIComponent(text)}`;
       return;
     }
-    // Started inside the click; a blob still rendering goes in as a promise.
-    let write: Promise<void> | null = null;
-    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      try {
-        write = navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]);
-      } catch {}
-    }
-    if (write) {
-      write.catch(() => setNote(null));
-      return setNote({ kind: "x", intent, key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
-    }
-    window.open(intent, "_blank", "noopener,noreferrer");
-    setDone(linkable ? "Opened X · the card shows as the link's preview" : "Opened X");
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+    setDone(linkable ? "Opened X · your card shows as the link's preview" : "Opened X");
   };
 
   const copy = async () => {
+    sfx("tap");
+    setNote(null);
     try {
       await navigator.clipboard.writeText(`${caption} ${link("copy")}`);
       setDone("Link copied");
@@ -280,90 +240,51 @@ export function ShareSheet({
     }
   };
 
+  const title = mine ? "Share your card" : "Share this card";
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 backdrop-blur-md sm:items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label="Share your taste sign">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 backdrop-blur-md sm:items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
       <div
         className="rise flex max-h-[100dvh] w-full flex-col items-center gap-4 overflow-y-auto rounded-t-[28px] border border-line bg-paper px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:w-auto sm:rounded-[28px] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex w-full items-center justify-between gap-3">
-          <div className="inline-flex rounded-full border border-line bg-card p-1 text-[12.5px]" role="tablist">
-            {formats.map((f) => (
-              <button
-                key={f}
-                role="tab"
-                aria-selected={fmt === f}
-                onClick={() => {
-                  setFmt(f);
-                  setDone(null);
-                }}
-                className={`rounded-full px-3.5 py-1.5 font-medium transition ${fmt === f ? "bg-ink text-paper" : "text-ink-2 hover:text-ink"}`}
-              >
-                {SIZE[f].label}
-              </button>
-            ))}
+        <div className="flex w-full max-w-[400px] items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-serif text-[22px] italic leading-none text-ink">{title}</p>
+            <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">{linkable ? "every share links back to a fight" : "story, snap, or x"}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full border border-line text-ink-2 hover:text-ink">
-            ✕
-          </button>
+          <CloseButton onClick={onClose} label="Close" />
         </div>
 
-        <div className="relative overflow-hidden rounded-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-line" style={{ width: size.w * scale, height: size.h * scale }}>
-          <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0", width: size.w, height: size.h }}>
-            {fmt === "story" ? (
-              <Story
-                ref={node}
-                card={card}
-                mine={mine}
-                href={linkable ? fight("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined}
-                code={cardCode(card)}
-              />
-            ) : !result ? null : fmt === "receipt" ? (
-              <Receipt ref={node} card={card} result={result} />
-            ) : (
-              <Square ref={node} card={card} result={result} />
-            )}
+        <div className="relative shrink-0 overflow-hidden rounded-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-line" style={{ width: SIZE.w * scale, height: SIZE.h * scale }}>
+          <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0", width: SIZE.w, height: SIZE.h }}>
+            <Story ref={node} card={card} mine={mine} href={linkable ? fight("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined} code={code} />
           </div>
         </div>
 
         <div className="flex w-full max-w-[400px] flex-col gap-2">
-          {note && <NoteCard note={note} onSave={() => go("save")} onShare={go} onClose={() => setNote(null)} />}
+          <AnimatePresence>{note && <NoteCard key={note.kind} note={note} onSave={() => go("save")} onShare={go} onClose={() => setNote(null)} />}</AnimatePresence>
           <div className="grid grid-cols-4 gap-2" data-share-targets>
-            <Tile label="Story" sub="Instagram" busy={busy === "insta"} disabled={!!busy} onClick={() => toPhone("insta")}>
+            <Tile label="Instagram" sub="story" busy={busy === "insta"} disabled={!!busy} onClick={() => toApp("insta")}>
               <InstaIcon />
             </Tile>
-            <Tile label="Snap" sub="Snapchat" busy={busy === "snap"} disabled={!!busy} onClick={() => toPhone("snap")}>
+            <Tile label="Snapchat" sub="snap" busy={busy === "snap"} disabled={!!busy} onClick={() => toApp("snap")}>
               <SnapIcon />
             </Tile>
-            <Tile label="Post" sub="X" disabled={!!busy} onClick={postX}>
+            <Tile label="X" sub="post" disabled={!!busy} onClick={postX}>
               <XIcon />
             </Tile>
-            {canShare ? (
-              <Tile label="More" sub="Share sheet" busy={busy === "share"} disabled={!!busy} onClick={() => { sfx("tap"); go("share"); }}>
-                <MoreIcon />
-              </Tile>
-            ) : (
-              <Tile label="Copy" sub="Link" disabled={!!busy} onClick={() => { sfx("tap"); copy(); }}>
-                <LinkIcon />
-              </Tile>
-            )}
+            <Tile label="Copy" sub="link" disabled={!!busy} onClick={copy}>
+              <LinkIcon />
+            </Tile>
           </div>
-          <div className="flex items-center justify-center gap-4 font-mono text-[11px] text-ink-2">
-            <button onClick={() => go("save")} disabled={!!busy} className="underline-offset-4 hover:text-ink hover:underline disabled:opacity-60">
-              {busy === "save" ? "Minting PNG…" : `Save ${SIZE[fmt].label.toLowerCase()} PNG`}
+          <div className="flex min-h-[20px] items-center justify-between gap-3 px-1 font-mono text-[11px]">
+            <button onClick={() => go("save")} disabled={!!busy} className="shrink-0 text-ink-2 underline-offset-4 hover:text-ink hover:underline disabled:opacity-60">
+              {busy === "save" ? "Saving…" : "Save image"}
             </button>
-            {canShare && (
-              <>
-                <span className="text-ink-3">·</span>
-                <button onClick={copy} disabled={!!busy} className="underline-offset-4 hover:text-ink hover:underline disabled:opacity-60">
-                  Copy link
-                </button>
-              </>
-            )}
+            <p className="min-w-0 truncate text-right text-ink-3" aria-live="polite" data-share-status>
+              {err ? <span className="text-bad">{err}</span> : done}
+            </p>
           </div>
-          <p className="min-h-[18px] text-center font-mono text-[11px] text-ink-3" aria-live="polite" data-share-status>
-            {err ? <span className="text-bad">{err}</span> : done ?? `${size.out[0]}×${size.out[1]} · made for ${size.for}`}
-          </p>
         </div>
       </div>
     </div>
@@ -372,80 +293,65 @@ export function ShareSheet({
 
 /* ------------------------------------------------------------------ share targets */
 
-function NoteCard({ note, onSave, onShare, onClose }: { note: NonNullable<Note>; onSave: () => void; onShare: (app: "insta" | "snap") => void; onClose: () => void }) {
-  const code = useMemo(() => {
-    const m = qr(note.kind === "phone" ? note.url : "-");
-    return { q: m.length + 8, d: qrPath(m) };
-  }, [note]);
-  if (note.kind === "sticker") {
-    const insta = note.app === "insta";
-    const steps = insta
-      ? ["Share, then Instagram, then Stories", "Stickers, then Link, then paste", "Rename it “Fight my card” and drop it under the card"]
-      : ["Share, then Snapchat", "Tap the paperclip and paste"];
-    return (
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={SPRING} className="relative rounded-2xl border border-accent/50 bg-accent/10 p-3.5 pr-9 text-left" data-share-note="sticker">
-        <p className="font-serif text-[19px] italic leading-tight text-ink">Link copied</p>
+function CloseButton({ onClick, label, small = false }: { onClick: () => void; label: string; small?: boolean }) {
+  return (
+    <button onClick={onClick} aria-label={label} className={`grid shrink-0 place-items-center rounded-full text-ink-2 transition hover:text-ink ${small ? "h-8 w-8 hover:bg-white/10" : "h-10 w-10 border border-line hover:border-ink-3"}`}>
+      <svg width={small ? 12 : 14} height={small ? 12 : 14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+        <path d="M2 2l10 10M12 2L2 12" />
+      </svg>
+    </button>
+  );
+}
+
+/** The one step-card shape: optional QR, a serif title, numbered steps, one lime button, a quiet fallback. */
+function NoteCard({ note, onSave, onShare, onClose }: { note: NonNullable<Note>; onSave: () => void; onShare: (app: App) => void; onClose: () => void }) {
+  const code = useMemo(() => (note.kind === "phone" ? (() => { const m = qr(note.url); return { q: m.length + 8, d: qrPath(m) }; })() : null), [note]);
+  const insta = note.kind === "sticker" && note.app === "insta";
+  const view =
+    note.kind === "phone"
+      ? { title: "Finish on your phone", steps: ["Scan this with your phone camera", "Tap Instagram or Snapchat there"], action: null }
+      : insta
+        ? { title: "Link copied", steps: ["Share, then Instagram, then Stories", "Stickers, then Link, then paste", "Rename it “Fight my card”, drag it under the card"], action: "Share to Instagram" }
+        : { title: "Link copied", steps: ["Share, then Snapchat", "Tap the paperclip, then paste"], action: "Share to Snapchat" };
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={SPRING}
+      className="relative flex items-start gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3.5 pr-10 text-left"
+      data-share-note={note.kind}
+    >
+      {code && (
+        <svg viewBox={`-4 -4 ${code.q} ${code.q}`} shapeRendering="crispEdges" className="h-[104px] w-[104px] shrink-0 rounded-lg" role="img" aria-label="QR code: open this card on your phone">
+          <rect x="-4" y="-4" width={code.q} height={code.q} fill="#fff" />
+          <path d={code.d} />
+        </svg>
+      )}
+      <div className="min-w-0">
+        <p className="font-serif text-[19px] italic leading-tight text-ink">{view.title}</p>
         <ol className="mt-2 flex flex-col gap-1.5">
-          {steps.map((t, i) => (
+          {view.steps.map((t, i) => (
             <li key={t} className="flex items-start gap-2.5 text-[13px] leading-snug text-ink-2">
               <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ink font-mono text-[10.5px] font-semibold text-paper">{i + 1}</span>
               {t}
             </li>
           ))}
         </ol>
-        <button onClick={() => onShare(note.app)} className="mt-3 rounded-full bg-accent px-4 py-2 text-[13.5px] font-semibold text-black">
-          Share to {insta ? "Instagram" : "Snapchat"} →
-        </button>
-        <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
-          ✕
-        </button>
-      </motion.div>
-    );
-  }
-  if (note.kind === "x")
-    return (
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={SPRING} className="relative flex items-center gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3 pr-9" data-share-note="x">
-        <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-ink px-2 font-mono text-[15px] font-semibold text-paper">{note.key}+V</span>
-        <div className="min-w-0 text-left">
-          <p className="font-serif text-[19px] italic leading-tight text-ink">Image copied</p>
-          <p className="mt-1 text-[12.5px] leading-snug text-ink-2">In the post, press {note.key}+V to attach your card.</p>
-          <button
-            onClick={() => {
-              window.open(note.intent, "_blank", "noopener,noreferrer");
-              onClose();
-            }}
-            className="mt-2 rounded-full bg-accent px-4 py-1.5 text-[13px] font-semibold text-black"
-          >
-            Open X →
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {view.action && note.kind === "sticker" && (
+            <button onClick={() => onShare(note.app)} className="rounded-full bg-accent px-4 py-2 text-[13.5px] font-semibold text-black">
+              {view.action} →
+            </button>
+          )}
+          <button onClick={onSave} className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline">
+            or save image
           </button>
         </div>
-        <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
-          ✕
-        </button>
-      </motion.div>
-    );
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={SPRING}
-      className="relative flex items-center gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3 pr-9"
-      data-share-note={note.kind}
-    >
-      <svg viewBox={`-4 -4 ${code.q} ${code.q}`} shapeRendering="crispEdges" className="h-[104px] w-[104px] shrink-0 rounded-lg" role="img" aria-label="QR code: open this card on your phone">
-        <rect x="-4" y="-4" width={code.q} height={code.q} fill="#fff" />
-        <path d={code.d} />
-      </svg>
-      <div className="min-w-0 text-left">
-        <p className="font-serif text-[19px] italic leading-tight text-ink">Finish on your phone</p>
-        <p className="mt-1 text-[12.5px] leading-snug text-ink-2">Stories and snaps only post from the apps. Scan this, then tap Story or Snap there.</p>
-        <button onClick={onSave} className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline">
-          or save the PNG
-        </button>
       </div>
-      <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
-        ✕
-      </button>
+      <div className="absolute right-1.5 top-1.5">
+        <CloseButton onClick={onClose} label="Dismiss" small />
+      </div>
     </motion.div>
   );
 }
@@ -461,7 +367,7 @@ function Tile({ label, sub, busy, disabled, onClick, children }: { label: string
       className="group flex flex-col items-center gap-1.5 rounded-2xl border border-line bg-card px-1 py-3 text-ink transition hover:border-accent/60 disabled:opacity-60"
     >
       <span className={`grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] transition group-hover:bg-accent group-hover:text-black ${busy ? "animate-pulse" : ""}`}>{children}</span>
-      <span className="text-[12.5px] font-semibold leading-none">{busy ? "Minting…" : label}</span>
+      <span className="text-[12.5px] font-semibold leading-none">{busy ? "Saving…" : label}</span>
       <span className="font-mono text-[9px] uppercase leading-none tracking-[0.16em] text-ink-3">{sub}</span>
     </motion.button>
   );
@@ -491,15 +397,7 @@ function XIcon() {
       <path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.36 5.77L17.75 3Zm-1.08 16.17h1.7L7.4 4.74H5.58l11.09 14.43Z" />
     </svg>
   );
-}
-function MoreIcon() {
-  return (
-    <svg {...ICON}>
-      <path d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" />
-    </svg>
-  );
-}
-function LinkIcon() {
+}function LinkIcon() {
   return (
     <svg {...ICON}>
       <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
@@ -553,60 +451,6 @@ function Wordmark({ size = 13 }: { size?: number }) {
     </span>
   );
 }
-
-function BigThreeStrip({ card, vertical = false }: { card: CardData; vertical?: boolean }) {
-  const { sun, moon, rising, moonIsContradiction } = card.bigThree;
-  const rows = [
-    { k: "sun" as const, label: "Sun", t: sun },
-    { k: "moon" as const, label: moonIsContradiction ? "Moon ≠" : "Moon", t: moon },
-    { k: "rising" as const, label: "Rising", t: rising },
-  ];
-  return (
-    <div className={vertical ? "flex flex-col gap-1.5" : "grid grid-cols-3 gap-1.5"}>
-      {rows.map((r) => (
-        <div
-          key={r.k}
-          className={`flex min-w-0 rounded-xl border px-2 py-1.5 ${vertical ? "items-center gap-2" : "flex-col items-center text-center"}`}
-          style={{ borderColor: `color-mix(in oklab, ${r.t.a} 45%, transparent)`, background: `linear-gradient(180deg, color-mix(in oklab, ${r.t.a} 16%, transparent), rgba(255,255,255,0.03))` }}
-        >
-          <span className="flex items-center gap-1 font-mono text-[7.5px] uppercase tracking-[0.2em] text-ink-2">
-            <Sigil kind={r.k} className="h-[11px] w-[11px]" />
-            {!vertical && r.label}
-          </span>
-          <span className={`min-w-0 truncate font-display text-[11px] font-semibold leading-tight ${vertical ? "" : "mt-0.5 w-full"}`}>
-            {vertical && <span className="mr-1 font-mono text-[7.5px] font-normal uppercase tracking-[0.18em] text-ink-3">{r.label}</span>}
-            {r.t.name} <span style={{ color: r.t.a }}>{glyph(r.t.glyph)}</span>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TopBrands({ result, vertical = false }: { result: StyleResult; vertical?: boolean }) {
-  const top = result.brands.filter((b) => !b.side).slice(0, 3);
-  return (
-    <div className={vertical ? "flex flex-col gap-1.5" : "grid grid-cols-3 gap-1.5"}>
-      {top.map((b) => (
-        <div key={b.entity.id} className="flex min-w-0 items-center gap-1.5 rounded-xl bg-white/[0.05] p-1 pr-2 ring-1 ring-white/10">
-          <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-lg bg-white p-[2px]">
-            {b.entity.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={proxied(b.entity.image)} alt="" crossOrigin="anonymous" className="h-full w-full object-contain" />
-            ) : (
-              <span className="text-[10px] text-black">{b.entity.name[0]}</span>
-            )}
-          </span>
-          <span className="min-w-0 leading-none">
-            <span className="block truncate text-[10px] font-semibold">{b.entity.name}</span>
-            <span className="mt-0.5 block font-mono text-[7px] text-accent">.{Math.round(b.affinity * 100)} aff</span>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** 9:16 for Instagram Stories and Snapchat (360x640, exported at 3x). Laid out around their UI: the top ~84px sits under
  *  the progress bar and the bottom ~110px under the reply bar, so both hold nothing that matters. The gap under the card
  *  is left clear for the Link sticker the user pastes; the preview plays a short guide to putting it there. */
@@ -638,7 +482,7 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?
         <HoloCard card={card} width={176} idle={false} still />
       </div>
 
-      <div className="absolute inset-x-0 top-[568px] flex justify-center opacity-50">
+      <div className="absolute inset-x-0 top-[522px] flex justify-center opacity-50">
         <Wordmark size={9} />
       </div>
       {href && code && <StickerGuide link={href} />}
@@ -773,47 +617,3 @@ function StickerGuide({ link }: { link: string }) {
     </div>
   );
 }
-
-/* Receiptify-style thermal printout, shared with the results page (components/card/Receipt.tsx). */
-const Receipt = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult }>(function Receipt({ card, result }, ref) {
-  return (
-    <div ref={ref} className="relative overflow-hidden" style={{ width: 360, height: 640, background: "#0b0b0e" }}>
-      <div className="absolute inset-0" style={{ background: "radial-gradient(70% 50% at 50% 45%, rgba(255,255,255,0.08), transparent 70%)" }} />
-      <ReceiptPaper className="absolute left-1/2 top-[16px] w-[300px] -translate-x-1/2 rotate-[-1.2deg]">
-        <ReceiptBody card={card} result={result} compact />
-      </ReceiptPaper>
-    </div>
-  );
-});
-
-const Square = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult }>(function Square({ card, result }, ref) {
-  return (
-    <div ref={ref} className="relative overflow-hidden text-ink" style={{ width: 400, height: 400, fontFamily: "var(--nf-sans), system-ui, sans-serif" }}>
-      <Backdrop card={card} />
-      <div className="relative flex h-full items-center gap-4 p-5">
-        <div className="shrink-0">
-          <HoloCard card={card} width={186} idle={false} still />
-        </div>
-        <div className="flex h-full min-w-0 flex-1 flex-col py-1">
-          <Wordmark size={10} />
-          <p className="mt-4 font-mono text-[7.5px] uppercase tracking-[0.28em] text-accent">my taste sign is</p>
-          <h2 className="mt-1 font-serif leading-[0.95]" style={{ fontFamily: "var(--nf-serif), Georgia, serif", fontSize: card.archetype.length > 30 ? 19 : 23 }}>
-            {card.archetype}
-          </h2>
-          <div className="mt-3">
-            <BigThreeStrip card={card} vertical />
-          </div>
-          <div className="mt-2.5">
-            <TopBrands result={result} vertical />
-          </div>
-          <div className="mt-auto pt-2">
-            <p className="font-serif text-[16px] italic leading-none" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
-              {BRAND.question}
-            </p>
-            <p className="mt-1 font-mono text-[6.5px] uppercase tracking-[0.2em] text-ink-3">{BRAND.tagline.toLowerCase()}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});

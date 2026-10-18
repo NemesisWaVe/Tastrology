@@ -6,8 +6,9 @@ import type { Stamps } from "@/lib/stamps";
 
 const MARK = { won: "W", lost: "L", tied: "=" } as const;
 
-/** The card as a passport: every challenge it has answered leaves a stamp. Quiet until there's something to show. */
-export function Passport({ code }: { code: string }) {
+/** The card as a passport: every challenge it has answered leaves a stamp. Quiet until there's something to show.
+ *  `challenge` false where the page already leads with its own fight button. */
+export function Passport({ code, challenge = true }: { code: string; challenge?: boolean }) {
   const [s, setS] = useState<Stamps | null>(null);
   useEffect(() => {
     let off = false;
@@ -49,9 +50,11 @@ export function Passport({ code }: { code: string }) {
           ))}
         </ul>
       )}
-      <Link href={`/vs/${code}`} className="mt-4 inline-block font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline decoration-dotted underline-offset-4 hover:text-accent">
-        Challenge this card
-      </Link>
+      {challenge && (
+        <Link href={`/vs/${code}`} className="mt-4 inline-block font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline decoration-dotted underline-offset-4 hover:text-accent">
+          Challenge this card
+        </Link>
+      )}
     </div>
   );
 }

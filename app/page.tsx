@@ -119,9 +119,13 @@ export default function Home() {
       setSaved(s);
       setStage("result");
       setReturning(true);
+      // Only on a cold load: coming Back into this entry (from /deck, /c) it's already the result entry, and pushing
+      // again would add a phantom landing page and wipe Forward.
       try {
-        history.replaceState({ s: "home" }, "");
-        history.pushState({ s: "result" }, "");
+        if ((history.state as { s?: Stage } | null)?.s !== "result") {
+          history.replaceState({ s: "home" }, "");
+          history.pushState({ s: "result" }, "");
+        }
       } catch {}
     } else {
       try {
@@ -264,10 +268,11 @@ export default function Home() {
   // "/?new=1" (shop, "New sign"): start a fresh reading instead of reopening the saved one. The card stays in the deck.
   useEffect(() => {
     if (new URLSearchParams(location.search).get("new") !== "1") return;
-    resetRef.current();
+    // Clean the URL first and mark this entry home, so reset() lands here instead of stepping Back.
     try {
-      history.replaceState(null, "", "/");
+      history.replaceState({ s: "home" }, "", "/");
     } catch {}
+    resetRef.current();
   }, []);
   useEffect(() => {
     if (!returning || !saved?.result) return;
@@ -428,12 +433,12 @@ export default function Home() {
           {BRAND.name}
         </button>
         <span className="flex items-center gap-2 sm:gap-4">
-          <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
+          <Link href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
             Shop
-          </a>
-          <a href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink whitespace-nowrap py-2">
+          </Link>
+          <Link href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink whitespace-nowrap py-2">
             <span className="hidden sm:inline">My </span>Deck
-          </a>
+          </Link>
           <SoundToggle />
           <AuthNav />
           <button onClick={reset} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-1.5 text-[13px] sm:text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:px-4">

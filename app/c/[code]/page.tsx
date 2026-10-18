@@ -12,7 +12,6 @@ import { BrandSheet } from "@/components/deck/BrandSheet";
 import { ShareSheet } from "@/components/card/ShareSheet";
 import { loadDeck } from "@/lib/deck";
 import { CursorArrow } from "@/components/CursorArrow";
-import { BRAND } from "@/lib/brand";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
 import type { StyleResult } from "@/lib/types";
 
@@ -30,8 +29,6 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const [share, setShare] = useState(false);
   /** This device made the card: the reading it came from is saved here, or it sits in this device's or account's deck as a mint. */
   const [mine, setMine] = useState(false);
-  /** The full reading behind the card, when this device still has it (unlocks the Receipt and Square layouts). */
-  const [reading, setReading] = useState<StyleResult | null>(null);
   // ?b=1 (from the deck or a share) opens the brand sheet straight away; ?share=1 (the laptop share sheet's QR) the share sheet.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -40,6 +37,12 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
     if (q.get("share") === "1") {
       setShare(true);
       setMine(true);
+    }
+    // One-shot: a reload, Back, or a forwarded link shouldn't reopen the sheet.
+    if (q.has("b") || q.has("share")) {
+      q.delete("b");
+      q.delete("share");
+      history.replaceState(history.state, "", window.location.pathname + (q.size ? `?${q}` : ""));
     }
   }, []);
 
@@ -83,7 +86,6 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
     try {
       const saved = JSON.parse(localStorage.getItem("tastrology:v1") ?? "null") as { result?: StyleResult } | null;
       if (saved?.result && cardCode(buildCard(saved.result)) === code) {
-        setReading(saved.result);
         setMine(true);
         return;
       }
@@ -163,39 +165,26 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
               No. {card.serial} · Season {SEASON} · {card.rarityLabel} · code {code}
             </p>
             {card.moves.length > 0 && <p className="mt-4 text-sm text-ink-2">Signature brands: {card.moves.map((m) => m.name).join(" · ")}</p>}
+            {/* Owner: sharing is the main move. Visitor: answering it is (mint yours, fight this one). */}
+            {mine ? (
+              <Primary onClick={() => setShare(true)} title="Share your card" sub="instagram, snapchat, or x" />
+            ) : source === "server" ? (
+              <Primary href={`/vs/${encodeURIComponent(code)}`} title="Fight this card" sub="mint yours, then battle it" />
+            ) : null}
             {source === "server" && (
-              <button
-                type="button"
-                onClick={() => setBrands(true)}
-                className="mt-6 flex w-full items-center justify-between rounded-2xl border border-accent/50 bg-accent/10 px-5 py-4 text-left transition hover:bg-accent/20"
-              >
-                <span>
-                  <span className="block font-serif text-xl italic text-ink">{mine ? "See what your taste pulled in" : "See what this taste pulled in"}</span>
-                  <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">brands, and why each one</span>
-                </span>
-                <span aria-hidden className="text-2xl text-accent">→</span>
-              </button>
+              <Secondary onClick={() => setBrands(true)} title={mine ? "See what your taste pulled in" : "See what this taste pulled in"} sub="brands, and why each one" />
             )}
-            <button
-              type="button"
-              onClick={() => setShare(true)}
-              className="mt-3 flex w-full items-center justify-between rounded-2xl border border-line bg-card/60 px-5 py-4 text-left transition hover:border-accent/50"
-            >
-              <span>
-                <span className="block font-serif text-xl italic text-ink">{mine ? "Share your card" : "Share this card"}</span>
-                <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">story, snap, or x</span>
-              </span>
-              <span aria-hidden className="text-2xl text-ink-2">↗</span>
-            </button>
-            {source === "server" && <Passport code={code} />}
-            <CTA />
-          </section>
-          {share &&
-            (reading ? (
-              <ShareSheet result={reading} linkable={source === "server"} onClose={() => setShare(false)} />
+            {!mine && <Secondary onClick={() => setShare(true)} title="Share this card" sub="instagram, snapchat, or x" arrow="↗" />}
+            {source === "server" && <Passport code={code} challenge={mine} />}
+            {mine ? (
+              <Link href="/deck" className="mt-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline-offset-4 hover:text-ink hover:underline">
+                Your deck →
+              </Link>
             ) : (
-              <ShareSheet card={card} mine={mine} linkable={source === "server"} onClose={() => setShare(false)} />
-            ))}
+              <CTA />
+            )}
+          </section>
+          {share && <ShareSheet card={card} mine={mine} linkable={source === "server"} onClose={() => setShare(false)} />}
           <BrandSheet code={code} card={card} open={brands} onClose={() => setBrands(false)} src="share" visitor={!mine} />
         </>
       )}
@@ -203,10 +192,44 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   );
 }
 
+function Primary({ title, sub, onClick, href }: { title: string; sub: string; onClick?: () => void; href?: string }) {
+  const inner = (
+    <>
+      <span>
+        <span className="block font-serif text-xl italic">{title}</span>
+        <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] opacity-70">{sub}</span>
+      </span>
+      <span aria-hidden className="text-2xl">→</span>
+    </>
+  );
+  const cls = "mt-6 flex w-full items-center justify-between rounded-2xl bg-accent px-5 py-4 text-left text-paper transition hover:brightness-105";
+  return href ? (
+    <Link href={href} className={cls}>
+      {inner}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} className={cls}>
+      {inner}
+    </button>
+  );
+}
+
+function Secondary({ title, sub, onClick, arrow = "→" }: { title: string; sub: string; onClick: () => void; arrow?: string }) {
+  return (
+    <button type="button" onClick={onClick} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-line bg-card/60 px-5 py-4 text-left transition hover:border-accent/50">
+      <span>
+        <span className="block font-serif text-xl italic text-ink">{title}</span>
+        <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">{sub}</span>
+      </span>
+      <span aria-hidden className="text-2xl text-ink-2">{arrow}</span>
+    </button>
+  );
+}
+
 function CTA() {
   return (
     <Link href="/" className="group mt-8 inline-flex items-center gap-3 rounded-full bg-accent py-2 pl-6 pr-2 font-semibold text-paper">
-      Get your own {BRAND.name} sign
+      Mint your own card
       <CursorArrow className="h-9 w-9 bg-paper text-accent" />
     </Link>
   );
