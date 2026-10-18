@@ -50,4 +50,13 @@ describe("vibes", () => {
     expect(normalizeRequest({ seeds, vibes: [1, 2, 3].map((i) => ({ id: `urn:tag:keyword:qloo:x${i}`, name: "x" })) })).toMatch(/up to 2/);
     expect(normalizeRequest({ seeds, vibes: [{ id: "javascript:alert(1)", name: "x" }] })).toMatch(/isn't one we can read/);
   });
+  it("let one named love plus a vibe make a card, and keep explicit picks out", () => {
+    const one = [seeds[0]];
+    const v = [{ id: "urn:tag:cuisine:qloo:ramen", name: "Ramen" }];
+    expect(typeof normalizeRequest({ seeds: one, vibes: v })).toBe("object");
+    expect(normalizeRequest({ seeds: one })).toMatch(/between 2 and 8/);
+    expect(normalizeRequest({ seeds: [...seeds, { id: "x1", name: "Brazzers", kind: "movie" }] })).toMatch(/can't go on a card/);
+    expect(normalizeRequest({ seeds, goal: "a strip club" })).toMatch(/can't go on a card/);
+    expect(normalizeRequest({ seeds, vibes: [{ id: "urn:tag:genre:media:hentai", name: "Hentai" }] })).toMatch(/can't go on a card/);
+  });
 });

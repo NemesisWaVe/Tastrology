@@ -38,10 +38,10 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   useEffect(() => {
     if (restored.current) saveDraft({ seeds, budget, goal });
   }, [seeds, budget, goal]);
-  // Vibes (lib/vibes.ts) ride along with named loves: at least 2 named things, 3 picks in all.
+  // Vibes (lib/vibes.ts) ride along with named loves: at least 1 named thing, 3 picks in all.
   const named = seeds.filter((s) => s.kind !== "vibe");
   const vibes = seeds.filter((s) => s.kind === "vibe");
-  const need = Math.max(0, 3 - seeds.length, 2 - named.length);
+  const need = Math.max(0, 3 - seeds.length, 1 - named.length);
   const ready = need === 0;
 
   const go = () => {

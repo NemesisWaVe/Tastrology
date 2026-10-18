@@ -39,7 +39,18 @@ export const KIND_ICON: Record<string, string> = {
 };
 
 const FILTERS: (EntityKind | "vibe")[] = ["vibe", "artist", "movie", "tv_show", "book", "place", "podcast", "videogame"];
-const TRY = ["Frank Ocean", "Aftersun", "Hades", "Fleabag", "ramen", "shoegaze", "The Secret History"];
+/** "Try" suggestions, one set per tab. */
+const TRY: Record<string, string[]> = {
+  all: ["Frank Ocean", "Aftersun", "Hades", "Fleabag", "ramen", "The Secret History"],
+  vibe: ["ramen", "shoegaze", "hiking", "thrifting", "brutalism", "matcha"],
+  artist: ["Frank Ocean", "Radiohead", "SZA", "Bad Bunny", "Mitski", "A. R. Rahman"],
+  movie: ["Aftersun", "Spirited Away", "Past Lives", "In the Mood for Love", "Dune", "Parasite"],
+  tv_show: ["Fleabag", "Jujutsu Kaisen", "The Bear", "Succession", "Twin Peaks", "Arcane"],
+  book: ["The Secret History", "Norwegian Wood", "Normal People", "Dune", "Piranesi", "Circe"],
+  place: ["Kyoto", "Lisbon", "Mexico City", "Seoul", "Marrakech", "Copenhagen"],
+  podcast: ["99% Invisible", "Radiolab", "Song Exploder", "This American Life", "Huberman Lab"],
+  videogame: ["Hades", "Disco Elysium", "Outer Wilds", "Elden Ring", "Stardew Valley", "Hollow Knight"],
+};
 const MAX = 8;
 const VIBES_MAX = 2;
 const VIBE_HINTS = ["ramen", "shoegaze", "hiking", "thrifting", "brutalism", "matcha", "k-pop"];
@@ -95,7 +106,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind === "vibe" ? "&vibes=only" : kind !== "all" ? `&types=${kind}` : "&vibes=1"}`);
-        const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[] };
+        const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[]; blocked?: boolean };
+        if (data.blocked && id === req.current) setNote("That one can't go on a card. Try something else.");
         if (id === req.current) {
           const ents = dedupe(data.results ?? []);
           const vs: Seed[] = (data.vibes ?? []).slice(0, kind === "vibe" ? 6 : 2).map((v) => ({ id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` }));
@@ -340,7 +352,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         {seeds.length === 0 && (
           <span className="flex flex-wrap items-center gap-1.5 py-1 text-[13px] text-ink-3">
             <span className="mr-1">Try</span>
-            {TRY.map((t) => (
+            {(TRY[kind] ?? TRY.all).map((t) => (
               <button
                 key={t}
                 onClick={() => {

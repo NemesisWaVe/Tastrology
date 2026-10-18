@@ -1,4 +1,5 @@
 import "server-only";
+import { blocked } from "./guard";
 import { resolveVibes } from "./vibes";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BRAND } from "./brand";
@@ -183,11 +184,6 @@ async function resolveSeeds(st: RunState) {
   // Every search failed on Qloo's side (network, timeout, 429, 5xx): say so, rather than blaming the picks.
   if (!resolved.length && upstreamFails >= st.req.seeds.length) throw new UpstreamError();
   st.seeds = resolved.filter((s, i) => resolved.findIndex((x) => x.id === s.id) === i);
-  st.ledger.record(st.seeds);
-  st.emit({ type: "data", data: { kind: "seeds", seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind, image: s.image })) } });
-  st.done.add("resolve");
-  st.emit({ type: "step", id: "resolve", label: "Seeds resolved", status: "done", detail: st.seeds.map((s) => s.name).join(" · ") });
-  if (st.seeds.length < 2) throw new Error("Need at least 2 seeds that Qloo recognises.");
   if (st.req.vibes?.length) {
     const vibes = st.req.vibes;
     await logged(st, "resolve_vibes", vibes.map((v) => v.name).join(", "), async (log) => {
@@ -196,10 +192,23 @@ async function resolveSeeds(st: RunState) {
       st.vibeAnchors = r.anchors.filter((a, i) => !seedIds.has(a.id) && r.anchors.findIndex((x) => x.id === a.id) === i);
       st.vibeTags = r.tags;
       st.vibeVia = r.via;
-      st.ledger.record(st.vibeAnchors);
       return { value: null, summary: `Vibes read as ${[...st.vibeAnchors.map((a) => a.name), ...(r.tags.length ? [`${r.tags.length} tag signal${r.tags.length > 1 ? "s" : ""}`] : [])].join(", ") || "nothing usable"}` };
     });
+    // One named love plus vibes: the vibes' anchors stand in as loves (one per vibe first), so the reading has the two
+    // it needs. They show on the card as loves, read from that vibe.
+    const byVibe = vibes.map((v) => st.vibeAnchors.find((a) => (st.vibeVia[v.id] ?? []).includes(a.name))).filter((a): a is QEntity => Boolean(a));
+    for (const a of [...byVibe, ...st.vibeAnchors]) {
+      if (st.seeds.length >= 2) break;
+      if (!st.seeds.some((x) => x.id === a.id)) st.seeds.push(a);
+    }
+    st.vibeAnchors = st.vibeAnchors.filter((a) => !st.seeds.some((x) => x.id === a.id));
+    st.ledger.record(st.vibeAnchors);
   }
+  st.ledger.record(st.seeds);
+  st.emit({ type: "data", data: { kind: "seeds", seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind, image: s.image })) } });
+  st.done.add("resolve");
+  st.emit({ type: "step", id: "resolve", label: "Seeds resolved", status: "done", detail: st.seeds.map((s) => s.name).join(" · ") });
+  if (st.seeds.length < 2) throw new Error("Need at least 2 seeds that Qloo recognises.");
   return { seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind })) };
 }
 
@@ -886,10 +895,11 @@ async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal
         }
       : {}),
     dna: { name: st.name, tagline: st.tagline, keywords: st.keywords.slice(0, 5), lobes: st.lobes },
-    brands: st.final,
+    // The content guard (lib/guard.ts): an explicit brand or bridge never lands on a card.
+    brands: st.final.filter((b) => !blocked(b.entity.name)),
     rejected: st.rejected,
     contradictions: st.contradictions.slice(0, 3),
-    bridges: st.bridges,
+    bridges: st.bridges.filter((b) => !blocked(b.entity.name)),
     capsule: capsule(st.final),
     critique: st.critique,
     stats: { qlooCalls: st.calls, ms: Date.now() - t0, llmSteps: st.llmSteps },
