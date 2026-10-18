@@ -32,9 +32,15 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const [mine, setMine] = useState(false);
   /** The full reading behind the card, when this device still has it (unlocks the Receipt and Square layouts). */
   const [reading, setReading] = useState<StyleResult | null>(null);
-  // ?b=1 (from the deck or a share) opens the brand sheet straight away.
+  // ?b=1 (from the deck or a share) opens the brand sheet straight away; ?share=1 (the laptop share sheet's QR) the share sheet.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("b") === "1") setBrands(true);
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("b") === "1") setBrands(true);
+    // Only the sharer's own laptop shows that QR, so the phone shares in the first person ("I pulled").
+    if (q.get("share") === "1") {
+      setShare(true);
+      setMine(true);
+    }
   }, []);
 
   useEffect(() => {

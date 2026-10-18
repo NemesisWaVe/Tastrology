@@ -10,6 +10,7 @@ import { sfx } from "@/lib/sound";
 import { HoloCard, glyph } from "./HoloCard";
 import { Sigil, Sparkle } from "./Sigils";
 import { ReceiptBody, ReceiptPaper } from "./Receipt";
+import { qr, qrPath } from "./qr";
 
 type Format = "story" | "receipt" | "square";
 const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label: string; for: string }> = {
@@ -22,6 +23,8 @@ const SPRING = { type: "spring" as const, stiffness: 500, damping: 28 };
 let fontCSS: Promise<string> | null = null;
 
 type Target = "insta" | "snap" | "x";
+/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR), or paste the image into X. */
+type Note = { kind: "phone"; url: string } | { kind: "paste"; key: string } | null;
 
 /**
  * Share sheet: live preview of the export, then straight to a platform. X and Snapchat take the card's link (its
@@ -46,6 +49,7 @@ export function ShareSheet({
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
+  const [note, setNote] = useState<Note>(null);
   const [vp, setVp] = useState({ w: 400, h: 800 });
   const node = useRef<HTMLDivElement>(null);
   const coarse = useRef(false);
@@ -134,9 +138,10 @@ export function ShareSheet({
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  const go = (mode: "share" | "save" | "insta") => {
+  const go = (mode: "share" | "save" | "insta" | "snap") => {
     setErr(null);
     setDone(null);
+    setNote(null);
     const ready = blobs.current[fmt];
     // Ready: hand it over inside this tap (no await before navigator.share).
     if (ready) return deliver(mode, ready);
@@ -150,35 +155,32 @@ export function ShareSheet({
     );
   };
 
-  const deliver = async (mode: "share" | "save" | "insta", blob: Blob, late = false) => {
+  const deliver = async (mode: "share" | "save" | "insta" | "snap", blob: Blob, late = false) => {
     setBusy(mode);
     try {
       const file = new File([blob], fileName, { type: "image/png" });
       // Phones only: laptops (Windows, macOS) also say they can share files, but their share dialog doesn't reach Instagram.
       if (mode !== "save" && canShare && navigator.canShare?.({ files: [file] })) {
         // The phone decides the sheet's order (most-messaged people first), so say where to look before it opens.
-        if (mode === "insta") setDone("In the row of apps: Instagram → Stories");
+        const app = mode === "insta" ? "Instagram → Stories" : mode === "snap" ? "Snapchat" : null;
+        if (app) setDone(`In the row of apps: ${app}`);
         try {
-          // Instagram drops the image when text rides along on some phones, so the story share sends the file alone.
-          await navigator.share(
-            mode === "insta" ? { files: [file] } : { files: [file], title: BRAND.name, text: caption },
-          );
-          if (mode !== "insta") setDone("Shared");
+          // Instagram and Snapchat take the picture as the post itself, and drop it on some phones when text rides
+          // along, so those shares send the file alone.
+          await navigator.share(app ? { files: [file] } : { files: [file], title: BRAND.name, text: caption });
+          if (!app) setDone("Shared");
         } catch (e) {
           const name = (e as Error).name;
           // The render outlived the tap: the PNG is ready now, so the next tap goes straight through.
           if (name === "NotAllowedError" && late) setDone("Image ready · tap again to share");
           else if (name !== "AbortError") throw e;
         }
-      } else if (mode === "insta") {
+      } else if (mode === "insta" || mode === "snap") {
         save(blob);
-        if (coarse.current) {
+        if (coarse.current && mode === "insta") {
           setDone("Saved. Opening Instagram: add it from your camera roll");
           setTimeout(() => (location.href = "instagram://story-camera"), 600);
-        } else {
-          window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer");
-          setDone("Saved. Stories are phone-only; on instagram.com, Create → drop the PNG in to post it");
-        }
+        } else setDone("Saved. Add it from your camera roll");
       } else {
         save(blob);
         setDone(`Saved ${size.out[0]}×${size.out[1]} PNG · ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
@@ -190,29 +192,45 @@ export function ShareSheet({
     }
   };
 
-  // X and Snapchat open from the click itself (no await first), so the browser doesn't block the new tab.
-  // Both carry the card's link, whose preview is the card (app/c/[code]/opengraph-image.tsx; layout.tsx names it).
-  // On a phone that link opens the X app straight to the compose box. On desktop the PNG also goes onto the clipboard
-  // first, so pasting into the post attaches the full story image.
-  const openLink = (t: "snap" | "x") => {
+  // Stories and snaps only post from the phone apps. On a phone the PNG goes through the share sheet; on a laptop the
+  // sheet shows a QR that opens this card on the phone with the share sheet up (/c/<code>?share=1), plus a plain save.
+  const toPhone = (mode: "insta" | "snap") => {
+    sfx("tap");
+    if (canShare) return go(mode);
+    setErr(null);
+    setDone(null);
+    if (!linkable) return go("save");
+    setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(cardCode(card))}?share=1` });
+  };
+
+  // X: the link carries the card (app/c/[code]/opengraph-image.tsx is its preview). A web intent can't attach a
+  // picture, so on a laptop the PNG goes onto the clipboard first and the sheet says to paste it. On a phone the X app's
+  // own scheme opens the compose box (x.com in Safari lands on a login page); the web intent is the fallback.
+  const postX = () => {
     sfx("tap");
     setErr(null);
-    const ready = blobs.current[fmt];
+    setNote(null);
+    const text = `${caption} ${link("x")}`;
+    const intent = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+    if (coarse.current) {
+      setDone("Opening X");
+      const t = setTimeout(() => {
+        if (document.visibilityState === "visible") location.href = intent;
+      }, 1400);
+      window.addEventListener("pagehide", () => clearTimeout(t), { once: true });
+      location.href = `twitter://post?message=${encodeURIComponent(text)}`;
+      return;
+    }
     let pasted = false;
-    if (t === "x" && !coarse.current && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
       try {
-        void navigator.clipboard.write([new ClipboardItem({ "image/png": ready ?? prepare(fmt) })]).catch(() => {});
+        void navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]).catch(() => setNote(null));
         pasted = true;
       } catch {}
     }
-    const u = link(t);
-    const href =
-      t === "x"
-        ? `https://x.com/intent/post?text=${encodeURIComponent(caption)}&url=${encodeURIComponent(u)}`
-        : `https://www.snapchat.com/share?link=${encodeURIComponent(u)}`;
-    window.open(href, "_blank", "noopener,noreferrer");
-    if (pasted) return setDone(`Image copied · paste it into your post (${/Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘" : "Ctrl"}+V)`);
-    setDone(linkable ? `Opened ${t === "x" ? "X" : "Snapchat"} · the link previews as ${mine ? "your" : "the"} card` : `Opened ${t === "x" ? "X" : "Snapchat"}`);
+    window.open(intent, "_blank", "noopener,noreferrer");
+    if (pasted) setNote({ kind: "paste", key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
+    else setDone("Opened X");
   };
 
   const copy = async () => {
@@ -265,14 +283,15 @@ export function ShareSheet({
         </div>
 
         <div className="flex w-full max-w-[400px] flex-col gap-2">
+          {note && <NoteCard note={note} onSave={() => go("save")} onClose={() => setNote(null)} />}
           <div className="grid grid-cols-4 gap-2" data-share-targets>
-            <Tile label="Story" sub="Instagram" busy={busy === "insta"} disabled={!!busy} onClick={() => { sfx("tap"); go("insta"); }}>
+            <Tile label="Story" sub="Instagram" busy={busy === "insta"} disabled={!!busy} onClick={() => toPhone("insta")}>
               <InstaIcon />
             </Tile>
-            <Tile label="Snap" sub="Snapchat" disabled={!!busy} onClick={() => openLink("snap")}>
+            <Tile label="Snap" sub="Snapchat" busy={busy === "snap"} disabled={!!busy} onClick={() => toPhone("snap")}>
               <SnapIcon />
             </Tile>
-            <Tile label="Post" sub="X" disabled={!!busy} onClick={() => openLink("x")}>
+            <Tile label="Post" sub="X" disabled={!!busy} onClick={postX}>
               <XIcon />
             </Tile>
             {canShare ? (
@@ -308,6 +327,53 @@ export function ShareSheet({
 }
 
 /* ------------------------------------------------------------------ share targets */
+
+function NoteCard({ note, onSave, onClose }: { note: NonNullable<Note>; onSave: () => void; onClose: () => void }) {
+  const code = useMemo(() => {
+    if (note.kind !== "phone") return null;
+    const m = qr(note.url);
+    return { q: m.length + 8, d: qrPath(m) };
+  }, [note]);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={SPRING}
+      className="relative flex items-center gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3 pr-9"
+      data-share-note={note.kind}
+    >
+      {code ? (
+        <svg viewBox={`-4 -4 ${code.q} ${code.q}`} shapeRendering="crispEdges" className="h-[104px] w-[104px] shrink-0 rounded-lg" role="img" aria-label="QR code: open this card on your phone">
+          <rect x="-4" y="-4" width={code.q} height={code.q} fill="#fff" />
+          <path d={code.d} />
+        </svg>
+      ) : (
+        <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-ink px-2 font-mono text-[15px] font-semibold text-paper">
+          {note.kind === "paste" ? `${note.key}+V` : ""}
+        </span>
+      )}
+      <div className="min-w-0 text-left">
+        {note.kind === "phone" ? (
+          <>
+            <p className="font-serif text-[19px] italic leading-tight text-ink">Finish on your phone</p>
+            <p className="mt-1 text-[12.5px] leading-snug text-ink-2">Stories and snaps only post from the apps. Scan this, then tap Story or Snap there.</p>
+            <button onClick={onSave} className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline">
+              or save the PNG
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="font-serif text-[19px] italic leading-tight text-ink">Image copied</p>
+            <p className="mt-1 text-[12.5px] leading-snug text-ink-2">X can&apos;t take a picture from a link. Click into the post and press {note.key}+V to attach it.</p>
+          </>
+        )}
+      </div>
+      <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
+        ✕
+      </button>
+    </motion.div>
+  );
+}
 
 function Tile({ label, sub, busy, disabled, onClick, children }: { label: string; sub: string; busy?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
