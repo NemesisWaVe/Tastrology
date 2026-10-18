@@ -150,18 +150,20 @@ export function ShareSheet({
     );
   };
 
-  const deliver = async (mode: "share" | "save" | "insta" | "x", blob: Blob, late = false) => {
+  const deliver = async (mode: "share" | "save" | "insta", blob: Blob, late = false) => {
     setBusy(mode);
     try {
       const file = new File([blob], fileName, { type: "image/png" });
       // Phones only: laptops (Windows, macOS) also say they can share files, but their share dialog doesn't reach Instagram.
       if (mode !== "save" && canShare && navigator.canShare?.({ files: [file] })) {
+        // The phone decides the sheet's order (most-messaged people first), so say where to look before it opens.
+        if (mode === "insta") setDone("In the row of apps: Instagram → Stories");
         try {
           // Instagram drops the image when text rides along on some phones, so the story share sends the file alone.
           await navigator.share(
-            mode === "insta" ? { files: [file] } : mode === "x" ? { files: [file], text: `${caption} ${link("x")}` } : { files: [file], title: BRAND.name, text: caption },
+            mode === "insta" ? { files: [file] } : { files: [file], title: BRAND.name, text: caption },
           );
-          setDone(mode === "insta" ? "Pick Instagram, then Story" : mode === "x" ? "Pick X: the image rides along" : "Shared");
+          if (mode !== "insta") setDone("Shared");
         } catch (e) {
           const name = (e as Error).name;
           // The render outlived the tap: the PNG is ready now, so the next tap goes straight through.
@@ -189,17 +191,13 @@ export function ShareSheet({
   };
 
   // X and Snapchat open from the click itself (no await first), so the browser doesn't block the new tab.
-  // X only shows a link's preview image when it feels like it, so the image goes into the post itself: on a phone the
-  // PNG, caption and link go through the share sheet (pick X); on desktop the PNG is put on the clipboard first and
-  // pasting it into the post attaches it.
+  // Both carry the card's link, whose preview is the card (app/c/[code]/opengraph-image.tsx; layout.tsx names it).
+  // On a phone that link opens the X app straight to the compose box. On desktop the PNG also goes onto the clipboard
+  // first, so pasting into the post attaches the full story image.
   const openLink = (t: "snap" | "x") => {
     sfx("tap");
     setErr(null);
     const ready = blobs.current[fmt];
-    if (t === "x" && canShare && ready) {
-      void deliver("x", ready);
-      return;
-    }
     let pasted = false;
     if (t === "x" && !coarse.current && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
       try {

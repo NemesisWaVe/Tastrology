@@ -36,6 +36,9 @@ const CSP = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Link previews (Snapchat, iMessage, Telegram, X…) only read og: tags in <head>. Next streams metadata into <body>
+  // for anything not on its bot list, and Snapchat's crawler isn't on it, so every request gets the blocking <head>.
+  htmlLimitedBots: /.*/,
   async headers() {
     const h = [
       { key: "X-Content-Type-Options", value: "nosniff" },
