@@ -186,7 +186,31 @@
   transition: opacity 0.25s;
 }
 
+/* Held or hovered: the star flares and twinkles fast, like it noticed you. */
+.flare {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: flare 0.7s ease-in-out infinite alternate;
+}
+.flare .halo {
+  opacity: 1;
+}
+@keyframes flare {
+  from {
+    transform: scale(1.15);
+    filter: brightness(1.1);
+  }
+  to {
+    transform: scale(1.6);
+    filter: brightness(1.8) drop-shadow(0 0 6px #fff);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .flare {
+    animation: none;
+    transform: scale(1.3);
+  }
   .dust,
   .corona,
   .flow,

@@ -11,8 +11,8 @@ import s from "./sky.module.css";
  * "Your sky": you are the star in the middle, every friend a star bound to you by a filament of light. Closer orbits
  * and brighter colours mean more days fought. Requests either way are nebulae still forming, and a friend you haven't
  * seen arrive yet is born on screen once (the cloud collapses, flashes, ignites, and the bond draws in).
- * Hold a star (or hover it) and their line whispers next to it; tap it and the sky flies in to them, with their line
- * sealed under foil until you scratch it.
+ * Hold a star (or hover it) and it flares up and says who it is, hinting at a sealed line; tap it and the sky flies
+ * in to them, where the line waits under foil until you scratch it. The line itself is never shown on hover.
  */
 
 const TINT: Record<string, string> = {
@@ -363,7 +363,7 @@ export function FriendSky({
               className={s.star}
               tabIndex={0}
               role="button"
-              aria-label={`${b.label}, ${b.level === "New" ? "new" : b.level} friend${b.tag ? `: ${b.tag}` : ""}`}
+              aria-label={`${b.label}, ${b.level === "New" ? "new" : b.level} friend${b.tag ? ", sealed line" : ""}`}
               style={{ opacity: focus && focus !== b.pc ? 0.22 : 1, transition: "opacity 0.6s" }}
               onPointerDown={(e) => press(b.pc, e.pointerType)}
               onPointerUp={(e) => release(e.pointerType)}
@@ -420,7 +420,7 @@ export function FriendSky({
                   <circle cx={b.x} cy={b.y} r="8" fill="none" stroke="#ffffff" strokeWidth="1.5" className={s.birthFlash} style={after(0.85)} />
                 </>
               )}
-              <g className={birth !== undefined ? s.birthStar : undefined} style={after(0.9)}>
+              <g className={`${birth !== undefined ? s.birthStar : ""} ${held === b.pc && !focus ? s.flare : ""}`} style={after(0.9)}>
                 <circle className={s.halo} cx={b.x} cy={b.y} r={r * 4.2} fill={`url(#sky-halo-${b.level})`} opacity="0.55" />
                 <circle cx={b.x} cy={b.y} r={r} fill="#ffffff" />
                 <circle cx={b.x} cy={b.y} r={r * 0.55} fill={tint} opacity="0.6" />
@@ -457,13 +457,14 @@ export function FriendSky({
       {whisper && (
         <div
           className="pointer-events-none absolute z-10 max-w-[13rem] -translate-x-1/2 rounded-2xl border border-white/10 bg-paper/80 px-3.5 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md"
-          style={{ left: Math.min(Math.max(whisper.x, 110), w - 110), top: Math.max(whisper.y - 74, 8) }}
+          style={{ left: Math.min(Math.max(whisper.x, 110), w - 110), top: whisper.y < 120 ? whisper.y + 22 : whisper.y - 96 }}
           role="status"
         >
           <p className="font-mono text-[9.5px] uppercase tracking-[0.2em]" style={{ color: TINT[whisper.level] }}>
             {whisper.label}
           </p>
-          <p className="mt-0.5 font-serif text-[15px] italic leading-snug text-ink">{whisper.tag ? `“${whisper.tag}”` : "No bio yet."}</p>
+          <p className="mt-0.5 font-serif text-[15px] italic leading-snug text-ink">{ago(whisper.seen) || "Somewhere out there"}</p>
+          {whisper.tag && <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-accent">A sealed line · tap to scratch</p>}
         </div>
       )}
 
