@@ -333,12 +333,10 @@ export function BrandSheet({
     }
     setTimeout(
       () =>
-        document
-          .getElementById(`pulled-${b.id}`)
-          ?.scrollIntoView({
-            behavior: reduce ? "auto" : "smooth",
-            block: "center",
-          }),
+        document.getElementById(`pulled-${b.id}`)?.scrollIntoView({
+          behavior: reduce ? "auto" : "smooth",
+          block: "center",
+        }),
       60,
     );
   };
@@ -407,6 +405,29 @@ export function BrandSheet({
   const receipt = full ?? (snap ? reprintOf(snap, card) : null);
   const reprint = !full && Boolean(snap);
 
+  const head = (
+    <header className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-accent">
+          Pulled by your taste
+        </p>
+        <h2 className="mt-1 truncate font-serif text-3xl italic leading-tight">
+          {card.archetype}
+        </h2>
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
+          No. {card.serial} · {code}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="shrink-0 rounded-full border border-line bg-black/40 px-3 py-1 backdrop-blur font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 hover:text-ink"
+      >
+        Close
+      </button>
+    </header>
+  );
+
   return (
     <AnimatePresence>
       {open && (
@@ -428,26 +449,20 @@ export function BrandSheet({
             transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
             className="h-[100dvh] w-full overflow-y-auto overscroll-contain border-l border-line bg-[var(--card,#0d0d12)] px-5 pb-16 pt-5 sm:w-[560px] sm:px-8"
           >
-            <header className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-accent">
-                  Pulled by your taste
-                </p>
-                <h2 className="mt-1 truncate font-serif text-3xl italic leading-tight">
-                  {card.archetype}
-                </h2>
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
-                  No. {card.serial} · {code}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="shrink-0 rounded-full border border-line px-3 py-1 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 hover:text-ink"
-              >
-                Close
-              </button>
-            </header>
+            {snap && love ? (
+              <PulledSky
+                header={head}
+                loves={snap.loves}
+                sel={sel}
+                onSel={setSel}
+                pulled={pulled}
+                decoded={decoded}
+                onDecode={decode}
+                onScratched={scratched}
+              />
+            ) : (
+              head
+            )}
 
             {toast && (
               <p
@@ -504,19 +519,7 @@ export function BrandSheet({
                     kept for this card.
                   </p>
                 )}
-                <PulledSky
-                  loves={snap.loves}
-                  sel={sel}
-                  onSel={setSel}
-                  pulled={pulled}
-                  decoded={decoded}
-                  onDecode={decode}
-                />
-                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
-                  Tap a star to travel · tap a signal to scratch it open
-                </p>
-
-                <h3 className="mt-7 font-serif text-2xl italic">
+                <h3 className="mt-6 font-serif text-2xl italic">
                   Sent by {displayName(love.name)}
                 </h3>
                 {pulled.length ? (

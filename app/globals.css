@@ -268,3 +268,13 @@ html[data-gate] [data-orb] { opacity: 0; pointer-events: none; }
   from { left: -35%; }
   to { left: 110%; }
 }
+
+/* Focus sky (components/deck/PulledSky.tsx) */
+@keyframes skyBob {
+  0%, 100% { transform: translateY(-3px); }
+  50% { transform: translateY(3px); }
+}
+@keyframes skyBreathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
