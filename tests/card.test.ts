@@ -100,6 +100,15 @@ describe("rising sign", () => {
   });
 });
 
+describe("rolled rarity", () => {
+  it("takes the roll over the taste score, and a second draw still caps it", () => {
+    const r = base({ overlap: 1 }, 0.1);
+    expect(buildCard({ ...r, roll: { tier: "common", u: 0.9, season: "01" } }).rarity).toBe("common");
+    expect(buildCard({ ...r, roll: { tier: "secret", u: 0.01, season: "01" } }).rarity).toBe("secret");
+    expect(buildCard({ ...r, roll: { tier: "secret", u: 0.01, season: "01" }, redraw: { cap: "rare" } }).rarity).toBe("rare");
+  });
+});
+
 describe("second draw", () => {
   it("can't outrank the card it replaced, and says so", () => {
     const r = base({ overlap: 0, contradictions: [{ a: "s1", b: "s2", overlap: 0 }] }, 0.99);

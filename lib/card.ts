@@ -160,7 +160,9 @@ export function buildCard(r: StyleResult): CardData {
     tension: con ? Math.round(15 * (1 - con.overlap)) : 0,
   };
   const rarityScore = pts.obscurity + pts.pairing + pts.spread + pts.tension;
-  const natural: Rarity = rarityScore >= RARITY_CUTS.secret ? "secret" : rarityScore >= RARITY_CUTS.holo ? "holo" : rarityScore >= RARITY_CUTS.rare ? "rare" : "common";
+  const scored: Rarity = rarityScore >= RARITY_CUTS.secret ? "secret" : rarityScore >= RARITY_CUTS.holo ? "holo" : rarityScore >= RARITY_CUTS.rare ? "rare" : "common";
+  // Rolled cards take the roll; older cards and personas keep the tier their taste score earned.
+  const natural: Rarity = r.roll?.tier ?? scored;
   // A second draw (paid by a regret) can't outrank the card it replaced.
   const TIER: Rarity[] = ["common", "rare", "holo", "secret"];
   const cap = r.redraw?.cap;

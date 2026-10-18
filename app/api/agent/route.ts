@@ -21,6 +21,7 @@ import { dropLease, leaseHeld, takeLease } from "@/lib/runLease";
 import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
 import { numberCard } from "@/lib/cardStyle";
+import { rollFor, rollOn } from "@/lib/roll";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
 
@@ -135,6 +136,9 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
     async (result) => {
       const rec = { events: f.events, result };
       // Register the card's twin server-side, before the result is returned or cached. (Stage C: also write the fighter sheet here.)
+      // Rarity is a roll for real mints (lib/roll.ts): keyed to the account and the paid run, kept in the cached result so
+      // a replay of the same picks is the same card. Personas and runs without an account keep the taste-scored tier.
+      if (minter && rollOn() && result.mode !== "mock") result.roll = rollFor(minter.userId, minter.runId ?? result.runId, SEASON);
       if (minter?.cap) {
         result.redraw = { cap: minter.cap };
         // Tier jumps on second draws, for spotting rarity farming: counted, and logged without user ids.

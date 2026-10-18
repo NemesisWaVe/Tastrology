@@ -113,8 +113,27 @@ export function ResultsView({
 
             <div className="mt-5 max-w-xl">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2">
-                {card.rarityLabel} · {card.rarityScore}/100
+                {result.roll ? (
+                  <>
+                    {card.rarityLabel} · rolled ·{" "}
+                    <a href="/odds" className="underline decoration-dotted underline-offset-2 hover:text-ink">
+                      odds
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    {card.rarityLabel} · {card.rarityScore}/100
+                  </>
+                )}
               </p>
+              {result.roll && (
+                <>
+                  <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">
+                    Rolled {result.roll.u.toFixed(4)} on the published odds. Rarity is a roll. Your taste isn&apos;t.
+                  </p>
+                  <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">Taste marks · {card.rarityScore}/100</p>
+                </>
+              )}
               <ul className="mt-1.5 space-y-1 text-[13.5px] leading-snug text-ink-3">
                 {card.rarityWhy.map((w) => (
                   <li key={w}>{w}</li>

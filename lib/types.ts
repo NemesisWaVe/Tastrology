@@ -118,6 +118,8 @@ export interface StyleResult {
   runId: string;
   /** Set when a regret credit paid for this reading: the card can't outrank the one it replaced (regret-burn.md). */
   redraw?: { cap: "common" | "rare" | "holo" | "secret" };
+  /** The mint's rarity roll (lib/roll.ts). Absent on older cards and demo personas: they keep the taste-scored tier. */
+  roll?: { tier: "common" | "rare" | "holo" | "secret"; u: number; season: string };
   mode: "live" | "mock";
   planner: "llm" | "autopilot";
   cached?: boolean;
