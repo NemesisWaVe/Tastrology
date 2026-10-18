@@ -500,19 +500,6 @@ export function Orrery({
     <div ref={box} className="relative aspect-square w-[min(92vw,44vh,480px)] lg:w-[min(48vw,66vh,620px)]">
       <canvas ref={cv} className="absolute inset-0 h-full w-full" aria-hidden />
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[24%] w-[24%] -translate-x-1/2 -translate-y-1/2">{center}</div>
-      {/* Vibes: dashed rainbow satellites on the sides of the well, each with what it was read as (lib/vibes.ts). */}
-      {(f.vibes ?? []).slice(0, 2).map((v, i) => (
-        <div
-          key={v.name}
-          className={`pointer-events-none absolute top-1/2 w-[26%] -translate-y-1/2 text-center transition-opacity duration-500 ${collapsing ? "opacity-0" : "opacity-100"}`}
-          style={i === 0 ? { left: "2%" } : { right: "2%" }}
-        >
-          <span className="vibeChip inline-flex max-w-full items-center rounded-full px-3 py-1 text-[11px] font-semibold">
-            <span className="vibeText truncate">∿ {v.name}</span>
-          </span>
-          <p className="mt-1 truncate font-mono text-[8px] uppercase tracking-[0.18em] text-ink-3 sm:text-[9px]">{v.via.length ? `via ${v.via[0]}` : "vibe"}</p>
-        </div>
-      ))}
       {f.seeds.map((s) => (
         <button
           key={s.id}
