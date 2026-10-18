@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ReceiptBody, ReceiptPaper } from "@/components/card/Receipt";
+import { ReceiptRoll } from "@/components/card/ReceiptRoll";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
 import { readSeen, writeSeen, type Seen } from "@/lib/brandSeen";
@@ -169,7 +169,6 @@ export function BrandSheet({
   const [seen, setSeen] = useState<Seen | null>(null);
   // The receipt: pinned at the top, folded to its head until unrolled. Never the printing show (that's the first mint's).
   const [full, setFull] = useState<StyleResult | null>(null);
-  const [unrolled, setUnrolled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const freshRef = useRef<HTMLElement>(null);
   const [shared, setShared] = useState<string | null>(null);
@@ -314,41 +313,7 @@ export function BrandSheet({
               </p>
             )}
 
-            {receipt && (
-              <section className="mt-5">
-                <ReceiptPaper curl>
-                  {unrolled ? (
-                    <ReceiptBody card={card} result={receipt} stagger={false} />
-                  ) : (
-                    <div className="px-5 pt-3 font-mono text-[11px] uppercase leading-[1.55] tracking-[0.06em]">
-                      <p className="text-center text-[18px] font-bold tracking-[0.18em]">Tastrology</p>
-                      <p className="mt-1 flex justify-between">
-                        <span>order #{card.serial}</span>
-                        <span>{day(receipt.createdAt)}</span>
-                      </p>
-                      <p className="mt-2 border-t border-dashed border-black/30 pt-2">
-                        {receipt.seeds.length} loves · {receipt.brands.length} brands
-                      </p>
-                      <p className="flex justify-between text-[14px] font-black">
-                        <span>total: your taste</span>
-                        <span>{card.power}</span>
-                      </p>
-                      <p className="mt-1 text-[10px] opacity-70">{reprint ? "Reprint from a re-read · original not kept" : "Paid in full · kept on file"}</p>
-                    </div>
-                  )}
-                </ReceiptPaper>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sfx("rustle");
-                    setUnrolled((u) => !u);
-                  }}
-                  className="mt-2 w-full text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3 hover:text-ink"
-                >
-                  {unrolled ? "Fold the receipt ↑" : "Unroll the receipt ↓"}
-                </button>
-              </section>
-            )}
+            {receipt && <ReceiptRoll card={card} result={receipt} note={reprint ? "Reprinted from a re-read. The original wasn't kept." : undefined} />}
 
             {!r && <p className="mt-10 font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding what it pulled in…</p>}
 
