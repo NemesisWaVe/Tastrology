@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import type { StyleResult } from "@/lib/types";
 import { buildCard, cardCode, proxied, type CardData } from "@/lib/card";
@@ -609,12 +609,11 @@ function TopBrands({ result, vertical = false }: { result: StyleResult; vertical
 
 /** 9:16 for Instagram Stories and Snapchat (360x640, exported at 3x). Laid out around their UI: the top ~84px sits under
  *  the progress bar and the bottom ~110px under the reply bar, so both hold nothing that matters. The gap under the card
- *  is left clear for the Link sticker the user pastes, and the typed link is large enough to read and type. */
+ *  is left clear for the Link sticker the user pastes; the preview plays a short guide to putting it there. */
 const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?: string; code?: string }>(function Story({ card, mine = true, href, code }, ref) {
   const [t1, t2] = card.types;
   const a = t1?.a ?? "#a78bfa";
   const b = (t2 ?? t1)?.b ?? "#22d3ee";
-  const base = href && code ? href.slice(0, href.length - encodeURIComponent(code).length) : null;
   return (
     <div ref={ref} className="relative overflow-hidden text-ink" style={{ width: 360, height: 640, fontFamily: "var(--nf-sans), system-ui, sans-serif" }}>
       <Backdrop card={card} />
@@ -639,30 +638,141 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?
         <HoloCard card={card} width={176} idle={false} still />
       </div>
 
-      {href && (
-        <>
-          {/* where the Link sticker goes: outlined in the preview, left out of the export */}
-          <div data-export-skip className="absolute left-1/2 top-[456px] grid h-[42px] w-[176px] -translate-x-1/2 place-items-center rounded-xl border border-dashed border-white/30 font-mono text-[8px] uppercase tracking-[0.2em] text-ink-3">
-            link sticker here
-          </div>
-          <p className="absolute inset-x-0 top-[506px] text-center font-mono text-[13px] font-medium tracking-tight">
-            {base ? (
-              <>
-                {base}
-                <span style={{ color: "#c6ff3d" }}>{encodeURIComponent(code!)}</span>
-              </>
-            ) : (
-              href
-            )}
-          </p>
-        </>
-      )}
       <div className="absolute inset-x-0 top-[568px] flex justify-center opacity-50">
         <Wordmark size={9} />
       </div>
+      {href && code && <StickerGuide link={href} />}
     </div>
   );
 });
+
+/** Preview only (left out of the export): a looping walk-through of adding the Link sticker in Instagram. Tap
+ *  Stickers, pick Link, paste the copied link, then drag the sticker into the gap under the card. Coordinates are the
+ *  story's own 360x640. */
+const GUIDE = [
+  { t: "Tap Stickers", ms: 1500 },
+  { t: "Pick Link", ms: 1500 },
+  { t: "Paste the link", ms: 1800 },
+  { t: "Rename it “Fight my card”", ms: 1500 },
+  { t: "Drag it under the card", ms: 2600 },
+];
+function StickerGuide({ link }: { link: string }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setStep((s) => (s + 1) % GUIDE.length), GUIDE[step].ms);
+    return () => clearTimeout(t);
+  }, [step]);
+  const tap = (x: number, y: number) => (
+    <motion.span
+      key={`tap-${x}-${y}`}
+      className="absolute h-7 w-7 rounded-full border-2 border-white bg-white/30"
+      style={{ left: x - 14, top: y - 14 }}
+      initial={{ scale: 1.6, opacity: 0 }}
+      animate={{ scale: [1.6, 0.8, 1], opacity: [0, 1, 0.9] }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, delay: 0.4 }}
+    />
+  );
+  return (
+    <div data-export-skip className="pointer-events-none absolute inset-0" aria-hidden>
+      {/* the stickers button, where Instagram puts it */}
+      <div className="absolute right-[14px] top-[34px] grid h-9 w-9 place-items-center rounded-full bg-black/55 ring-1 ring-white/25">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 3H8a5 5 0 0 0-5 5v8a5 5 0 0 0 5 5h5l8-8V8a5 5 0 0 0-5-5z" />
+          <path d="M13 21v-3a5 5 0 0 1 5-5h3M9 10h.01M15 10h.01" />
+        </svg>
+      </div>
+
+      <AnimatePresence>
+        {step === 0 && tap(328, 52)}
+        {(step === 1 || step === 2) && <motion.div key="dim" className="absolute inset-0 bg-black/55" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
+        {step === 1 && (
+          <motion.div
+            key="tray"
+            className="absolute inset-x-0 bottom-0 rounded-t-[22px] bg-[#1c1c22] px-5 pb-16 pt-4 ring-1 ring-white/10"
+            initial={{ y: 260 }}
+            animate={{ y: 0 }}
+            exit={{ y: 260 }}
+            transition={SPRING}
+          >
+            <div className="mx-auto mb-4 h-1 w-9 rounded-full bg-white/25" />
+            <div className="flex flex-wrap justify-center gap-2">
+              {["Location", "Mention", "Link", "Poll", "Music", "Question"].map((c) => (
+                <span key={c} className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold uppercase ${c === "Link" ? "bg-white text-[#2563eb] ring-2 ring-accent" : "bg-white/10 text-white/80"}`}>
+                  {c}
+                </span>
+              ))}
+            </div>
+          </motion.div>
+        )}
+        {step === 1 && tap(239, 524)}
+        {step === 2 && (
+          <motion.div key="url" className="absolute inset-x-6 top-[230px] rounded-2xl bg-[#1c1c22] p-4 ring-1 ring-white/10" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SPRING}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">URL</p>
+            <div className="relative mt-1.5 h-[34px] rounded-lg bg-white/10 px-3 py-2 font-mono text-[11px] text-white">
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>
+                {link}
+              </motion.span>
+              <motion.span
+                className="absolute -top-8 left-2 rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-black shadow-lg"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 1, 1, 0] }}
+                transition={{ duration: 1.1, times: [0, 0.15, 0.8, 1], delay: 0.1 }}
+              >
+                Paste
+              </motion.span>
+            </div>
+          </motion.div>
+        )}
+        {step === 2 && tap(44, 300)}
+        {step >= 3 && (
+          <motion.div
+            key="sticker"
+            className="absolute left-1/2 flex items-center gap-1.5 whitespace-nowrap rounded-[10px] bg-white px-3 py-2 text-[13px] font-bold uppercase tracking-tight text-[#2563eb] shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
+            style={{ x: "-50%" }}
+            initial={{ top: 300, scale: 0.6, opacity: 0 }}
+            animate={step === 4 ? { top: 462, scale: 1, opacity: 1 } : { top: 300, scale: 1.08, opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={step === 4 ? { type: "spring", stiffness: 120, damping: 18, delay: 0.25 } : SPRING}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1 1M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1-1" />
+            </svg>
+            Fight my card
+          </motion.div>
+        )}
+        {step === 4 && (
+          <motion.span
+            key="drag"
+            className="absolute h-7 w-7 rounded-full border-2 border-white bg-white/30"
+            style={{ left: 166 }}
+            initial={{ top: 300, opacity: 0 }}
+            animate={{ top: [300, 300, 468, 468], opacity: [0, 1, 1, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.7, times: [0, 0.15, 0.75, 1] }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* step caption, in the strip the app covers anyway */}
+      <div className="absolute inset-x-0 bottom-[22px] flex justify-center">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={step}
+            className="flex items-center gap-2 rounded-full bg-black/75 py-1.5 pl-1.5 pr-3.5 text-[12px] font-semibold text-white ring-1 ring-white/15"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2 }}
+          >
+            <span className="grid h-5 w-5 place-items-center rounded-full bg-accent font-mono text-[10.5px] text-black">{step + 1}</span>
+            {GUIDE[step].t}
+          </motion.span>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
 
 /* Receiptify-style thermal printout, shared with the results page (components/card/Receipt.tsx). */
 const Receipt = forwardRef<HTMLDivElement, { card: CardData; result: StyleResult }>(function Receipt({ card, result }, ref) {
