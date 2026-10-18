@@ -472,7 +472,7 @@ export default function Home() {
         </div>
       )}
 
-      {share && shareable && <ShareSheet result={shareable} linkable={shareable.mode !== "mock" && !isPersonaRequest(req)} onClose={() => setShare(false)} />}
+      {share && shareable && <ShareSheet result={shareable} linkable={shareable.mode !== "mock"} onClose={() => setShare(false)} />}
     </div>
   );
 }
