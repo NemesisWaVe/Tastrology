@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, listBouts, listFriends, listRequests, openBout, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, openBout, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -81,6 +81,17 @@ describe("friends", () => {
     expect(await addFriend("bo", b, a.pc)).toBe("added");
     expect((await listFriends("ann"))!.map((f) => f.pc)).toEqual([b.pc]);
     expect(await listRequests("bo")).toEqual({ incoming: [], sent: [] });
+  });
+
+  it("ticks the other side's change counter on every write that reaches them", async () => {
+    const [a, b] = await pair();
+    const before = (await inboxCount("bo"))!;
+    expect(before).toBeGreaterThan(0);
+    await openBout("ann", a, b.pc, 0);
+    expect(await inboxCount("bo")).toBe(before + 1);
+    const ann = (await inboxCount("ann"))!;
+    await acceptBout("bo", b, (await listBouts("bo"))![0].id);
+    expect(await inboxCount("ann")).toBe(ann + 1);
   });
 
   it("adds both sides on accept, no self-adds, and removes both sides", async () => {

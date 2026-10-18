@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { battle, type BattleResult } from "./battle";
 import type { CardData } from "./card";
-import { ddbDelete, ddbGet, ddbPutIfAbsent, ddbQuery, ddbTransact, ddbUpdate, type Flat, type TxOp } from "./ddb";
+import { ddbDelete, ddbGet, ddbGetStatus, ddbPutIfAbsent, ddbQuery, ddbTransact, ddbUpdate, type Flat, type TxOp } from "./ddb";
 import { fromSheet, getFighterStatus } from "./fighters";
 import { recordBattle } from "./stamps";
 import { burnedAt } from "./twins";
@@ -137,6 +137,19 @@ async function bumpFriendship(uid: string, pc: string, now = Date.now()) {
   });
 }
 
+/**
+ * A per-player change counter: every write that lands on someone else's lists ticks theirs. An open friends page
+ * polls only this (one small read) and reloads the full lists when it moves, so nobody has to refresh.
+ */
+async function touch(...uids: string[]) {
+  await Promise.allSettled(uids.filter(Boolean).map((u) => ddbUpdate(U(u), "INBOX", "ADD n :one", { values: { ":one": 1 } })));
+}
+
+export async function inboxCount(uid: string): Promise<number | null> {
+  const r = await ddbGetStatus(U(uid), "INBOX", 1500);
+  return r.status === "found" ? Number(r.value.n) || 0 : r.status === "missing" ? 0 : null;
+}
+
 const edge = (p: Player & { uid: string }, at: number) => ({ uid: p.uid, pc: p.pc, name: p.name, card: p.card, rarity: p.rarity, at });
 
 export interface Requests {
@@ -171,7 +184,10 @@ export async function addFriend(uid: string, me: Player, pc: string): Promise<"a
     { put: { PK: U(uid), SK: `SENT#${pc}`, ...edge(them, now) }, condition: "attribute_not_exists(PK)" },
   ]);
   if (!r) return "error";
-  if (r.ok) return "sent";
+  if (r.ok) {
+    await touch(them.uid);
+    return "sent";
+  }
   return r.reasons.includes(CCF) ? "pending" : "error";
 }
 
@@ -192,7 +208,10 @@ export async function acceptFriend(uid: string, me: Player, pc: string): Promise
     { delete: { PK: U(them.uid), SK: `SENT#${me.pc}` } },
   ]);
   if (!r) return "error";
-  if (r.ok) return "added";
+  if (r.ok) {
+    await touch(them.uid);
+    return "added";
+  }
   return r.reasons.includes(CCF) ? "exists" : "error";
 }
 
@@ -202,7 +221,9 @@ export async function dropRequest(uid: string, me: Player, pc: string): Promise<
   const ops: Promise<string>[] = [];
   if (inc) ops.push(ddbDelete(U(uid), `REQ#${pc}`), ddbDelete(U(str(inc.uid)), `SENT#${me.pc}`));
   if (out) ops.push(ddbDelete(U(uid), `SENT#${pc}`), ddbDelete(U(str(out.uid)), `REQ#${me.pc}`));
-  return !(await Promise.all(ops)).includes("error");
+  const ok = !(await Promise.all(ops)).includes("error");
+  await touch(str(inc?.uid), str(out?.uid));
+  return ok;
 }
 
 export async function removeFriend(uid: string, me: Player, pc: string): Promise<boolean> {
@@ -210,6 +231,7 @@ export async function removeFriend(uid: string, me: Player, pc: string): Promise
   if (!f) return true;
   const other = str(f.uid);
   const [a, b] = await Promise.all([ddbDelete(U(uid), `FRIEND#${pc}`), other ? ddbDelete(U(other), `FRIEND#${me.pc}`) : "deleted"]);
+  await touch(other);
   return a !== "error" && b !== "error";
 }
 
@@ -267,6 +289,7 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   ];
   if (!stake) {
     const r = await ddbTransact(rows);
+    if (r?.ok) await touch(other);
     return r?.ok ? "open" : "error";
   }
   const r = await ddbTransact([
@@ -276,7 +299,10 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
     ...rows,
   ]);
   if (!r) return "error";
-  if (r.ok) return "open";
+  if (r.ok) {
+    await touch(other);
+    return "open";
+  }
   if (r.reasons[0] === CCF) return "empty";
   if (r.reasons[2] === CCF) return "daily";
   return "error";
@@ -339,7 +365,7 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
   const r = await ddbTransact(ops);
   if (!r) return { ok: false, why: "error" };
   if (!r.ok) return { ok: false, why: r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : r.reasons[2] === CCF ? "empty" : "error" };
-  await Promise.allSettled([recordBattle(a, b, result), bumpFriendship(uid, str(mine.pc), now), bumpFriendship(challenger, me.pc, now)]);
+  await Promise.allSettled([recordBattle(a, b, result), bumpFriendship(uid, str(mine.pc), now), bumpFriendship(challenger, me.pc, now), touch(challenger)]);
   return { ok: true, result, a, b, outcome: side("b") };
 }
 
@@ -367,6 +393,9 @@ export async function closeBout(uid: string, sk: string): Promise<"closed" | "go
     : [];
   const r = await ddbTransact([close(uid), close(other), ...refund]);
   if (!r) return "error";
-  if (r.ok) return "closed";
+  if (r.ok) {
+    await touch(other);
+    return "closed";
+  }
   return r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : "error";
 }

@@ -19,8 +19,12 @@ type Data = {
   dustOn?: boolean;
   dust?: number | null;
   stakes?: number[];
+  inbox?: number | null;
   error?: string;
 };
+
+/** How often an open, visible friends page checks its change counter. */
+const POLL_MS = 8000;
 
 export async function friendsOp(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; a?: string; b?: string; outcome?: string; status?: string }> {
   try {
@@ -79,6 +83,29 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
     void whenAuthReady().then((b) => (off = b?.onChange(() => void load())));
     return () => off?.();
   }, [load]);
+
+  // Live: poll the one-number change counter while the tab is visible; reload the lists only when it moves.
+  const seen = d?.inbox;
+  const signedIn = Boolean(d?.signedIn);
+  useEffect(() => {
+    if (!signedIn) return;
+    let stop = false;
+    const tick = async () => {
+      if (stop || document.hidden) return;
+      const j = (await fetch("/api/friends?ping=1", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)) as { n?: number | null } | null;
+      if (!stop && typeof j?.n === "number" && j.n !== seen) void load();
+    };
+    const t = setInterval(() => void tick(), POLL_MS);
+    const wake = () => !document.hidden && void tick();
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      stop = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, [signedIn, seen, load]);
 
   const run = async (key: string, body: Record<string, unknown>, done?: (j: Awaited<ReturnType<typeof friendsOp>>) => void) => {
     setBusy(key);

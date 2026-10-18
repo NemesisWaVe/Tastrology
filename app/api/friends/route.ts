@@ -1,6 +1,6 @@
 import { clerkOn, currentUserId } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, acceptFriend, addFriend, BOUT_SK, closeBout, dropRequest, ensurePlayer, listBouts, listFriends, listRequests, lookupPlayer, openBout, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupPlayer, openBout, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
 import { TWIN_CODE } from "@/lib/twins";
@@ -15,6 +15,7 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
  * GET              your code, fighter, friends, bouts and dust
  * GET ?pc=XXXXXX   the public face of a player code (invite page), no sign-in needed
  * GET ?whoami=1    just your player code (share links carry it)
+ * GET ?ping=1      your change counter, for live updates
  */
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
@@ -27,12 +28,14 @@ export async function GET(request: Request) {
   if (!on) return json({ on: false });
   const uid = await currentUserId();
   if (!uid) return json({ on: true, signedIn: false });
+  // Live updates: the page polls this one counter and reloads only when it moves.
+  if (q.get("ping")) return json({ n: await inboxCount(uid) });
   const me = await ensurePlayer(uid);
   if (!me) return json({ error: "Couldn't reach the server." }, 503);
   if (q.get("whoami")) return json({ on: true, signedIn: true, me });
   const dOn = dustOn();
-  const [friends, requests, bouts, ds] = await Promise.all([listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
-  return json({ on: true, signedIn: true, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES });
+  const [inbox, friends, requests, bouts, ds] = await Promise.all([inboxCount(uid), listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
+  return json({ on: true, signedIn: true, inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES });
 }
 
 type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string };
