@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, openBout, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -102,6 +102,19 @@ describe("friends", () => {
     expect((await listFriends("bo"))!.map((f) => f.pc)).toEqual([a.pc]);
     expect(await removeFriend("bo", b, a.pc)).toBe(true);
     expect(await listFriends("ann")).toEqual([]);
+  });
+
+  it("gives unique usernames, frees the old one, and shows the new one to friends", async () => {
+    const [a, b] = await pair();
+    expect(await setUsername("ann", a, "@Ann_K")).toMatchObject({ ok: true, me: { user: "ann_k" } });
+    expect(await setUsername("bo", b, "ann_k")).toEqual({ ok: false, why: "taken" });
+    expect(await setUsername("bo", b, "x")).toEqual({ ok: false, why: "bad" });
+    expect(await setUsername("bo", b, "admin")).toEqual({ ok: false, why: "bad" });
+    expect((await lookupUser("@ANN_K"))?.pc).toBe(a.pc);
+    expect((await listFriends("bo"))![0].user).toBe("ann_k");
+    await setUsername("ann", { ...a, user: "ann_k" }, "annie");
+    expect(await lookupUser("ann_k")).toBeNull();
+    expect((await setUsername("bo", b, "ann_k")).ok).toBe(true);
   });
 
   it("refreshes your fighter on friends' lists", async () => {

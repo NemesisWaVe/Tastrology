@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { qr, qrPath } from "@/components/card/qr";
 import { whenAuthReady } from "@/lib/authBridge";
 import { loadDeck, type DeckEntry } from "@/lib/deck";
@@ -23,8 +23,13 @@ type Data = {
   error?: string;
 };
 
-/** How often an open, visible friends page checks its change counter. */
-const POLL_MS = 8000;
+/**
+ * Live pacing: right after anything happens (you act, or the counter moves) the page checks every 1.5s for a minute,
+ * so a fight lands on both screens at once; then the gap stretches x1.5 per check up to 30s while nothing happens.
+ */
+const HOT_MS = 1500;
+const HOT_FOR_MS = 60_000;
+const COOL_MAX_MS = 30_000;
 
 export async function friendsOp(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; a?: string; b?: string; outcome?: string; status?: string }> {
   try {
@@ -40,7 +45,7 @@ const pill = "rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 tra
 const lime = "rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper disabled:opacity-40";
 const OUTCOME = { won: "Won", lost: "Lost", tied: "Tied" } as const;
 const ADDED = { sent: "Request sent. You're friends once they accept.", added: "You're friends now.", pending: "Already asked. Waiting on them.", exists: "Already friends." } as const;
-const who = (b: { name: string; pc: string }) => b.name || b.pc;
+const who = (b: { user?: string; name: string; pc: string }) => (b.user ? `@${b.user}` : b.name || b.pc);
 
 function InviteQr({ url }: { url: string }) {
   const code = useMemo(() => {
@@ -64,12 +69,24 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   const [betFor, setBetFor] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [uname, setUname] = useState("");
+  const [editName, setEditName] = useState(false);
+  const hotUntil = useRef(Date.now() + HOT_FOR_MS);
+  const heat = () => (hotUntil.current = Date.now() + HOT_FOR_MS);
+  /** Challenges you sent that were still open: when one settles, its fight opens here straight away. */
+  const waiting = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     const j = (await fetch("/api/friends", { cache: "no-store" })
       .then((r) => r.json())
       .catch(() => ({ on: true, error: "Couldn't reach the server." }))) as Data;
     if (j.me?.pc) rememberPlayerCode(j.me.pc);
+    const done = (j.bouts ?? []).find((b) => b.role === "out" && b.status === "done" && waiting.current.has(b.id) && b.a && b.b);
+    waiting.current = new Set((j.bouts ?? []).filter((b) => b.role === "out" && b.status === "open").map((b) => b.id));
+    if (done && !document.hidden) {
+      location.href = `/vs/${done.a}?vs=${done.b}`;
+      return;
+    }
     setD(j);
   }, []);
 
@@ -84,32 +101,51 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
     return () => off?.();
   }, [load]);
 
-  // Live: poll the one-number change counter while the tab is visible; reload the lists only when it moves.
-  const seen = d?.inbox;
+  // Live: poll the one-number change counter while the tab is visible (hot, then cooling); reload only when it moves.
+  const seen = useRef<number | null | undefined>(undefined);
+  seen.current = d?.inbox;
   const signedIn = Boolean(d?.signedIn);
   useEffect(() => {
     if (!signedIn) return;
     let stop = false;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let gap = HOT_MS;
+    const next = () => {
+      if (stop) return;
+      gap = Date.now() < hotUntil.current ? HOT_MS : Math.min(COOL_MAX_MS, Math.max(HOT_MS, gap) * 1.5);
+      t = setTimeout(() => void tick(), gap);
+    };
     const tick = async () => {
-      if (stop || document.hidden) return;
+      if (stop) return;
+      if (document.hidden) return next();
       const j = (await fetch("/api/friends?ping=1", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)) as { n?: number | null } | null;
-      if (!stop && typeof j?.n === "number" && j.n !== seen) void load();
+      if (!stop && typeof j?.n === "number" && j.n !== seen.current) {
+        heat();
+        await load();
+      }
+      next();
     };
-    const t = setInterval(() => void tick(), POLL_MS);
-    const wake = () => !document.hidden && void tick();
+    const wake = () => {
+      if (document.hidden) return;
+      heat();
+      clearTimeout(t);
+      void tick();
+    };
+    next();
     document.addEventListener("visibilitychange", wake);
     return () => {
       stop = true;
-      clearInterval(t);
+      clearTimeout(t);
       document.removeEventListener("visibilitychange", wake);
     };
-  }, [signedIn, seen, load]);
+  }, [signedIn, load]);
 
   const run = async (key: string, body: Record<string, unknown>, done?: (j: Awaited<ReturnType<typeof friendsOp>>) => void) => {
     setBusy(key);
     setNote(null);
+    heat();
     const j = await friendsOp(body);
     setBusy(null);
     if (j.error) setNote(j.error);
@@ -131,6 +167,13 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   if (!d.me) return <p className="text-ink-2">{d.error ?? "Couldn't load your circle."}</p>;
 
   const me = d.me;
+  const saveName = () =>
+    run("name", { op: "username", user: uname }, () => {
+      setEditName(false);
+      setUname("");
+      if (code) setNote("Username saved. Now send that request.");
+    });
+  const naming = !me.user || editName;
   const invite = typeof window === "undefined" ? "" : `${location.origin}/f/${me.pc}`;
   const shareInvite = async () => {
     if (navigator.share) {
@@ -157,7 +200,51 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <div className="flex flex-col gap-6">
+        {naming && (
+          <section className="rounded-[22px] border border-accent/50 bg-accent/5 p-5 sm:p-6">
+            <p className={`${mono} text-accent`}>{me.user ? "Change your username" : "Pick your username"}</p>
+            <p className="mt-2 text-sm text-ink-2">It&apos;s how friends find you and see you. Letters, numbers and _.</p>
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveName();
+              }}
+            >
+              <span className="flex min-w-0 flex-1 items-center rounded-full border border-line bg-paper px-4">
+                <span className="text-ink-3">@</span>
+                <input
+                  value={uname}
+                  onChange={(e) => setUname(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
+                  placeholder="yourname"
+                  aria-label="Username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="min-w-0 flex-1 bg-transparent py-2.5 pl-1 text-ink outline-none placeholder:text-ink-3"
+                />
+              </span>
+              <button type="submit" disabled={uname.length < 3 || busy === "name"} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper disabled:opacity-40">
+                Save
+              </button>
+            </form>
+            {me.user && (
+              <button type="button" onClick={() => setEditName(false)} className={`${mono} mt-3 text-ink-3 hover:text-ink`}>
+                Keep @{me.user}
+              </button>
+            )}
+          </section>
+        )}
         <section className="rounded-[22px] border border-line bg-paper/60 p-5 sm:p-6">
+          {me.user && (
+            <p className="mb-4 flex items-baseline gap-3">
+              <span className="font-serif text-3xl italic">@{me.user}</span>
+              {!editName && (
+                <button type="button" onClick={() => setEditName(true)} className={`${mono} text-ink-3 hover:text-ink`}>
+                  Change
+                </button>
+              )}
+            </p>
+          )}
           <p className={`${mono} text-ink-3`}>Your player code</p>
           <p className="mt-2 font-mono text-4xl tracking-[0.18em] text-accent">{me.pc}</p>
           <p className="mt-2 text-sm text-ink-2">Share it, or let them scan. They send a request; you accept.</p>
@@ -214,12 +301,14 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
           >
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 6))}
-              placeholder="6-letter code"
-              aria-label="Friend's player code"
-              className="min-w-0 flex-1 rounded-full border border-line bg-paper px-4 py-2.5 font-mono tracking-[0.2em] text-ink placeholder:tracking-normal placeholder:text-ink-3"
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9A-Za-z_@]/g, "").slice(0, 21))}
+              placeholder="@username or code"
+              aria-label="Friend's username or player code"
+              autoCapitalize="none"
+              autoCorrect="off"
+              className="min-w-0 flex-1 rounded-full border border-line bg-paper px-4 py-2.5 font-mono text-ink placeholder:text-ink-3"
             />
-            <button type="submit" disabled={code.length !== 6 || busy === "add"} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper disabled:opacity-40">
+            <button type="submit" disabled={code.replace("@", "").length < 3 || busy === "add" || !me.user} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper disabled:opacity-40">
               Ask
             </button>
           </form>
@@ -313,7 +402,8 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                 <li key={f.pc} className="rounded-2xl border border-line p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-serif text-xl italic">{f.name || "No card yet"}</p>
+                      <p className="truncate font-serif text-xl italic">{who(f)}</p>
+                      <p className="mt-0.5 truncate text-xs text-ink-3">{f.name ? `Fights with ${f.name}` : "No card yet"}</p>
                       <p className={`${mono} mt-1 text-ink-3`}>
                         <span className={f.days ? "text-accent" : ""}>{levelOf(f.days ?? 0)} friend</span> · {f.days ?? 0} day{f.days === 1 ? "" : "s"} fought · {f.pc}
                       </p>

@@ -47,6 +47,8 @@ export function Invite({ pc }: { pc: string }) {
     }
     const go = async () => {
       const j = await friendsOp({ op: "add", pc });
+      // No username yet: the friends page asks for one, then sends this request.
+      if (j.error && /username first/.test(j.error)) return router.push(`/friends?add=${pc}`);
       if (j.error && !/own code/.test(j.error)) {
         setBusy(false);
         return setMsg(j.error);
@@ -77,7 +79,7 @@ export function Invite({ pc }: { pc: string }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center text-center">
       <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">Friend invite</p>
-      <h1 className="mt-2 font-serif text-5xl italic leading-[0.95]">{p.name ? `${p.name} wants a rival.` : "You've been invited."}</h1>
+      <h1 className="mt-2 font-serif text-5xl italic leading-[0.95]">{p.user ? `@${p.user} wants a rival.` : p.name ? `${p.name} wants a rival.` : "You've been invited."}</h1>
       {card && (
         <div className="mt-8">
           <HoloCard card={card} width={260} />

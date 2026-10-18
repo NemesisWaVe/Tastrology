@@ -4,6 +4,7 @@ import type { CardData } from "./card";
 import { ddbDelete, ddbGet, ddbGetStatus, ddbPutIfAbsent, ddbQuery, ddbTransact, ddbUpdate, type Flat, type TxOp } from "./ddb";
 import { fromSheet, getFighterStatus } from "./fighters";
 import { recordBattle } from "./stamps";
+import { blocked } from "./guard";
 import { burnedAt } from "./twins";
 export { levelOf } from "./friendLevels";
 
@@ -34,6 +35,8 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 
 export interface Player {
   pc: string;
+  /** Unique @username, chosen once on the friends page (lowercase a-z, 0-9, _). */
+  user?: string;
   name: string;
   card: string;
   rarity: string;
@@ -48,6 +51,7 @@ export interface Bout {
   role: "out" | "in";
   pc: string;
   name: string;
+  user?: string;
   stake: number;
   status: "open" | "done" | "declined" | "cancelled" | "expired";
   at: number;
@@ -83,7 +87,7 @@ async function ownCards(uid: string): Promise<DeckCard[] | null> {
 }
 
 const toPlayer = (it: Flat | null): Player | null =>
-  it && str(it.pc) ? { pc: str(it.pc), name: str(it.name), card: str(it.card), rarity: str(it.rarity) || "common" } : null;
+  it && str(it.pc) ? { pc: str(it.pc), ...(str(it.user) ? { user: str(it.user) } : {}), name: str(it.name), card: str(it.card), rarity: str(it.rarity) || "common" } : null;
 
 /** Your player profile, made on first use. Picks your rarest card as your fighter until you choose one. */
 export async function ensurePlayer(uid: string): Promise<Player | null> {
@@ -150,7 +154,44 @@ export async function inboxCount(uid: string): Promise<number | null> {
   return r.status === "found" ? Number(r.value.n) || 0 : r.status === "missing" ? 0 : null;
 }
 
-const edge = (p: Player & { uid: string }, at: number) => ({ uid: p.uid, pc: p.pc, name: p.name, card: p.card, rarity: p.rarity, at });
+const edge = (p: Player & { uid: string }, at: number) => ({ uid: p.uid, pc: p.pc, ...(p.user ? { user: p.user } : {}), name: p.name, card: p.card, rarity: p.rarity, at });
+
+/* ------------------------------------------------------------ usernames */
+
+export const USERNAME = /^[a-z0-9_]{3,20}$/;
+const RESERVED = new Set(["admin", "tastrology", "support", "help", "official", "mod", "moderator", "staff", "qloo", "root", "system"]);
+export const normUser = (raw: string) => raw.trim().replace(/^@/, "").toLowerCase();
+
+/** The account behind an @username, for adding by name. */
+export async function lookupUser(raw: string): Promise<(Player & { uid: string }) | null> {
+  const u = normUser(raw);
+  if (!USERNAME.test(u)) return null;
+  const uid = str((await ddbGet(`NAME#${u}`, "META"))?.uid);
+  if (!uid) return null;
+  const p = toPlayer(await ddbGet(U(uid), "PLAYER"));
+  return p ? { ...p, uid } : null;
+}
+
+/**
+ * Claims a unique @username (NAME#<u> is write-once per owner), frees the old one, and refreshes your snapshot on
+ * every friend's list. Requests and old bouts keep the name they were sent with.
+ */
+export async function setUsername(uid: string, me: Player, raw: string): Promise<{ ok: true; me: Player } | { ok: false; why: "bad" | "taken" | "error" }> {
+  const u = normUser(raw);
+  if (!USERNAME.test(u) || RESERVED.has(u) || blocked(u.replace(/_/g, " "))) return { ok: false, why: "bad" };
+  if (u === me.user) return { ok: true, me };
+  const claim = await ddbPutIfAbsent({ PK: `NAME#${u}`, SK: "META", uid, at: Date.now() });
+  if (claim === "error") return { ok: false, why: "error" };
+  if (claim === "exists" && str((await ddbGet(`NAME#${u}`, "META"))?.uid) !== uid) return { ok: false, why: "taken" };
+  if ((await ddbUpdate(U(uid), "PLAYER", "SET #u = :u", { names: { "#u": "user" }, values: { ":u": u } })) !== "updated") return { ok: false, why: "error" };
+  const friends = await ddbQuery(U(uid), "FRIEND#", FRIENDS_MAX, undefined, ["uid"]);
+  await Promise.allSettled([
+    me.user ? ddbDelete(`NAME#${me.user}`, "META", { condition: "uid = :me", values: { ":me": uid } }) : null,
+    ...(friends?.items ?? []).map((f) => ddbUpdate(U(str(f.uid)), `FRIEND#${me.pc}`, "SET #u = :u", { names: { "#u": "user" }, values: { ":u": u }, condition: "attribute_exists(PK)" })),
+  ]);
+  await touch(...(friends?.items ?? []).map((f) => str(f.uid)));
+  return { ok: true, me: { ...me, user: u } };
+}
 
 export interface Requests {
   /** People asking to be your friend. */
@@ -259,6 +300,7 @@ const toBout = (it: Flat): Bout => ({
   role: it.role === "in" ? "in" : "out",
   pc: str(it.pc),
   name: str(it.name),
+  ...(str(it.user) ? { user: str(it.user) } : {}),
   stake: Number(it.stake) || 0,
   status: lapsed(it) ? "expired" : ((str(it.status) || "open") as Bout["status"]),
   at: Number(it.at) || 0,
@@ -284,8 +326,8 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   const day = new Date(now).toISOString().slice(0, 10);
   const base = { stake, status: "open", at: now };
   const rows: TxOp[] = [
-    { put: { PK: U(uid), SK, role: "out", uid: other, pc, name: str(f?.name), ...base } },
-    { put: { PK: U(other), SK, role: "in", uid, pc: me.pc, name: me.name, ...base } },
+    { put: { PK: U(uid), SK, role: "out", uid: other, pc, name: str(f?.name), user: str(f?.user), ...base } },
+    { put: { PK: U(other), SK, role: "in", uid, pc: me.pc, name: me.name, user: me.user ?? "", ...base } },
   ];
   if (!stake) {
     const r = await ddbTransact(rows);
