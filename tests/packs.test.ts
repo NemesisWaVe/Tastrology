@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ddbPutIfAbsent } from "@/lib/ddb";
-import { addToPool, drawPack, openPack, PACK_DUST, PACK_ODDS, tierFor } from "@/lib/packs";
+import { addToPool, drawPack, openPack, PACK_DUST, PACK_ODDS, PACK_SIZE, tierFor } from "@/lib/packs";
 import { FakeDynamo, useFakeDynamo } from "./fakeDynamo";
 
 let db: FakeDynamo;
@@ -29,7 +29,7 @@ describe("battle packs", () => {
   it("draws the same pack all day, and never your own cards", async () => {
     await ddbPutIfAbsent({ PK: "OWNER#u1", SK: "CARD#5000-CCCC", code: "5000-CCCC" });
     const a = await drawPack("u1", "2026-10-18");
-    expect(a).toHaveLength(3);
+    expect(a).toHaveLength(PACK_SIZE);
     expect(a).not.toContain("5000-CCCC");
     expect(await drawPack("u1", "2026-10-18")).toEqual(a);
   });

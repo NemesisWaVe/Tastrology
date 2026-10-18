@@ -5,15 +5,16 @@ import { dustOn } from "./stardust";
 import { burnedAt, getTwin } from "./twins";
 
 /**
- * Battle Packs (docs/design/regret-burn.md §3): three cards from other people's skies, bought with earned Stardust only.
+ * Battle Packs (docs/design/regret-burn.md §3): one card from someone else's sky, bought with earned Stardust only.
+ * One card, not a bundle: every card stays a person, and a collection grows slowly enough that each one matters.
  * They go to a collection to fight, never into your deck: they aren't you, carry no dust and can't be burned.
  *   POOL#<tier>      CARD#<code>     every fresh mint, by tier (the pool packs draw from)
  *   USER#<id>        PACK#<day>      codes (comma-joined), at        one pack a day, write-once
  *   USER#<id>        LEDGER#pack#<day>   -PACK_DUST
  * Contents are fixed per account per UTC day, so there is nothing to re-roll. Stardust is never sold (legal review).
  */
-export const PACK_DUST = 60;
-export const PACK_SIZE = 3;
+export const PACK_DUST = 25;
+export const PACK_SIZE = 1;
 /** Published odds per slot. Shown on the shop page. */
 export const PACK_ODDS: { tier: Rarity; p: number }[] = [
   { tier: "common", p: 0.7 },

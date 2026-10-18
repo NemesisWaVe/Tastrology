@@ -19,7 +19,7 @@ interface PackInfo {
 const LABEL: Record<string, string> = { common: "Common", rare: "Rare", holo: "Holo", secret: "Secret" };
 
 /**
- * The one thing Stardust buys: three cards from other people's skies, to fight. Odds are published, the pack is fixed
+ * The one thing Stardust buys: one card from someone else's sky, to fight. Odds are published, the pack is fixed
  * for the day, and Stardust is earned only (never sold), per docs/design/regret-burn-legal.md.
  */
 export function BattlePack() {
@@ -59,13 +59,13 @@ export function BattlePack() {
       <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">Battle Pack · Stardust only</p>
       <h2 className="mt-2 font-serif text-4xl italic leading-tight">Three strangers, ready to fight.</h2>
       <p className="mt-3 max-w-xl text-ink-2">
-        Three real cards from other people&apos;s skies. They go to your collection to battle, never into your deck. One pack a day, the same pack all day.
+        One real card from a stranger&apos;s sky. It goes to your collection to battle, never into your deck. One a day, the same card all day.
       </p>
-      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">Odds per card: {odds || "…"}</p>
+      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">Odds: {odds || "…"}</p>
 
       {cards?.length ? (
         <>
-          <ul className="mt-8 grid grid-cols-1 justify-items-center gap-8 sm:grid-cols-3">
+          <ul className="mt-8 flex justify-center">
             {cards.map(({ code, card }, i) => (
               <li key={code} className="rise flex flex-col items-center" style={{ animationDelay: `${i * 140}ms` }}>
                 <Link href={`/vs/${code}`} aria-label={`Fight ${card.archetype}`} className="block transition hover:-translate-y-1">
@@ -77,7 +77,7 @@ export function BattlePack() {
               </li>
             ))}
           </ul>
-          <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">Today&apos;s pack is open. A new one tomorrow.</p>
+          <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">Today&apos;s card is drawn. A new one tomorrow.</p>
         </>
       ) : (
         <div className="mt-6 flex flex-wrap items-center gap-4">
