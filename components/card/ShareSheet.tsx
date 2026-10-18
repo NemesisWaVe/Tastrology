@@ -125,7 +125,7 @@ export function ShareSheet({
   const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}`;
   const link = (src: string) => {
     if (typeof window === "undefined") return "";
-    return linkable ? `${location.origin}/c/${encodeURIComponent(cardCode(card))}?s=${src}` : location.origin;
+    return linkable ? `${location.origin}/c/${encodeURIComponent(cardCode(card))}?via=${src}` : location.origin;
   };
 
   const save = (blob: Blob) => {
