@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import { ReceiptBody } from "@/components/card/Receipt";
+import { ReceiptBody, ReceiptPaper } from "@/components/card/Receipt";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
 import { readSeen, writeSeen, type Seen } from "@/lib/brandSeen";
@@ -13,6 +13,31 @@ import { sfx } from "@/lib/sound";
 import type { StyleResult } from "@/lib/types";
 
 type Reply = { status: "fresh" | "lite" | "faded" | "burned" | "error"; snap?: Snap; drift?: Drift | null; error?: string };
+
+/**
+ * A receipt for cards whose full reading wasn't kept: printed from the re-read brands, so every card still has its
+ * proof of purchase. Marked as a reprint on the paper.
+ */
+function reprintOf(snap: Snap, card: CardData): StyleResult {
+  return {
+    runId: "reprint",
+    mode: "live",
+    planner: "autopilot",
+    createdAt: snap.at,
+    seeds: snap.loves.map((l) => ({ id: l.id, name: l.name, kind: l.kind as never, image: l.image, tags: [] })),
+    dna: { name: card.archetype, tagline: "", keywords: [], lobes: [] },
+    brands: snap.brands.map((b) => ({
+      entity: { id: b.id, name: b.name, kind: "brand", image: b.image, site: b.site, instagram: b.instagram, tags: [] },
+      affinity: b.affinity,
+      category: b.category,
+      explain: b.explain,
+      ablation: b.ablation,
+      because: b.because,
+      why: b.why,
+    })),
+    rejected: [],
+  } as unknown as StyleResult;
+}
 
 const img = (u?: string) => (u ? (u.startsWith("/") ? u : proxied(u)) : undefined);
 const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -122,7 +147,9 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
   const [r, setR] = useState<Reply | null>(null);
   const [sel, setSel] = useState<string>("");
   const [seen, setSeen] = useState<Seen | null>(null);
-  const [stub, setStub] = useState<"closed" | "loading" | StyleResult | "none">("closed");
+  // The receipt: pinned at the top, folded to its head until unrolled. Never the printing show (that's the first mint's).
+  const [full, setFull] = useState<StyleResult | null>(null);
+  const [unrolled, setUnrolled] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -130,9 +157,13 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
     sfx("flip");
     setSeen(readSeen(code));
     let off = false;
-    fetch(`/api/card/${encodeURIComponent(code)}/receipt?drift=1`, { cache: "no-store" })
-      .then((x) => x.json() as Promise<Reply>)
-      .then((j) => !off && setR(j))
+    fetch(`/api/card/${encodeURIComponent(code)}/receipt?drift=1&full=1`, { cache: "no-store" })
+      .then((x) => x.json() as Promise<Reply & { result?: StyleResult }>)
+      .then((j) => {
+        if (off) return;
+        setR(j);
+        setFull(j.result ?? null);
+      })
       .catch(() => !off && setR({ status: "error" }));
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", esc);
@@ -183,13 +214,8 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
     } else setR((cur) => ({ ...(cur ?? { status: "faded" }), error: j?.error ?? "Couldn't re-read it just now." }));
   };
 
-  const openStub = async () => {
-    if (stub !== "closed") return setStub("closed");
-    sfx("rustle");
-    setStub("loading");
-    const j = (await fetch(`/api/card/${encodeURIComponent(code)}/receipt?full=1`, { cache: "no-store" }).then((x) => x.json()).catch(() => null)) as { result?: StyleResult } | null;
-    setStub(j?.result ?? "none");
-  };
+  const receipt = full ?? (snap ? reprintOf(snap, card) : null);
+  const reprint = !full && Boolean(snap);
 
   return (
     <AnimatePresence>
@@ -216,6 +242,42 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
                 Close
               </button>
             </header>
+
+            {receipt && (
+              <section className="mt-5">
+                <ReceiptPaper curl>
+                  {unrolled ? (
+                    <ReceiptBody card={card} result={receipt} stagger={false} />
+                  ) : (
+                    <div className="px-5 pt-3 font-mono text-[11px] uppercase leading-[1.55] tracking-[0.06em]">
+                      <p className="text-center text-[18px] font-bold tracking-[0.18em]">Tastrology</p>
+                      <p className="mt-1 flex justify-between">
+                        <span>order #{card.serial}</span>
+                        <span>{day(receipt.createdAt)}</span>
+                      </p>
+                      <p className="mt-2 border-t border-dashed border-black/30 pt-2">
+                        {receipt.seeds.length} loves · {receipt.brands.length} brands
+                      </p>
+                      <p className="flex justify-between text-[14px] font-black">
+                        <span>total: your taste</span>
+                        <span>{card.power}</span>
+                      </p>
+                      <p className="mt-1 text-[10px] opacity-70">{reprint ? "Reprint from a re-read · original not kept" : "Paid in full · kept on file"}</p>
+                    </div>
+                  )}
+                </ReceiptPaper>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sfx("rustle");
+                    setUnrolled((u) => !u);
+                  }}
+                  className="mt-2 w-full text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3 hover:text-ink"
+                >
+                  {unrolled ? "Fold the receipt ↑" : "Unroll the receipt ↓"}
+                </button>
+              </section>
+            )}
 
             {!r && <p className="mt-10 font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding what it pulled in…</p>}
 
@@ -283,20 +345,6 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
 
                 {silent.length > 0 && <p className="mt-8 text-sm text-ink-3">Nothing here for {silent.map((l) => displayName(l.name)).join(", ")}.</p>}
 
-                {!snap.lite && (
-                  <section className="mt-10">
-                    <button type="button" onClick={() => void openStub()} className="w-full border-t-2 border-dashed border-line pt-3 text-left font-mono text-[11px] uppercase tracking-[0.2em] text-ink-2 hover:text-ink">
-                      {stub === "closed" ? `Original receipt, ${day(snap.at)} ↓` : "Fold the receipt ↑"}
-                    </button>
-                    {stub === "loading" && <p className="mt-3 text-xs text-ink-3">Unrolling…</p>}
-                    {stub === "none" && <p className="mt-3 text-xs text-ink-3">The full receipt isn&apos;t available.</p>}
-                    {typeof stub === "object" && (
-                      <div className="mt-4 overflow-hidden rounded-xl">
-                        <ReceiptBody card={card} result={stub} compact stagger={false} />
-                      </div>
-                    )}
-                  </section>
-                )}
               </>
             )}
           </motion.aside>

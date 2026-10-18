@@ -42,6 +42,7 @@ const FILTERS: (EntityKind | "vibe")[] = ["vibe", "artist", "movie", "tv_show", 
 const TRY = ["Frank Ocean", "Aftersun", "Hades", "Fleabag", "ramen", "shoegaze", "The Secret History"];
 const MAX = 8;
 const VIBES_MAX = 2;
+const VIBE_HINTS = ["ramen", "shoegaze", "hiking", "thrifting", "brutalism", "matcha", "k-pop"];
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -75,6 +76,13 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const full = seeds.length >= MAX;
+  // The Vibes field cycles examples until you type (fixed on reduced motion).
+  const [hint, setHint] = useState(0);
+  useEffect(() => {
+    if (kind !== "vibe" || q || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setHint((h) => (h + 1) % VIBE_HINTS.length), 2200);
+    return () => clearInterval(t);
+  }, [kind, q]);
 
   useEffect(() => {
     if (q.trim().length < 2) {
@@ -148,25 +156,29 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
             key={k}
             onClick={() => setKind((cur) => (cur === k ? "all" : k))}
             aria-pressed={kind === k}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-[12px] transition ${
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] transition ${
               k === "vibe"
-                ? kind === k
-                  ? "border-transparent font-semibold text-paper"
-                  : "border-transparent font-semibold"
+                ? "vibeChip inline-flex items-center gap-1.5 font-semibold"
                 : kind === k
-                  ? "border-ink bg-ink text-paper"
-                  : "border-line text-ink-2 hover:border-ink-3 hover:text-ink"
+                  ? "border border-ink bg-ink text-paper"
+                  : "border border-line text-ink-2 hover:border-ink-3 hover:text-ink"
             }`}
-            style={
-              k === "vibe"
-                ? kind === k
-                  ? { background: "var(--holo)" }
-                  : { background: "linear-gradient(#0c0c11, #0c0c11) padding-box, var(--holo) border-box" }
-                : undefined
-            }
           >
             {k === "vibe" ? (
-              <span style={kind === k ? undefined : { backgroundImage: "var(--holo)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>∿ Vibes</span>
+              <>
+                <svg width="14" height="10" viewBox="0 0 14 10" aria-hidden className="transition-transform">
+                  <defs>
+                    <linearGradient id="vibeInk" x1="0" x2="1">
+                      <stop offset="0" stopColor="#ff7773" />
+                      <stop offset="0.35" stopColor="#ffed5f" />
+                      <stop offset="0.65" stopColor="#83fff7" />
+                      <stop offset="1" stopColor="#d875ff" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M1 3.2q3-3 6 0t6 0M1 7.2q3-3 6 0t6 0" stroke="url(#vibeInk)" />
+                </svg>
+                <span className="vibeText">Vibes</span>
+              </>
             ) : (
               <>
                 <span className="mr-1 opacity-60">{KIND_ICON[k]}</span>
@@ -192,7 +204,16 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
       </p>
 
       <div className="relative">
-        <div className="group relative flex items-center rounded-2xl border border-line bg-black/30 transition focus-within:border-accent/70 focus-within:shadow-[0_0_0_4px_rgba(198,255,61,0.08)]">
+        <div
+          className={`group relative flex items-center rounded-2xl border border-line bg-black/30 transition focus-within:border-accent/70 focus-within:shadow-[0_0_0_4px_rgba(198,255,61,0.08)] ${kind === "vibe" ? "vibeField" : ""}`}
+        >
+          {kind === "vibe" && !q && !full && (
+            <span aria-hidden className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-[16px] text-ink-3">
+              <span key={hint} className="inline-block animate-[fadeIn_0.2s_ease-out]">
+                {VIBE_HINTS[hint]}…
+              </span>
+            </span>
+          )}
           <span className="pl-4 text-ink-3 group-focus-within:text-accent" aria-hidden>
             ✦
           </span>
@@ -228,10 +249,10 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
               }
               if (e.key === "Escape") setOpen(false);
             }}
-            placeholder={full ? "That's plenty: 8 max" : kind === "vibe" ? "ramen, shoegaze, hiking, vintage…" : "Search anything you love…"}
+            placeholder={full ? "That's plenty: 8 max" : kind === "vibe" ? "" : "Search anything you love…"}
             disabled={full}
             className="w-full min-w-0 bg-transparent px-3 py-4 text-[16px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-50"
-            aria-label="Search Qloo for something you love"
+            aria-label={kind === "vibe" ? "Search vibes, like ramen, shoegaze or hiking" : "Search Qloo for something you love"}
             role="combobox"
             aria-autocomplete="list"
             aria-controls={listId}
