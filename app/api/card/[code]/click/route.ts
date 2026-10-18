@@ -1,5 +1,5 @@
 import { upstash } from "@/lib/cache";
-import { clientId } from "@/lib/ratelimit";
+import { allow, clientId } from "@/lib/ratelimit";
 import { TWIN_CODE } from "@/lib/twins";
 
 export const runtime = "nodejs";
@@ -17,6 +17,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
   const brand = String(j?.brand ?? "");
   const src = SRC.has(String(j?.src)) ? String(j?.src) : "deck";
   if (!TWIN_CODE.test(code) || !BRAND_ID.test(brand)) return new Response(null, { status: 204 });
+  // A cap per browser, so a script can't burn the counter store's quota.
+  if (!(await allow(`click:${clientId(request.headers)}`, 120, 10 * 60 * 1000))) return new Response(null, { status: 204 });
   const first = await upstash([["SET", `tm:ckd:${clientId(request.headers)}:${brand}`, "1", "EX", 3600, "NX"]]);
   if (!first || first[0] !== "OK") return new Response(null, { status: 204 });
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");

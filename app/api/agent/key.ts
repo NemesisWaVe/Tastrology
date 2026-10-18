@@ -65,5 +65,6 @@ export function cacheKey(req: AgentRequest, llm = process.env.LLM_MODEL ?? ""): 
     p: [...(req.previous?.brandIds ?? [])].sort(),
     // Only when present, so every key minted before vibes stays the same.
     ...(req.vibes?.length ? { vb: req.vibes.map((v) => v.id).sort() } : {}),
+    ...(req.audience ? { au: req.audience } : {}),
   });
 }

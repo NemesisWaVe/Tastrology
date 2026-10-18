@@ -52,6 +52,7 @@ export interface QEntity {
 
 export interface InsightsParams {
   type: EntityKind | "tag";
+  audience?: Audience;
   entityIds: string[];
   tagIds?: string[];
   filterTags?: string[];
@@ -180,4 +181,10 @@ export interface AgentRequest {
   feedback?: { liked: string[]; disliked: string[] };
   /** Previous round, for the "what changed" diff. Names are display labels only, never recommendations. */
   previous?: { brandIds: string[]; names?: Record<string, string> };
+  /** Who the reading is for, from the account profile (never the request body): steers Qloo and drops items made for another audience. */
+  audience?: Audience;
 }
+
+/** Gender as picked on the profile; "" is "rather not say". Only woman/man become a Qloo demographic signal. */
+export type Audience = "woman" | "man" | "nonbinary" | "";
+

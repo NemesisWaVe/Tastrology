@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, refundRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, refundRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, setProfile, audienceOf, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -201,6 +201,25 @@ describe("accounts", () => {
     expect(await lookupUser("ann_k")).toBeNull();
     expect(await lookupPlayer(a.pc)).toBeNull();
     expect((await listBouts("bo"))![0].status).toBe("declined");
+  });
+
+  it("leaves nothing of the account behind: deck, wallet and settings go too", async () => {
+    await pair();
+    wallet("ann", 5);
+    expect(await wipePlayer("ann")).toBe(true);
+    expect([...db.items.keys()].filter((k) => k.startsWith("USER#ann|") || k.startsWith("OWNER#ann|"))).toEqual([]);
+  });
+
+  it("keeps gender private and shows friends the bio line", async () => {
+    const [a] = await pair();
+    expect(await setProfile("ann", { gender: "woman", bio: "My life my rules", tag: "My rules" })).toBe(true);
+    expect(await audienceOf("ann")).toBe("woman");
+    expect(await audienceOf("nobody")).toBe("");
+    const seen = (await listFriends("bo"))!.find((f) => f.pc === a.pc)!;
+    expect(seen.tag).toBe("My rules");
+    expect(seen.gender).toBeUndefined();
+    expect(await setProfile("bo", { gender: "" })).toBe(true);
+    expect((await ensurePlayer("bo"))!.gender).toBe("");
   });
 });
 

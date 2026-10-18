@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { kvCache, sharedCache, MAX_TTL_MS } from "./cache";
 import { mockQloo } from "./mock/server";
 import { bumpDaily } from "./ratelimit";
-import type { EntityKind, InsightsParams, QEntity, QlooCallLog, QTag } from "./types";
+import type { Audience, EntityKind, InsightsParams, QEntity, QlooCallLog, QTag } from "./types";
 
 export const qlooMode = (): "live" | "mock" =>
   process.env.QLOO_MODE === "live" && process.env.QLOO_API_KEY ? "live" : "mock";
@@ -264,6 +264,17 @@ export async function lookupEntities(ids: string[], log?: QlooCallLog[]): Promis
   return list.map(normEntity);
 }
 
+/**
+ * Items made for women only (lingerie, bras, maternity...) reach a reading only when the profile says woman. Anyone
+ * else, including "rather not say", never gets them: guessing wrong here is the one pick people screenshot.
+ */
+const WOMENS_ONLY = /\b(lingerie|bras?|bralettes?|panties|knickers|negligees?|corsetry|shapewear|maternity|nursing bras?|intimates|babydolls?)\b/i;
+export function fitsAudience(e: Pick<QEntity, "name"> & Partial<Pick<QEntity, "subtitle" | "style" | "tags">>, audience?: Audience): boolean {
+  if (audience === "woman") return true;
+  const tags = (e.tags ?? []).map((t) => t.name).join(" ");
+  return !WOMENS_ONLY.test([e.name, e.subtitle ?? "", ...(e.style ?? []), tags].join(" "));
+}
+
 export async function searchEntities(query: string, kinds: EntityKind[], take = 8, log?: QlooCallLog[]): Promise<QEntity[]> {
   const json = await qget("/search", { query, types: kinds.map(searchUrn).join(","), take: String(take) }, log);
   const results = (Array.isArray(json.results) ? json.results : []) as Record<string, unknown>[];
@@ -283,6 +294,7 @@ export async function insights(p: InsightsParams, log?: QlooCallLog[]): Promise<
   if (p.popularity?.min !== undefined) params["filter.popularity.min"] = String(p.popularity.min);
   if (p.popularity?.max !== undefined) params["filter.popularity.max"] = String(p.popularity.max);
   if (p.explain) params["feature.explainability"] = "true";
+  if (p.audience === "woman" || p.audience === "man") params["signal.demographics.gender"] = p.audience === "woman" ? "female" : "male";
 
   const json = await qget("/v2/insights", params, log);
   const r = (json.results ?? {}) as Record<string, unknown[]>;
@@ -296,7 +308,8 @@ export async function insights(p: InsightsParams, log?: QlooCallLog[]): Promise<
       affinity: Number(((t.query ?? {}) as Record<string, unknown>).affinity ?? 0) || undefined,
     }));
   }
-  return list.map(normEntity);
+  const out = list.map(normEntity);
+  return p.type === "brand" ? out.filter((e) => fitsAudience(e, p.audience)) : out;
 }
 
 export async function findTags(query: string, take = 10, log?: QlooCallLog[], parentType?: EntityKind): Promise<QTag[]> {

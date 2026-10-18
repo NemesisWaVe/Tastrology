@@ -1,5 +1,6 @@
 import { census, styled } from "@/lib/cardStyle";
 import { ddbConfigured, ddbQuery } from "@/lib/ddb";
+import { allow, clientId } from "@/lib/ratelimit";
 import { getTwinStatus } from "@/lib/twins";
 import type { CardData } from "@/lib/card";
 
@@ -9,8 +10,10 @@ export const dynamic = "force-dynamic";
 const CACHE = { "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=300" };
 
 /** The Hall of Rares: Holo and Secret cards real people pulled (from the pack pool), and how many exist. */
-export async function GET() {
+export async function GET(request: Request) {
   if (!ddbConfigured()) return Response.json({ cards: [], census: null }, { headers: CACHE });
+  // The CDN serves most of these; this only bites a script busting the cache with query strings.
+  if (!(await allow(`rares:${clientId(request.headers)}`, 30, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429 });
   const [sec, holo, cen] = await Promise.all([
     ddbQuery("POOL#secret", "CARD#", 500, undefined, ["code"]).catch(() => null),
     ddbQuery("POOL#holo", "CARD#", 500, undefined, ["code"]).catch(() => null),

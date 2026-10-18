@@ -238,7 +238,7 @@ async function brandInsights(st: RunState) {
   st.emit({ type: "step", id: "insights", label: "Asking Qloo for brands that share your taste and aesthetic", status: "run" });
   const signal = [...st.mainSeeds.map((s) => s.id), ...st.vibeAnchors.map((a) => a.id), ...st.liked];
   const run = (filterTags: string[], tagIds: string[], log: QlooCallLog[]) =>
-    insights({ type: "brand", entityIds: signal, tagIds, filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 40, explain: true }, log).then(styleBrands);
+    insights({ type: "brand", audience: st.req.audience, entityIds: signal, tagIds, filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 40, explain: true }, log).then(styleBrands);
   const cands = await logged(
     st,
     "get_insights",
@@ -270,7 +270,7 @@ async function ablateSeeds(st: RunState) {
     const runs = await Promise.all(
       main.map(async (s) => {
         const signal = [...main.filter((x) => x.id !== s.id).map((x) => x.id), ...st.liked];
-        const r = await insights({ type: "brand", entityIds: signal, tagIds: st.signalTags, filterTags: st.filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 50 }, log);
+        const r = await insights({ type: "brand", audience: st.req.audience, entityIds: signal, tagIds: st.signalTags, filterTags: st.filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 50 }, log);
         st.ledger.record(r);
         const floor = r.length ? Math.min(...r.map((x) => x.affinity ?? 0)) : 0;
         // fell out of the top 50 → at most the floor
@@ -374,7 +374,7 @@ async function critique(st: RunState) {
     st.emit({ type: "step", id: "sideb", label: `Re-planning: separate Qloo query for your ${side.seedIds.map((x) => st.seedName(x)).join(" + ")} side`, status: "run" });
     const picks = await logged(st, "get_insights", `brand ← side B seeds + ${side.keywords.length} side tags`, async (log) => {
       const r = await insights(
-        { type: "brand", entityIds: [...side.seedIds, ...st.liked], tagIds: side.keywords.map((k) => k.id), filterTags: st.filterTags, excludeIds: [...st.disliked, ...st.final.map((b) => b.entity.id)], popularity: POP_BAND(), take: 20, explain: true },
+        { type: "brand", audience: st.req.audience, entityIds: [...side.seedIds, ...st.liked], tagIds: side.keywords.map((k) => k.id), filterTags: st.filterTags, excludeIds: [...st.disliked, ...st.final.map((b) => b.entity.id)], popularity: POP_BAND(), take: 20, explain: true },
         log,
       ).then(styleBrands);
       st.ledger.record(r);
@@ -546,7 +546,7 @@ async function tasteBridges(st: RunState) {
   const signal = [...st.seeds.map((s) => s.id), ...st.final.slice(0, 3).map((b) => b.entity.id)];
   const kinds = ["place", "movie", "artist", "book"] as const;
   await logged(st, "get_insights", `place/movie/artist/book ← seeds + top brands`, async (log) => {
-    const lists = await Promise.all(kinds.map((k) => insights({ type: k, entityIds: signal, excludeIds: [...seedIds], take: 6, explain: true }, log).catch(() => [])));
+    const lists = await Promise.all(kinds.map((k) => insights({ type: k, audience: st.req.audience, entityIds: signal, excludeIds: [...seedIds], take: 6, explain: true }, log).catch(() => [])));
     lists.forEach((l) => st.ledger.record(l));
     const picks: Bridge[] = [];
     for (const l of lists) {

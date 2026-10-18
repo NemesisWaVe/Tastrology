@@ -1,6 +1,7 @@
 import { clerkOn, currentUserId } from "@/lib/auth";
 import { claimOpen } from "@/lib/brandOpen";
 import { ddbConfigured } from "@/lib/ddb";
+import { allow } from "@/lib/ratelimit";
 import { TWIN_CODE } from "@/lib/twins";
 
 export const runtime = "nodejs";
@@ -15,5 +16,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ code: 
   if (!userId) return Response.json({ status: "signedout" }, { headers: NO_STORE });
   const code = decodeURIComponent((await params).code).toUpperCase();
   if (!TWIN_CODE.test(code)) return Response.json({ error: "bad code" }, { status: 400, headers: NO_STORE });
+  if (!(await allow(`opened:${userId}`, 60, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429, headers: NO_STORE });
   return Response.json(await claimOpen(userId, code), { headers: NO_STORE });
 }

@@ -36,11 +36,19 @@ export default function Page() {
 
       <Sec n={3} title="Your account">
         <p>
-          Accounts run on Clerk. Keep your sign-in to yourself; you are responsible for what happens under it. One person, one account. To delete your account and every card in it, email us; we do it within 15 days.
+          Accounts run on Clerk. Keep your sign-in to yourself; you are responsible for what happens under it. One person, one account. To delete your account and everything in it, use Close account on the Account page (or email us and we do it within 15 days).
         </p>
       </Sec>
 
-      <Sec n={4} title="What a card is, and what it isn't">
+      <Sec n={4} title="Usernames, bios and friends">
+        <p>
+          Your username and bio are visible to your friends and anyone you share a link with. Keep them free of hate, harassment, sexual content, other
+          people&apos;s personal details and impersonation. We filter obvious abuse and may remove a name or bio, or close an account, that breaks this. The
+          short line made from your bio is written by AI and can miss; change your bio any time. Report anything to the contact below.
+        </p>
+      </Sec>
+
+      <Sec n={5} title="What a card is, and what it isn't">
         <ul>
           <li>A card is generated from the loves you type, taste data from Qloo, and an AI model. Rarity and stats are part of the game, not a measure of value.</li>
           <li>Cards have no cash value. They can&apos;t be bought, sold, traded for money or redeemed. Stardust (if switched on) is a game point with no cash value either.</li>
@@ -49,21 +57,21 @@ export default function Page() {
         </ul>
       </Sec>
 
-      <Sec n={5} title="Who owns what">
+      <Sec n={6} title="Who owns what">
         <p>
           The site, the card designs, the artwork and the code belong to us. The text you type stays yours; you give us a free, worldwide licence to use it to
           make, show and share your card. A card&apos;s share link is public: anyone with it can see the card.
         </p>
       </Sec>
 
-      <Sec n={6} title="Brands, artists and Qloo data">
+      <Sec n={7} title="Brands, artists and Qloo data">
         <p>
           Names of brands, artists, films and places are trademarks of their owners. They appear because Qloo&apos;s data links them to your taste. No brand
           or person shown endorses, sponsors or works with Tastrology. Taste data is provided by Qloo and used under its hackathon terms.
         </p>
       </Sec>
 
-      <Sec n={7} title="Fair play">
+      <Sec n={8} title="Fair play">
         <ul>
           <li>Don&apos;t type anything hateful, sexual about real people, defamatory, or someone else&apos;s private details.</li>
           <li>Don&apos;t script the site, scrape it, dodge rate limits, or try to break or overload it.</li>
@@ -72,31 +80,31 @@ export default function Page() {
         <p>We may remove cards or close accounts that break these rules.</p>
       </Sec>
 
-      <Sec n={8} title="AI output">
+      <Sec n={9} title="AI output">
         <p>
           Readings are written by AI models and can be odd, wrong or off-key. They are entertainment, not advice of any kind. If a reading offends you, email us
           and we&apos;ll take it down.
         </p>
       </Sec>
 
-      <Sec n={9} title="Changes and availability">
+      <Sec n={10} title="Changes and availability">
         <p>
           This is a beta. Features may change, pause or disappear, and we may reset data. We will say so on the site before anything that deletes saved cards.
         </p>
       </Sec>
 
-      <Sec n={10} title="Liability">
+      <Sec n={11} title="Liability">
         <p>
           The service is free and provided as is. To the extent the law allows, we are not liable for indirect loss or for losing a card. Nothing here limits
           rights you have under consumer law that can&apos;t be excluded.
         </p>
       </Sec>
 
-      <Sec n={11} title="Law and disputes">
+      <Sec n={12} title="Law and disputes">
         <p>Indian law applies. Courts in Dehradun, Uttarakhand have jurisdiction, without taking away any right you have to sue where you live.</p>
       </Sec>
 
-      <Sec id="contact" n={12} title="Contact and grievances">
+      <Sec id="contact" n={13} title="Contact and grievances">
         <Contact />
       </Sec>
     </LegalPage>

@@ -6,6 +6,7 @@ import { deviceId, deviceIdsOn, newDevice } from "@/lib/device";
 import { dustOn, dustStatus, rates } from "@/lib/stardust";
 import { economy } from "@/lib/economy";
 import { payDividend } from "@/lib/dividend";
+import { allow } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
   if (!clerkOn()) return Response.json({ accounts: false, signedIn: false }, { headers: NO_STORE });
   const userId = await currentUserId();
   if (!userId) return Response.json({ accounts: true, signedIn: false }, { headers: NO_STORE });
+  if (!(await allow(`me:${userId}`, 120, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429, headers: NO_STORE });
   const on = creditsOn();
   // Tag the browser before the first free grant, so one browser can't fund a first card for endless accounts.
   let device = deviceId(request.headers);

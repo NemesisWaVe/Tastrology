@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
-import { ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
+import { ddbConfigured, ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
+import { audienceOf } from "@/lib/friends";
 import { creditsOn, heldRegret, nextRefillAt, refundCredit, refundRegret, RUN_ID_RE, spendCredit, spendRegret } from "@/lib/ledger";
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
 import { deviceId } from "@/lib/device";
@@ -211,6 +212,13 @@ export async function POST(request: Request) {
   const body = normalizeRequest(raw);
   if (typeof body === "string") return Response.json({ error: body }, { status: 400 });
 
+  // Who the reading is for comes from the account, never the request, and is part of the key: a cached reading made
+  // for one audience is never handed to another.
+  if (clerkOn() && ddbConfigured() && !isPersonaRequest(body)) {
+    const uid = await currentUserId();
+    const au = uid ? await audienceOf(uid).catch(() => "" as const) : "";
+    if (au) body.audience = au;
+  }
   const key = cacheKey(body);
   const fallbackKey = cacheKey(body, "*");
   // Demo personas are read once and kept for good, so the landing page never spends a Qloo call on them.

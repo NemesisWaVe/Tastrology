@@ -5,7 +5,7 @@ export const LEGAL = {
   operator: "Tastrology, a student project run by an individual developer",
   email: "nemesiswave440@gmail.com",
   place: "Dehradun, Uttarakhand 248001, India",
-  updated: "17 October 2026",
+  updated: "18 October 2026",
 };
 
 export function LegalPage({ title, intro, children }: { title: string; intro: React.ReactNode; children: React.ReactNode }) {

@@ -6,6 +6,7 @@ import { fromSheet, getFighterStatus } from "./fighters";
 import { recordBattle } from "./stamps";
 import { blocked } from "./guard";
 import { burnedAt } from "./twins";
+import type { Audience } from "./types";
 export { levelOf } from "./friendLevels";
 
 /**
@@ -39,6 +40,11 @@ export interface Player {
   user?: string;
   /** Times the username was changed after the first pick: the first change is free, then each costs RENAME_DUST. */
   renames?: number;
+  /** Profile, shown to you only: steers whose items your readings can include (lib/qloo.ts fitsAudience). */
+  gender?: Audience;
+  /** Your bio as typed, and the short line friends see when they hold your star. */
+  bio?: string;
+  tag?: string;
   name: string;
   card: string;
   rarity: string;
@@ -96,6 +102,10 @@ const toPlayer = (it: Flat | null): Player | null =>
         pc: str(it.pc),
         ...(str(it.user) ? { user: str(it.user) } : {}),
         ...(Number(it.renames) ? { renames: Number(it.renames) } : {}),
+        // "" (rather not say) is kept, so an answered profile isn't asked again.
+        ...(typeof it.gender === "string" && GENDERS.includes(it.gender as Audience) ? { gender: it.gender as Audience } : {}),
+        ...(str(it.bio) ? { bio: str(it.bio) } : {}),
+        ...(str(it.tag) ? { tag: str(it.tag) } : {}),
         name: str(it.name),
         card: str(it.card),
         rarity: str(it.rarity) || "common",
@@ -157,10 +167,20 @@ export async function lookupPlayer(pc: string): Promise<(Player & { uid: string 
 export async function listFriends(uid: string): Promise<Friend[] | null> {
   const page = await ddbQuery(U(uid), "FRIEND#", FRIENDS_MAX);
   if (!page) return null;
-  // Presence: one small read per friend, only when the list loads (not on every ping).
-  const seen = await Promise.all(page.items.map((it) => (str(it.uid) ? ddbGet(U(str(it.uid)), "PLAYER").then((p) => Number(p?.seen) || 0) : 0)));
+  // Presence and bio: one small read per friend, only when the list loads (not on every ping). Never their gender.
+  const live = await Promise.all(page.items.map((it) => (str(it.uid) ? ddbGet(U(str(it.uid)), "PLAYER").catch(() => null) : null)));
   return page.items
-    .map((it, i) => ({ ...(toPlayer(it) as Player), at: Number(it.at) || 0, days: Number(it.days) || 0, seen: seen[i] || undefined }))
+    .map((it, i) => {
+      const p = live[i];
+      return {
+        ...(toPlayer(it) as Player),
+        at: Number(it.at) || 0,
+        days: Number(it.days) || 0,
+        seen: Number(p?.seen) || undefined,
+        ...(str(p?.bio) ? { bio: str(p?.bio) } : {}),
+        ...(str(p?.tag) ? { tag: str(p?.tag) } : {}),
+      };
+    })
     .filter((f) => f.pc)
     .sort((x, y) => (y.days ?? 0) - (x.days ?? 0) || y.at - x.at);
 }
@@ -180,6 +200,33 @@ async function bumpFriendship(uid: string, pc: string, now = Date.now()) {
  */
 async function touch(...uids: string[]) {
   await Promise.allSettled(uids.filter(Boolean).map((u) => ddbUpdate(U(u), "INBOX", "ADD n :one", { values: { ":one": 1 } })));
+}
+
+/* ------------------------------------------------------------ profile */
+
+export const GENDERS: readonly Audience[] = ["woman", "man", "nonbinary", ""];
+
+/** Saves the profile fields given (gender, bio and its tagline); the rest stay as they are. */
+export async function setProfile(uid: string, p: { gender?: Audience; bio?: string; tag?: string }): Promise<boolean> {
+  const sets: string[] = [];
+  const values: Record<string, string> = {};
+  if (p.gender !== undefined && GENDERS.includes(p.gender)) {
+    sets.push("gender = :g");
+    values[":g"] = p.gender;
+  }
+  if (p.bio !== undefined) {
+    sets.push("bio = :b", "tag = :t");
+    values[":b"] = p.bio;
+    values[":t"] = p.tag ?? "";
+  }
+  if (!sets.length) return true;
+  return (await ddbUpdate(U(uid), "PLAYER", `SET ${sets.join(", ")}`, { values, condition: "attribute_exists(pc)" })) === "updated";
+}
+
+/** The audience a reading is made for (lib/qloo.ts): "" when unknown, which keeps out women-only items. */
+export async function audienceOf(uid: string): Promise<Audience> {
+  const g = str((await ddbGet(U(uid), "PLAYER").catch(() => null))?.gender);
+  return GENDERS.includes(g as Audience) ? (g as Audience) : "";
 }
 
 /** Presence heartbeat: stamps PLAYER.seen at most once a minute per account per instance (one write). */
@@ -553,7 +600,7 @@ export async function closeBout(uid: string, sk: string): Promise<"closed" | "go
  */
 export async function wipePlayer(uid: string): Promise<boolean> {
   const me = toPlayer(await ddbGet(U(uid), "PLAYER"));
-  if (!me) return true;
+  if (!me) return !(await Promise.all([purge(U(uid)), purge(`OWNER#${uid}`)])).includes(false);
   const [bouts, reqs, sent, friends] = await Promise.all([
     ddbQuery(U(uid), "BOUT#", 200, undefined, ["SK", "status"]),
     ddbQuery(U(uid), "REQ#", 50, undefined, ["pc"]),
@@ -571,5 +618,23 @@ export async function wipePlayer(uid: string): Promise<boolean> {
     ddbDelete(`PLAYER#${me.pc}`, "META"),
     ddbDelete(U(uid), "PLAYER"),
   ]);
-  return !res.includes(false) && !del.includes("error");
+  if (res.includes(false) || del.includes("error")) return false;
+  // Then everything else the account held: deck rows, wallet, credits, ledger, settings.
+  const purged = await Promise.all([purge(U(uid)), purge(`OWNER#${uid}`)]);
+  return !purged.includes(false);
+}
+
+/** Deletes every row in a partition (sort keys all start with a capital letter or digit). Rare, so plain deletes. */
+async function purge(PK: string): Promise<boolean> {
+  for (const lead of "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
+    for (let page = 0; page < 20; page++) {
+      const q = await ddbQuery(PK, lead, 100, undefined, ["SK"]);
+      if (!q) return false;
+      if (!q.items.length) break;
+      const out = await Promise.all(q.items.map((it) => ddbDelete(PK, str(it.SK))));
+      if (out.includes("error")) return false;
+      if (!q.cursor) break;
+    }
+  }
+  return true;
 }

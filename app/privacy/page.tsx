@@ -30,13 +30,15 @@ export default function Page() {
             ["Your loves", "“Kendrick Lamar”, “Spirited Away”", "To build your reading with Qloo data and AI"],
             ["Your card", "Archetype, stats, brand picks, rarity, verify code", "To show, share and verify it"],
             ["Account", "Email, and name and photo if you use Google sign-in; sign-in history", "To run your account and deck, and block fake sign-ups (via Clerk)"],
+            ["Profile", "Username, bio and the short line made from it, and who readings are for (woman, man, non-binary or rather not say)", "Friends see your username, bio line, fighter card and when you were last online. Who readings are for is never shown: it only keeps items that don't fit you out of your picks"],
+            ["Friends and fights", "Friend list, requests, fights and Stardust stakes, last-online time", "To run friends, fights and the sky"],
             ["Device id", "Random id in the tm_d cookie", "To keep your deck in this browser"],
             ["Network data", "IP address, browser type", "Rate limits, security, delivering pages. The IP is salted and hashed before storage"],
             ["Counts", "Cards minted per day, rarity spread", "To size the service. These don't identify anyone"],
           ]}
         />
         <p>
-          We don&apos;t ask for your birth date, ID, location or contacts. Your loves can hint at sensitive things; leave out anything you&apos;d rather not
+          We don&apos;t ask for your birth date, ID, location or contacts. Gender is optional (&ldquo;rather not say&rdquo; is always there) and you can change it on your Account page. Your loves can hint at sensitive things; leave out anything you&apos;d rather not
           see on a shareable card. We never use them for advertising.
         </p>
         <p>
@@ -50,8 +52,8 @@ export default function Page() {
           head={["Provider", "Job", "Data", "Where"]}
           rows={[
             ["Vercel", "Hosting", "Requests, IPs in short-lived logs", "USA / global edge"],
-            ["Amazon Web Services", "DynamoDB and S3 store cards and decks; Bedrock runs the AI", "Cards, account ids; your loves and Qloo results for one run (no name, email or IP)", "USA"],
-            ["Qloo", "Taste data", "Your loves as search terms; no name, email or IP", "USA"],
+            ["Amazon Web Services", "DynamoDB and S3 store cards, decks and profiles; Bedrock runs the AI (including the bio line)", "Cards, account ids; your loves and Qloo results for one run (no name, email or IP)", "USA"],
+            ["Qloo", "Taste data", "Your loves as search terms, and woman/man if you chose it; no name, email or IP", "USA"],
             ["Upstash", "Cache and rate-limit counters", "Hashed ids, counters, Qloo results for at most 6 hours", "USA"],
             ["Clerk", "Sign-in", "Email, profile, sessions", "USA"],
             ["Cloudflare", "Bot checks (Turnstile)", "IP and browser signals during the check", "Global"],
@@ -69,7 +71,7 @@ export default function Page() {
           head={["Data", "Kept"]}
           rows={[
             ["Cards and deck", "Until you burn the card, delete your account, or ask us"],
-            ["Account", "Until you delete it"],
+            ["Account, profile, friends, deck, Stardust", "Until you close the account (Account page), which deletes them at once"],
             ["Qloo results cache", "6 hours at most"],
             ["Rate-limit counters", "Minutes to 2 days"],
             ["tm_d device cookie", "400 days in your browser"],
@@ -80,7 +82,7 @@ export default function Page() {
 
       <Sec n={5} title="Your rights">
         <p>
-          You can ask to see, correct or delete your data, withdraw consent, and nominate someone to act for you. Email{" "}
+          You can see and correct your profile on the Account page and delete everything there with Close account. You can also ask to see, correct or delete your data, withdraw consent, and nominate someone to act for you. Email{" "}
           <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>. If we don&apos;t sort it out, you can complain to the Data Protection Board of India (or your
           local regulator).
         </p>

@@ -6,6 +6,7 @@ import { SiteShell } from "@/components/site/SiteShell";
 import { authOn, whenAuthReady, type Bridge } from "@/lib/authBridge";
 import { StardustTable } from "@/components/shop/StardustTable";
 import type { Economy } from "@/lib/economy";
+import { BIO_MAX, GENDER_CHOICES } from "@/components/auth/UsernameGate";
 
 interface Me {
   accounts: boolean;
@@ -145,6 +146,8 @@ export default function AccountPage() {
             </div>
           </section>
 
+          <ProfileCard />
+
           <CloseAccount onDone={() => void bridge?.signOut().finally(() => (location.href = "/"))} />
         </div>
       )}
@@ -229,6 +232,75 @@ function CloseAccount({ onDone }: { onDone: () => void }) {
           {err && <p className="mt-3 text-sm text-bad">{err}</p>}
         </div>
       )}
+    </section>
+  );
+}
+
+/** Who readings are for (private) and the bio friends see as a short line on your star. */
+function ProfileCard() {
+  const [p, setP] = useState<{ gender?: string; bio?: string; tag?: string } | null>(null);
+  const [gender, setGender] = useState("");
+  const [bio, setBio] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    void fetch("/api/friends", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { me?: { gender?: string; bio?: string; tag?: string } }) => {
+        if (!j.me) return;
+        setP(j.me);
+        setGender(j.me.gender ?? "");
+        setBio(j.me.bio ?? "");
+      })
+      .catch(() => {});
+  }, []);
+  if (!p) return null;
+  const save = async () => {
+    setBusy(true);
+    setNote(null);
+    const j = (await fetch("/api/friends", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "profile", gender, bio }) })
+      .then((r) => r.json())
+      .catch(() => ({ error: "Couldn't reach the server." }))) as { ok?: boolean; error?: string; me?: { tag?: string } };
+    setBusy(false);
+    if (!j.ok) return setNote(j.error ?? "Couldn't save that.");
+    setP({ ...p, gender, bio, tag: j.me?.tag });
+    setNote(j.me?.tag ? `Friends now see: “${j.me.tag}”` : "Saved.");
+  };
+  return (
+    <section className="rounded-3xl border border-line bg-card p-6 sm:col-span-2">
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Profile</p>
+      <p className="mt-4 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Readings are for</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {GENDER_CHOICES.map(([v, t]) => (
+          <button
+            key={v || "none"}
+            type="button"
+            aria-pressed={gender === v}
+            onClick={() => setGender(v)}
+            className={`rounded-full border px-4 py-1.5 text-sm transition ${gender === v ? "border-accent bg-accent text-paper" : "border-line bg-paper text-ink-2 hover:text-ink"}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-ink-3">Private. It only keeps picks that don&apos;t fit you out of your readings.</p>
+      <label htmlFor="acct-bio" className="mt-5 block font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
+        Bio
+      </label>
+      <textarea
+        id="acct-bio"
+        rows={2}
+        maxLength={BIO_MAX}
+        value={bio}
+        onChange={(e) => setBio(e.target.value)}
+        className="mt-2 w-full resize-none rounded-2xl border border-line bg-paper px-4 py-2.5 text-[15px] text-ink outline-none focus:border-accent/60"
+      />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 text-sm text-ink-2">{note ?? (p.tag ? `Friends see: “${p.tag}”` : "Friends see a short line made from it.")}</p>
+        <button onClick={() => void save()} disabled={busy} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper disabled:opacity-40">
+          {busy ? "Saving" : "Save"}
+        </button>
+      </div>
     </section>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ScratchReveal } from "@/components/deck/ScratchReveal";
 import { levelOf } from "@/lib/friendLevels";
 import type { Friend, Player } from "@/lib/friends";
 import s from "./sky.module.css";
@@ -9,7 +11,8 @@ import s from "./sky.module.css";
  * "Your sky": you are the star in the middle, every friend a star bound to you by a filament of light. Closer orbits
  * and brighter colours mean more days fought. Requests either way are nebulae still forming, and a friend you haven't
  * seen arrive yet is born on screen once (the cloud collapses, flashes, ignites, and the bond draws in).
- * Pure SVG and CSS; no canvas, no library.
+ * Hold a star (or hover it) and their line whispers next to it; tap it and the sky flies in to them, with their line
+ * sealed under foil until you scratch it.
  */
 
 const TINT: Record<string, string> = {
@@ -66,7 +69,29 @@ type Body = {
   kind: "friend" | "in" | "out";
   level: string;
   days: number;
+  tag?: string;
+  seen?: number;
+  fighter?: string;
 };
+
+const HOLD_MS = 380;
+const ONLINE_MS = 150_000;
+/** Lines you've already scratched open, per friend: a new bio arrives sealed again. */
+const readKey = (pc: string) => `tastrology:sky:read:${pc}`;
+function wasRead(pc: string, tag: string): boolean {
+  try {
+    return localStorage.getItem(readKey(pc)) === tag;
+  } catch {
+    return false;
+  }
+}
+function ago(t?: number): string {
+  if (!t) return "";
+  const d = Date.now() - t;
+  if (d < ONLINE_MS) return "Online";
+  const m = Math.round(d / 60000);
+  return m < 60 ? `Seen ${m}m ago` : m < 1440 ? `Seen ${Math.round(m / 60)}h ago` : `Seen ${Math.round(m / 1440)}d ago`;
+}
 
 export function FriendSky({
   me,
@@ -86,6 +111,19 @@ export function FriendSky({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 900, h: 400 });
+  const reduce = useReducedMotion() ?? false;
+  // Zoomed in on one friend, and the star being held (its line whispers beside it).
+  const [focus, setFocus] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+  const [read, setRead] = useState(false);
+  const holdT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const heldFired = useRef(false);
+  useEffect(() => {
+    if (!focus) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setFocus(null);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [focus]);
   // Stars appear only once the browser has measured the sky (and read which friends it has already seen born).
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -147,6 +185,9 @@ export function FriendSky({
       kind: "friend" as const,
       level: levelOf(f.days ?? 0),
       days: f.days ?? 0,
+      tag: f.tag,
+      seen: f.seen,
+      fighter: f.name,
     })),
     ...incoming.map((f) => ({
       pc: f.pc,
@@ -186,8 +227,36 @@ export function FriendSky({
   const stars = friends.length;
   const forming = incoming.length + bodies.filter((b) => b.kind === "out").length;
 
+  // The fly-in: the focused star moves to the upper middle and everything scales up around it.
+  const target = placed.find((b) => b.pc === focus && b.kind === "friend");
+  const k = compact ? 2.1 : 2.5;
+  const zoom = target
+    ? { transform: `translate(${w / 2 - target.x * k}px, ${h * (compact ? 0.24 : 0.27) - target.y * k}px) scale(${k})` }
+    : { transform: "translate(0px, 0px) scale(1)" };
+  const open = (pc: string) => {
+    const b = placed.find((x) => x.pc === pc);
+    setHeld(null);
+    setFocus(pc);
+    setRead(b?.tag ? wasRead(pc, b.tag) : true);
+  };
+  const press = (pc: string, pointer: string) => {
+    heldFired.current = false;
+    clearTimeout(holdT.current);
+    if (focus) return;
+    if (pointer === "mouse") return setHeld(pc);
+    holdT.current = setTimeout(() => {
+      heldFired.current = true;
+      setHeld(pc);
+    }, HOLD_MS);
+  };
+  const release = (pointer: string) => {
+    clearTimeout(holdT.current);
+    if (pointer !== "mouse" && heldFired.current) setTimeout(() => setHeld(null), 1600);
+  };
+  const whisper = !focus && held ? placed.find((b) => b.pc === held) : undefined;
+
   return (
-    <div ref={box} className={s.sky}>
+    <div ref={box} className={s.sky} style={target ? { height: compact ? 540 : 480 } : undefined} onClick={(e) => e.target === e.currentTarget && setFocus(null)}>
       <svg className={s.svg} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Your sky: ${stars} friend${stars === 1 ? "" : "s"}, ${forming} forming`}>
         <defs>
           <radialGradient id="sky-core" cx="50%" cy="50%" r="50%">
@@ -235,6 +304,12 @@ export function FriendSky({
           />
         ))}
 
+        <g
+          style={{ ...zoom, transformOrigin: "0 0", transition: reduce ? "none" : "transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1)" }}
+          onClick={(e) => {
+            if (focus && !(e.target as Element).closest("[data-star]")) setFocus(null);
+          }}
+        >
         {/* Faint orbit rings, one per friendship level. */}
         {(["Best", "Ultra", "Great", "Good"] as const).map((k) => (
           <ellipse key={k} cx={cx} cy={cy} rx={rx * ORBIT[k]} ry={ry * ORBIT[k]} fill="none" stroke={TINT[k]} strokeOpacity="0.06" strokeDasharray="1 6" />
@@ -284,12 +359,27 @@ export function FriendSky({
           return (
             <g
               key={b.pc}
+              data-star
               className={s.star}
               tabIndex={0}
               role="button"
-              aria-label={`${b.label}, ${b.level === "New" ? "new" : b.level} friend`}
-              onClick={() => onPick(b.pc)}
-              onKeyDown={(e) => e.key === "Enter" && onPick(b.pc)}
+              aria-label={`${b.label}, ${b.level === "New" ? "new" : b.level} friend${b.tag ? `: ${b.tag}` : ""}`}
+              style={{ opacity: focus && focus !== b.pc ? 0.22 : 1, transition: "opacity 0.6s" }}
+              onPointerDown={(e) => press(b.pc, e.pointerType)}
+              onPointerUp={(e) => release(e.pointerType)}
+              onPointerEnter={(e) => e.pointerType === "mouse" && !focus && setHeld(b.pc)}
+              onPointerLeave={(e) => {
+                clearTimeout(holdT.current);
+                if (e.pointerType === "mouse") setHeld(null);
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+              onClick={() => {
+                // A hold shows the line; only a plain tap flies in.
+                if (heldFired.current) return void (heldFired.current = false);
+                if (focus === b.pc) return setFocus(null);
+                open(b.pc);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && open(b.pc)}
             >
               <path
                 d={b.path}
@@ -361,7 +451,83 @@ export function FriendSky({
         <text x={cx} y={cy + 40} textAnchor="middle" className="font-serif" fontStyle="italic" fontSize="19" fill="#f3f1ec">
           {me.user ? `@${me.user}` : "you"}
         </text>
+        </g>
       </svg>
+
+      {whisper && (
+        <div
+          className="pointer-events-none absolute z-10 max-w-[13rem] -translate-x-1/2 rounded-2xl border border-white/10 bg-paper/80 px-3.5 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md"
+          style={{ left: Math.min(Math.max(whisper.x, 110), w - 110), top: Math.max(whisper.y - 74, 8) }}
+          role="status"
+        >
+          <p className="font-mono text-[9.5px] uppercase tracking-[0.2em]" style={{ color: TINT[whisper.level] }}>
+            {whisper.label}
+          </p>
+          <p className="mt-0.5 font-serif text-[15px] italic leading-snug text-ink">{whisper.tag ? `“${whisper.tag}”` : "No bio yet."}</p>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {target && (
+          <motion.div
+            key={target.pc}
+            initial={reduce ? false : { opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, y: 16 }}
+            transition={{ duration: 0.45, delay: reduce ? 0 : 0.35 }}
+            className="absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md rounded-[22px] border border-white/10 bg-paper/75 p-4 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: TINT[target.level] }}>
+                  {target.level === "New" ? "New star" : `${target.level} friends`} · {target.days} day{target.days === 1 ? "" : "s"} fought
+                </p>
+                <p className="mt-1 truncate font-serif text-[26px] italic leading-tight text-ink">{target.label}</p>
+                {target.fighter && <p className="truncate text-xs text-ink-3">Fights as {target.fighter}</p>}
+              </div>
+              <p className={`shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] ${ago(target.seen) === "Online" ? "text-accent" : "text-ink-3"}`}>{ago(target.seen)}</p>
+            </div>
+            <div className="mt-3">
+              {!target.tag ? (
+                <p className="text-sm text-ink-3">No bio yet. Their line shows up here once they write one.</p>
+              ) : read ? (
+                <p className="font-serif text-[19px] italic leading-snug text-ink">“{target.tag}”</p>
+              ) : (
+                <>
+                  <p className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-3">Scratch to read their line</p>
+                  <ScratchReveal
+                    name={target.tag}
+                    loveId={target.pc}
+                    brandId={`${target.pc}:${target.tag}`}
+                    reduce={reduce}
+                    onDone={() => {
+                      try {
+                        localStorage.setItem(readKey(target.pc), target.tag ?? "");
+                      } catch {}
+                      setTimeout(() => setRead(true), 600);
+                    }}
+                  />
+                </>
+              )}
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <button type="button" onClick={() => setFocus(null)} className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
+                Back to sky
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFocus(null);
+                  onPick(target.pc);
+                }}
+                className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper"
+              >
+                Fight or manage
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 sm:p-6">
         <p className="font-mono text-[10.5px] uppercase tracking-[0.24em] text-accent">Your sky</p>
@@ -370,9 +536,9 @@ export function FriendSky({
           {forming ? ` · ${forming} forming` : ""}
         </p>
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-5 transition-opacity sm:p-6 ${target ? "opacity-0" : ""}`}>
         <p className="hidden max-w-[16rem] text-xs text-ink-3 sm:block">
-          {stars ? "Fight more, orbit closer. Tap a star to find them." : "Every friend you add is born here."}
+          {stars ? "Hold a star to hear it. Tap to fly in. Fight more, orbit closer." : "Every friend you add is born here."}
         </p>
         <ul className="hidden gap-3 sm:flex">
           {(["Good", "Great", "Ultra", "Best"] as const).map((k) => (

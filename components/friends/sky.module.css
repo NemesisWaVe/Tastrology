@@ -175,6 +175,8 @@
 
 .star {
   cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .star:hover .halo,
 .star:focus-visible .halo {
@@ -205,3 +207,4 @@
     stroke-dashoffset: 0;
   }
 }
+.sky { transition: height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }

@@ -1,9 +1,12 @@
 import { clerkOn, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, refundRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, refundRename, closeBout, GENDERS, setProfile, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow, clientId } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
+import { blocked } from "@/lib/guard";
+import { cleanBio, tagline } from "@/lib/tagline";
 import { TWIN_CODE } from "@/lib/twins";
+import type { Audience } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,7 +70,7 @@ async function syncName(uid: string, me: Player): Promise<Player> {
   return me;
 }
 
-type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string; user?: string };
+type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string; user?: string; gender?: string; bio?: string };
 
 export async function POST(request: Request) {
   if (!clerkOn() || !ddbConfigured()) return json({ error: "Friends aren't on." }, 404);
@@ -117,6 +120,25 @@ export async function POST(request: Request) {
         return json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);
       }
       return json({ ok: true, me: rename ? { ...r.me, renames: (me.renames ?? 0) + 1 } : r.me });
+    }
+    case "profile": {
+      // Gender only steers your own readings and is never shown to anyone; the bio becomes a short line friends see.
+      const p: { gender?: Audience; bio?: string; tag?: string } = {};
+      if (b.gender !== undefined) {
+        if (!GENDERS.includes(String(b.gender) as Audience)) return json({ error: "Pick one of the options." }, 400);
+        p.gender = String(b.gender) as Audience;
+      }
+      if (b.bio !== undefined) {
+        const bio = cleanBio(String(b.bio));
+        if (bio && blocked(bio)) return json({ error: "Keep the bio friendly." }, 400);
+        if (bio !== (me.bio ?? "")) {
+          if (!(await allow(`bio:${uid}`, 8, 60 * 60 * 1000))) return json({ error: "That's a lot of bios. Try again in a bit." }, 429);
+          p.bio = bio;
+          p.tag = bio ? await tagline(bio) : "";
+        }
+      }
+      if (!(await setProfile(uid, p))) return json({ error: "Couldn't reach the server." }, 503);
+      return json({ ok: true, me: { ...me, ...p } });
     }
     case "add": {
       if (!me.user) return json({ error: "Pick your username first." }, 400);
