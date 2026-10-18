@@ -106,7 +106,6 @@ export function ClerkBridge() {
     <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Sign in">
       <button aria-label="Close" onClick={dismiss} className="absolute inset-0 bg-paper/80 backdrop-blur-sm" />
       <div className="relative flex flex-col items-center gap-4">
-        <p className="max-w-sm text-center font-serif text-2xl italic leading-tight text-ink">Sign in and the stars start reading.</p>
         {age === "ok" || resuming ? (
           <SignIn routing="hash" withSignUp forceRedirectUrl={back} signUpForceRedirectUrl={back} />
         ) : age === "no" ? (

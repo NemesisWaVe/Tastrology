@@ -33,7 +33,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     );
   }
   return (
-    <ClerkProvider appearance={CLERK_LOOK} signInUrl="/sign-in" signUpUrl="/sign-up">
+    <ClerkProvider appearance={CLERK_LOOK} localization={CLERK_WORDS} signInUrl="/sign-in" signUpUrl="/sign-up">
       <html lang="en">
         <body className={fonts}>
           {children}
@@ -63,10 +63,43 @@ const CLERK_LOOK = {
   },
   // Still on Clerk's development instance (production needs a domain we own): hide its "Development mode" badges.
   layout: { unsafe_disableDevelopmentModeWarnings: true },
+  // Clerk's own CSS sits in the "clerk" layer (globals.css orders it under utilities), so these classes win.
+  cssLayerName: "clerk",
   // Username changes go through /friends (one free, then Stardust) and closing an account through /account (it
   // clears friends and bouts first), so Clerk's own profile hides both.
   elements: {
     profileSection__username: { display: "none" },
     profileSection__danger: { display: "none" },
+    // The sheets in the house look: a hairline card, mono eyebrows, a serif line, pill fields and a lime pill.
+    cardBox: "rounded-[24px] border border-line shadow-[0_40px_100px_-30px_rgba(0,0,0,0.9)]",
+    card: "rounded-none border-0 bg-card px-7 py-8 shadow-none",
+    headerTitle: "font-mono text-[10.5px] font-normal uppercase tracking-[0.24em] text-accent",
+    headerSubtitle: "mt-1 font-serif text-[28px] italic leading-[1.1] text-ink",
+    socialButtonsBlockButton: "rounded-full border border-line bg-paper py-2.5 shadow-none transition hover:border-ink-3 hover:bg-paper",
+    socialButtonsBlockButtonText: "text-[15px] font-medium text-ink",
+    dividerLine: "bg-line",
+    dividerText: "font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3",
+    formFieldLabel: "font-mono text-[10.5px] font-normal uppercase tracking-[0.2em] text-ink-3",
+    formFieldInput: "rounded-full border border-line bg-paper px-4 py-2.5 text-[15px] text-ink shadow-none transition focus:border-accent/60",
+    formFieldAction: "text-accent",
+    formButtonPrimary: "rounded-full bg-accent py-2.5 text-[15px] font-semibold normal-case text-paper shadow-none transition hover:bg-accent hover:brightness-105",
+    buttonArrowIcon: "hidden",
+    otpCodeFieldInput: "rounded-xl border border-line bg-paper text-ink",
+    identityPreview: "rounded-full border border-line bg-paper",
+    identityPreviewEditButton: "text-accent",
+    footer: "bg-paper-2 [&>*]:bg-transparent",
+    footerActionText: "text-ink-3",
+    footerActionLink: "font-semibold text-accent hover:text-accent",
+  },
+};
+
+/** Clerk's copy, in our voice. The combined sheet (sign in or sign up) uses titleCombined. */
+const CLERK_WORDS = {
+  signIn: {
+    start: { title: "Tastrology", titleCombined: "Tastrology", subtitle: "Sign in and the stars start reading.", subtitleCombined: "Sign in and the stars start reading." },
+  },
+  signUp: {
+    start: { title: "New here", subtitle: "Pick a username. It's how friends find you." },
+    continue: { title: "Almost there", subtitle: "Pick a username. It's how friends find you." },
   },
 };

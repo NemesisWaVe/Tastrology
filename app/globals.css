@@ -1,3 +1,5 @@
+/* Clerk's styles go in their own layer under utilities, so the house classes in app/layout.tsx override them. */
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 
 /* Dark, cinematic base. Token names are semantic ("paper" = page background). */

@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { qr, qrPath } from "@/components/card/qr";
 import { whenAuthReady } from "@/lib/authBridge";
 import { loadDeck, type DeckEntry } from "@/lib/deck";
-import { levelOf } from "@/lib/friendLevels";
+import { LEVELS, levelOf } from "@/lib/friendLevels";
+import { FriendSky, SKY_TINT } from "./FriendSky";
 import type { Bout, Friend, Player } from "@/lib/friends";
 import { rememberPlayerCode } from "@/lib/player";
 
@@ -48,6 +49,22 @@ const lime = "rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-pape
 const OUTCOME = { won: "Won", lost: "Lost", tied: "Tied" } as const;
 const ADDED = { sent: "Request sent. You're friends once they accept.", added: "You're friends now.", pending: "Already asked. Waiting on them.", exists: "Already friends." } as const;
 const who = (b: { user?: string; name: string; pc: string }) => (b.user ? `@${b.user}` : b.name || b.pc);
+/** Panels: a faint glass sheet over the sky, and a lime-washed one for what needs you. */
+const glass = "rounded-[22px] border border-white/[0.07] bg-[linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.012)_60%)] backdrop-blur-sm";
+const lit = "rounded-[22px] border border-accent/35 bg-[linear-gradient(160deg,rgba(198,255,61,0.10),rgba(198,255,61,0.02)_60%)] backdrop-blur-sm";
+/** Scrolls to a friend or request row and makes it glow, from a tap on the sky. */
+function pick(pc: string) {
+  const el = document.getElementById(`fr-${pc}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.animate([{ boxShadow: "0 0 0 0 rgba(198,255,61,0)" }, { boxShadow: "0 0 0 2px rgba(198,255,61,0.7), 0 0 40px rgba(198,255,61,0.25)" }, { boxShadow: "0 0 0 0 rgba(198,255,61,0)" }], { duration: 1600, delay: 300 });
+}
+/** Days fought toward the next friendship level. */
+function bond(days: number) {
+  const next = [...LEVELS].reverse().find((l) => days < l.days);
+  const prev = [...LEVELS].find((l) => days >= l.days)?.days ?? 0;
+  return next ? { pct: Math.max(0.04, (days - prev) / (next.days - prev)), left: next.days - days, next: next.name } : { pct: 1, left: 0, next: null };
+}
 
 function InviteQr({ url }: { url: string }) {
   const code = useMemo(() => {
@@ -198,12 +215,17 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   const open = (d.bouts ?? []).filter((b) => b.status === "open" || (b.status === "expired" && b.role === "out"));
   const past = (d.bouts ?? []).filter((b) => b.status === "done" || b.status === "declined" || b.status === "cancelled").slice(0, 8);
   const friendPcs = new Set((d.friends ?? []).map((f) => f.pc));
+  const fighting = new Set((d.bouts ?? []).filter((b) => b.status === "open").map((b) => b.pc));
 
   return (
+    <div className="relative isolate flex flex-col gap-6">
+      {/* Nebula light behind the page, so the panels sit in space rather than on black. */}
+      <div aria-hidden className="pointer-events-none absolute -inset-x-[30vw] -top-60 bottom-0 -z-10 bg-[radial-gradient(40%_30%_at_80%_10%,rgba(120,80,220,0.16),transparent_70%),radial-gradient(35%_30%_at_10%_45%,rgba(20,120,120,0.14),transparent_70%),radial-gradient(30%_25%_at_70%_80%,rgba(198,255,61,0.05),transparent_70%)]" />
+      <FriendSky me={me} friends={d.friends ?? []} incoming={incoming} sent={sent} fighting={fighting} onPick={pick} />
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <div className="flex flex-col gap-6">
         {naming && (
-          <section className="rounded-[22px] border border-accent/50 bg-accent/5 p-5 sm:p-6">
+          <section className={`${lit} p-5 sm:p-6`}>
             <p className={`${mono} text-accent`}>{me.user ? "Change your username" : "Pick your username"}</p>
             <p className="mt-2 text-sm text-ink-2">
               {me.user
@@ -242,7 +264,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
             )}
           </section>
         )}
-        <section className="rounded-[22px] border border-line bg-paper/60 p-5 sm:p-6">
+        <section className={`${glass} p-5 sm:p-6`}>
           {me.user && (
             <p className="mb-4 flex items-baseline gap-3">
               <span className="font-serif text-3xl italic">@{me.user}</span>
@@ -295,7 +317,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
           </div>
         </section>
 
-        <section className="rounded-[22px] border border-line p-5 sm:p-6">
+        <section className={`${glass} p-5 sm:p-6`}>
           <p className={`${mono} text-ink-3`}>Add a friend</p>
           <form
             className="mt-3 flex gap-2"
@@ -323,8 +345,11 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
           {sent.length > 0 && (
             <ul className="mt-4 flex flex-col gap-2">
               {sent.map((r) => (
-                <li key={r.pc} className="flex items-center justify-between gap-3 text-sm text-ink-2">
-                  <span className="min-w-0 truncate">Asked {who(r)} · waiting</span>
+                <li key={r.pc} id={`fr-${r.pc}`} className="flex items-center justify-between gap-3 rounded-full text-sm text-ink-2">
+                  <span className="min-w-0 truncate">
+                    <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-[#d875ff] align-middle shadow-[0_0_8px_#d875ff]" />
+                    Asked {who(r)} · forming
+                  </span>
                   <button type="button" disabled={busy !== null} onClick={() => void run(`rq${r.pc}`, { op: "drop-request", pc: r.pc })} className={`${mono} text-ink-3 hover:text-ink`}>
                     Withdraw
                   </button>
@@ -342,14 +367,14 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
 
       <div className="flex flex-col gap-6">
         {(incoming.length > 0 || open.length > 0) && (
-          <section className="rounded-[22px] border border-accent/50 bg-accent/5 p-5 sm:p-6">
+          <section className={`${lit} p-5 sm:p-6`}>
             <div className="flex items-baseline justify-between">
               <p className={`${mono} text-accent`}>Waiting on you</p>
               {d.dustOn && d.dust !== null && <p className="font-mono text-xs tabular-nums text-ink-2">{d.dust} dust</p>}
             </div>
             <ul className="mt-3 flex flex-col divide-y divide-line/70">
               {incoming.map((r) => (
-                <li key={r.pc} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <li key={r.pc} id={`fr-${r.pc}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl py-3">
                   <p className="text-sm">
                     <b className="font-semibold">{who(r)}</b> wants to be friends
                   </p>
@@ -406,15 +431,26 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
             <p className="mt-3 max-w-md text-ink-2">No one yet. Send your invite or share a card. When they ask and you accept, you can fight.</p>
           ) : (
             <ul className="mt-3 flex flex-col gap-3">
-              {d.friends.map((f) => (
-                <li key={f.pc} className="rounded-2xl border border-line p-4">
+              {d.friends.map((f) => {
+                const lvl = levelOf(f.days ?? 0);
+                const tint = SKY_TINT[lvl];
+                const bd = bond(f.days ?? 0);
+                return (
+                <li key={f.pc} id={`fr-${f.pc}`} className={`${glass} p-4`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <span aria-hidden className="relative mt-1.5 h-3 w-3 shrink-0 rounded-full bg-white" style={{ boxShadow: `0 0 0 3px ${tint}33, 0 0 18px 2px ${tint}` }} />
+                    <div className="min-w-0 flex-1">
                       <p className="truncate font-serif text-xl italic">{who(f)}</p>
                       <p className="mt-0.5 truncate text-xs text-ink-3">{f.name ? `Fights with ${f.name}` : "No card yet"}</p>
-                      <p className={`${mono} mt-1 text-ink-3`}>
-                        <span className={f.days ? "text-accent" : ""}>{levelOf(f.days ?? 0)} friend</span> · {f.days ?? 0} day{f.days === 1 ? "" : "s"} fought · {f.pc}
+                      <p className={`${mono} mt-1.5 text-ink-3`}>
+                        <span style={{ color: tint }}>{lvl} friend</span> · {f.days ?? 0} day{f.days === 1 ? "" : "s"} fought · {f.pc}
                       </p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="h-[3px] w-28 overflow-hidden rounded-full bg-white/[0.07]">
+                          <span className="block h-full rounded-full" style={{ width: `${bd.pct * 100}%`, background: tint, boxShadow: `0 0 8px ${tint}` }} />
+                        </span>
+                        <span className="text-[11px] text-ink-3">{bd.next ? `${bd.left} more day${bd.left === 1 ? "" : "s"} to ${bd.next}` : "As close as it gets"}</span>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -452,7 +488,8 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </section>
@@ -496,6 +533,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
           </section>
         )}
       </div>
+    </div>
     </div>
   );
 }
