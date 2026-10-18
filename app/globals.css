@@ -250,3 +250,21 @@ html[data-gate] [data-orb] { opacity: 0; pointer-events: none; }
     transform: translateY(3px);
   }
 }
+
+/* Scratch-off decode (components/deck/ScratchReveal.tsx) */
+@keyframes scratchJitter {
+  from { transform: translate(-3px, 0) rotate(-8deg); }
+  to { transform: translate(3px, 1px) rotate(6deg); }
+}
+@keyframes scratchUp {
+  from { opacity: 0.2; filter: brightness(2.2); transform: translateY(2px); }
+  to { opacity: 1; filter: none; transform: none; }
+}
+@keyframes scratchFlake {
+  from { opacity: 1; transform: translate(0, 0) rotate(0); }
+  to { opacity: 0; transform: translate(var(--fx, 0), 16px) rotate(90deg); }
+}
+@keyframes scratchShine {
+  from { left: -35%; }
+  to { left: 110%; }
+}

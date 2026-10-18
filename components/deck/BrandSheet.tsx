@@ -3,7 +3,12 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ReceiptRoll } from "@/components/card/ReceiptRoll";
-import { PulledSky, readDecoded, writeDecoded } from "@/components/deck/PulledSky";
+import {
+  PulledSky,
+  readDecoded,
+  writeDecoded,
+} from "@/components/deck/PulledSky";
+import { ScratchReveal } from "@/components/deck/ScratchReveal";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
 import { readSeen, writeSeen, type Seen } from "@/lib/brandSeen";
@@ -13,7 +18,12 @@ import type { Snap, SnapBrand } from "@/lib/receipt";
 import { sfx } from "@/lib/sound";
 import type { StyleResult } from "@/lib/types";
 
-type Reply = { status: "fresh" | "lite" | "faded" | "burned" | "error"; snap?: Snap; drift?: Drift | null; error?: string };
+type Reply = {
+  status: "fresh" | "lite" | "faded" | "burned" | "error";
+  snap?: Snap;
+  drift?: Drift | null;
+  error?: string;
+};
 
 /**
  * A receipt for cards whose full reading wasn't kept: printed from the re-read brands, so every card still has its
@@ -25,10 +35,24 @@ function reprintOf(snap: Snap, card: CardData): StyleResult {
     mode: "live",
     planner: "autopilot",
     createdAt: snap.at,
-    seeds: snap.loves.map((l) => ({ id: l.id, name: l.name, kind: l.kind as never, image: l.image, tags: [] })),
+    seeds: snap.loves.map((l) => ({
+      id: l.id,
+      name: l.name,
+      kind: l.kind as never,
+      image: l.image,
+      tags: [],
+    })),
     dna: { name: card.archetype, tagline: "", keywords: [], lobes: [] },
     brands: snap.brands.map((b) => ({
-      entity: { id: b.id, name: b.name, kind: "brand", image: b.image, site: b.site, instagram: b.instagram, tags: [] },
+      entity: {
+        id: b.id,
+        name: b.name,
+        kind: "brand",
+        image: b.image,
+        site: b.site,
+        instagram: b.instagram,
+        tags: [],
+      },
       affinity: b.affinity,
       category: b.category,
       explain: b.explain,
@@ -40,37 +64,88 @@ function reprintOf(snap: Snap, card: CardData): StyleResult {
   } as unknown as StyleResult;
 }
 
-const img = (u?: string) => (u ? (u.startsWith("/") ? u : proxied(u)) : undefined);
-const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const img = (u?: string) =>
+  u ? (u.startsWith("/") ? u : proxied(u)) : undefined;
+const day = (ms: number) =>
+  new Date(ms).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
 
 function click(code: string, b: { id: string }, src: string) {
   try {
-    void fetch(`/api/card/${encodeURIComponent(code)}/click`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ brand: b.id, src }), keepalive: true });
+    void fetch(`/api/card/${encodeURIComponent(code)}/click`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ brand: b.id, src }),
+      keepalive: true,
+    });
   } catch {}
 }
 
-function BrandRow({ b, love, loves, code, onJump, src, flash = false }: { b: SnapBrand; love: Snap["loves"][number]; loves: Snap["loves"]; code: string; onJump: (id: string) => void; src: string; flash?: boolean }) {
+function BrandRow({
+  b,
+  love,
+  loves,
+  code,
+  onJump,
+  src,
+  flash = false,
+}: {
+  b: SnapBrand;
+  love: Snap["loves"][number];
+  loves: Snap["loves"];
+  code: string;
+  onJump: (id: string) => void;
+  src: string;
+  flash?: boolean;
+}) {
   const share = Math.round((b.explain[love.id] ?? 0) * 100);
   const drop = Math.round(b.ablation[love.id] ?? 0);
-  const others = b.because.filter((id) => id !== love.id).map((id) => loves.find((l) => l.id === id)).filter((x): x is Snap["loves"][number] => Boolean(x)).slice(0, 2);
+  const others = b.because
+    .filter((id) => id !== love.id)
+    .map((id) => loves.find((l) => l.id === id))
+    .filter((x): x is Snap["loves"][number] => Boolean(x))
+    .slice(0, 2);
   const link = brandLink(b);
   return (
-    <li id={`pulled-${b.id}`} className={`rise flex gap-4 rounded-2xl border-t border-line/70 py-4 transition-shadow duration-700 first:border-t-0 ${flash ? "shadow-[0_0_0_1px_rgba(198,255,61,0.6),0_0_30px_-6px_rgba(198,255,61,0.5)]" : ""}`}>
+    <li
+      id={`pulled-${b.id}`}
+      className={`rise flex gap-4 rounded-2xl border-t border-line/70 py-4 transition-shadow duration-700 first:border-t-0 ${flash ? "shadow-[0_0_0_1px_rgba(198,255,61,0.6),0_0_30px_-6px_rgba(198,255,61,0.5)]" : ""}`}
+    >
       <Thumb src={img(b.image)} name={b.name} size={44} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
           <span className="font-display text-lg font-semibold">{b.name}</span>
-          <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3">{b.category}</span>
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3">
+            {b.category}
+          </span>
         </p>
         <p className="mt-1 text-sm text-ink-2">
-          {share > 0 ? <b className="font-semibold text-ink">{share}% of the pull</b> : "In the pull"}
-          {drop > 0 && <span className="text-ink-3"> · without {displayName(love.name)} it drops {drop} points</span>}
+          {share > 0 ? (
+            <b className="font-semibold text-ink">{share}% of the pull</b>
+          ) : (
+            "In the pull"
+          )}
+          {drop > 0 && (
+            <span className="text-ink-3">
+              {" "}
+              · without {displayName(love.name)} it drops {drop} points
+            </span>
+          )}
         </p>
         {others.length > 0 && (
           <p className="mt-2 flex flex-wrap gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">also pulled by</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+              also pulled by
+            </span>
             {others.map((o) => (
-              <button key={o.id} type="button" onClick={() => onJump(o.id)} className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:border-accent hover:text-ink">
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => onJump(o.id)}
+                className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:border-accent hover:text-ink"
+              >
                 {displayName(o.name)}
               </button>
             ))}
@@ -85,7 +160,9 @@ function BrandRow({ b, love, loves, code, onJump, src, flash = false }: { b: Sna
         >
           {link.label} <span aria-hidden>↗</span>
         </a>
-        <span className="ml-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{link.note}</span>
+        <span className="ml-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+          {link.note}
+        </span>
       </div>
     </li>
   );
@@ -131,15 +208,24 @@ export function BrandSheet({
   // Breaking the seal: once per open, owners only. The bonus is for opening, never for clicking out.
   useEffect(() => {
     if (!open || !owned) return;
-    void fetch(`/api/card/${encodeURIComponent(code)}/opened`, { method: "POST" })
-      .then((x) => (x.ok ? (x.json() as Promise<{ status: string; dust?: number }>) : null))
+    void fetch(`/api/card/${encodeURIComponent(code)}/opened`, {
+      method: "POST",
+    })
+      .then((x) =>
+        x.ok ? (x.json() as Promise<{ status: string; dust?: number }>) : null,
+      )
       .then((j) => {
         if (!j) return;
         if (j.status === "paid" && j.dust) {
           setToast(`+${j.dust} Stardust. See you Monday.`);
           sfx("reveal");
         }
-        if (j.status === "paid" || j.status === "capped" || j.status === "opened") onOpenedRef.current?.(j.status === "paid" ? (j.dust ?? 0) : 0);
+        if (
+          j.status === "paid" ||
+          j.status === "capped" ||
+          j.status === "opened"
+        )
+          onOpenedRef.current?.(j.status === "paid" ? (j.dust ?? 0) : 0);
       })
       .catch(() => {});
   }, [open, owned, code]);
@@ -150,7 +236,9 @@ export function BrandSheet({
     sfx("flip");
     setSeen(readSeen(code));
     let off = false;
-    fetch(`/api/card/${encodeURIComponent(code)}/receipt?drift=1&full=1`, { cache: "no-store" })
+    fetch(`/api/card/${encodeURIComponent(code)}/receipt?drift=1&full=1`, {
+      cache: "no-store",
+    })
       .then((x) => x.json() as Promise<Reply & { result?: StyleResult }>)
       .then((j) => {
         if (off) return;
@@ -172,29 +260,55 @@ export function BrandSheet({
   // Default star: the strongest love; from the third visit, the one whose brands moved most, so it opens somewhere new.
   useEffect(() => {
     if (!snap || sel) return;
-    const weight = (id: string) => snap.brands.reduce((a, b) => a + (b.explain[id] ?? 0), 0);
+    const weight = (id: string) =>
+      snap.brands.reduce((a, b) => a + (b.explain[id] ?? 0), 0);
     const ranked = [...snap.loves].sort((a, b) => weight(b.id) - weight(a.id));
-    const pick = (seen?.visits ?? 0) >= 2 && ranked.length > 1 ? ranked[(seen?.visits ?? 0) % ranked.length] : ranked[0];
+    const pick =
+      (seen?.visits ?? 0) >= 2 && ranked.length > 1
+        ? ranked[(seen?.visits ?? 0) % ranked.length]
+        : ranked[0];
     if (pick) setSel(pick.id);
-    writeSeen(code, snap.brands.map((b) => b.id), seen);
+    writeSeen(
+      code,
+      snap.brands.map((b) => b.id),
+      seen,
+    );
   }, [snap, sel, seen, code]);
 
   // A sealed week with fresh brands opens on them.
   const scrolled = useRef(false);
   useEffect(() => {
-    if (!sealed || scrolled.current || !r?.drift?.entered.length || !freshRef.current) return;
+    if (
+      !sealed ||
+      scrolled.current ||
+      !r?.drift?.entered.length ||
+      !freshRef.current
+    )
+      return;
     scrolled.current = true;
-    freshRef.current.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    freshRef.current.scrollIntoView({
+      behavior: reduce ? "auto" : "smooth",
+      block: "start",
+    });
   }, [sealed, r, reduce]);
 
   const sharePull = async () => {
-    const names = (r?.drift?.entered.length ? r.drift.entered : (snap?.brands ?? [])).slice(0, 3).map((b) => b.name);
+    const names = (
+      r?.drift?.entered.length ? r.drift.entered : (snap?.brands ?? [])
+    )
+      .slice(0, 3)
+      .map((b) => b.name);
     const url = `${location.origin}/c/${code}?b=1`;
     const text = `My taste pulled in ${names.join(", ")} this week.`;
     try {
-      const png = await fetch(`/c/${encodeURIComponent(code)}/postcard`).then((x) => (x.ok ? x.blob() : null));
-      const file = png ? new File([png], `tastrology-${code}.png`, { type: "image/png" }) : null;
-      if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text, url });
+      const png = await fetch(`/c/${encodeURIComponent(code)}/postcard`).then(
+        (x) => (x.ok ? x.blob() : null),
+      );
+      const file = png
+        ? new File([png], `tastrology-${code}.png`, { type: "image/png" })
+        : null;
+      if (file && navigator.canShare?.({ files: [file] }))
+        await navigator.share({ files: [file], text, url });
       else if (navigator.share) await navigator.share({ text, url });
       else {
         await navigator.clipboard.writeText(`${text} ${url}`);
@@ -209,44 +323,85 @@ export function BrandSheet({
   useEffect(() => {
     if (open) setDecoded(new Set(readDecoded(code)));
   }, [open, code]);
+  // A sealed brand is scratched open on its row first (ScratchReveal), then kept decoded.
+  const [scratching, setScratching] = useState<string | null>(null);
   const decode = (b: SnapBrand) => {
-    if (!decoded.has(b.id)) {
-      const next = new Set(decoded).add(b.id);
-      setDecoded(next);
-      writeDecoded(code, [...next]);
-      sfx("reveal");
+    if (!decoded.has(b.id)) setScratching(b.id);
+    else {
+      setFlashId(b.id);
+      setTimeout(() => setFlashId((f) => (f === b.id ? null : f)), 1800);
     }
+    setTimeout(
+      () =>
+        document
+          .getElementById(`pulled-${b.id}`)
+          ?.scrollIntoView({
+            behavior: reduce ? "auto" : "smooth",
+            block: "center",
+          }),
+      60,
+    );
+  };
+  const scratched = (b: SnapBrand) => {
+    setDecoded((cur) => {
+      const next = new Set(cur).add(b.id);
+      writeDecoded(code, [...next]);
+      return next;
+    });
+    setScratching((s) => (s === b.id ? null : s));
     setFlashId(b.id);
-    setTimeout(() => document.getElementById(`pulled-${b.id}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }), 60);
     setTimeout(() => setFlashId((f) => (f === b.id ? null : f)), 1800);
   };
 
   const love = snap?.loves.find((l) => l.id === sel);
   const pulled = useMemo(() => {
     if (!snap || !love) return [];
-    const by = snap.brands.filter((b) => b.because.includes(love.id) || (b.explain[love.id] ?? 0) > 0);
-    return by.sort((a, b) => (b.explain[love.id] ?? 0) - (a.explain[love.id] ?? 0)).slice(0, 4);
+    const by = snap.brands.filter(
+      (b) => b.because.includes(love.id) || (b.explain[love.id] ?? 0) > 0,
+    );
+    return by
+      .sort((a, b) => (b.explain[love.id] ?? 0) - (a.explain[love.id] ?? 0))
+      .slice(0, 4);
   }, [snap, love]);
-  const silent = snap ? snap.loves.filter((l) => !snap.brands.some((b) => b.because.includes(l.id) || (b.explain[l.id] ?? 0) > 0)) : [];
+  const silent = snap
+    ? snap.loves.filter(
+        (l) =>
+          !snap.brands.some(
+            (b) => b.because.includes(l.id) || (b.explain[l.id] ?? 0) > 0,
+          ),
+      )
+    : [];
 
   const since = (() => {
     if (!seen || !snap) return null;
     const now = new Set(snap.brands.map((b) => b.id));
     const was = new Set(seen.brands);
-    const nu = [...now].filter((x) => !was.has(x)).length + (r?.drift?.entered.length ?? 0);
-    const gone = [...was].filter((x) => !now.has(x)).length + (r?.drift?.left.length ?? 0);
+    const nu =
+      [...now].filter((x) => !was.has(x)).length +
+      (r?.drift?.entered.length ?? 0);
+    const gone =
+      [...was].filter((x) => !now.has(x)).length + (r?.drift?.left.length ?? 0);
     if (!nu && !gone) return `Nothing moved since ${day(seen.at)}.`;
     return `Since ${day(seen.at)}: ${nu} new brand${nu === 1 ? "" : "s"}${gone ? `, ${gone} gone` : ""}.`;
   })();
 
   const reread = async () => {
     setBusy(true);
-    const j = (await fetch(`/api/card/${encodeURIComponent(code)}/receipt?reread=1`, { cache: "no-store" }).then((x) => x.json()).catch(() => null)) as Reply | null;
+    const j = (await fetch(
+      `/api/card/${encodeURIComponent(code)}/receipt?reread=1`,
+      { cache: "no-store" },
+    )
+      .then((x) => x.json())
+      .catch(() => null)) as Reply | null;
     setBusy(false);
     if (j?.snap) {
       sfx("reveal");
       setR(j);
-    } else setR((cur) => ({ ...(cur ?? { status: "faded" }), error: j?.error ?? "Couldn't re-read it just now." }));
+    } else
+      setR((cur) => ({
+        ...(cur ?? { status: "faded" }),
+        error: j?.error ?? "Couldn't re-read it just now.",
+      }));
   };
 
   const receipt = full ?? (snap ? reprintOf(snap, card) : null);
@@ -255,7 +410,13 @@ export function BrandSheet({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-[60] flex justify-end bg-black/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+        <motion.div
+          className="fixed inset-0 z-[60] flex justify-end bg-black/60"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
           <motion.aside
             role="dialog"
             aria-modal="true"
@@ -269,31 +430,61 @@ export function BrandSheet({
           >
             <header className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-accent">Pulled by your taste</p>
-                <h2 className="mt-1 truncate font-serif text-3xl italic leading-tight">{card.archetype}</h2>
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">No. {card.serial} · {code}</p>
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-accent">
+                  Pulled by your taste
+                </p>
+                <h2 className="mt-1 truncate font-serif text-3xl italic leading-tight">
+                  {card.archetype}
+                </h2>
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
+                  No. {card.serial} · {code}
+                </p>
               </div>
-              <button type="button" onClick={onClose} className="shrink-0 rounded-full border border-line px-3 py-1 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 hover:text-ink">
+              <button
+                type="button"
+                onClick={onClose}
+                className="shrink-0 rounded-full border border-line px-3 py-1 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 hover:text-ink"
+              >
                 Close
               </button>
             </header>
 
             {toast && (
-              <p role="status" className="mt-4 rounded-full border border-accent/50 bg-accent/10 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.16em] text-accent">
+              <p
+                role="status"
+                className="mt-4 rounded-full border border-accent/50 bg-accent/10 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.16em] text-accent"
+              >
                 {toast}
               </p>
             )}
 
+            {!r && (
+              <p className="mt-10 font-mono text-xs uppercase tracking-[0.2em] text-ink-3">
+                Finding what it pulled in…
+              </p>
+            )}
 
-            {!r && <p className="mt-10 font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding what it pulled in…</p>}
-
-            {r?.status === "burned" && <p className="mt-10 text-ink-2">This card was retired, and its brands went with it.</p>}
+            {r?.status === "burned" && (
+              <p className="mt-10 text-ink-2">
+                This card was retired, and its brands went with it.
+              </p>
+            )}
 
             {(r?.status === "faded" || r?.status === "error") && (
               <div className="mt-10">
-                <p className="font-serif text-2xl italic leading-tight">This card was made before we kept receipts.</p>
-                <p className="mt-2 text-ink-2">Its loves are still on it. Ask Qloo again and see which brands they pull in today.</p>
-                <button type="button" disabled={busy} onClick={() => void reread()} className="mt-5 rounded-full bg-accent px-5 py-2 font-semibold text-paper disabled:opacity-50">
+                <p className="font-serif text-2xl italic leading-tight">
+                  This card was made before we kept receipts.
+                </p>
+                <p className="mt-2 text-ink-2">
+                  Its loves are still on it. Ask Qloo again and see which brands
+                  they pull in today.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void reread()}
+                  className="mt-5 rounded-full bg-accent px-5 py-2 font-semibold text-paper disabled:opacity-50"
+                >
                   {busy ? "Asking Qloo…" : "Re-read its brands"}
                 </button>
                 {r.error && <p className="mt-3 text-sm text-warn">{r.error}</p>}
@@ -302,82 +493,186 @@ export function BrandSheet({
 
             {snap && love && (
               <>
-                {since && <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">{since}</p>}
-                {snap.lite && <p className="mt-2 text-xs text-ink-3">Re-read {day(snap.at)}. The original receipt wasn&apos;t kept for this card.</p>}
-                <PulledSky loves={snap.loves} sel={sel} onSel={setSel} pulled={pulled} decoded={decoded} onDecode={decode} />
-                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">Tap a star to travel · tap a signal to decode it</p>
+                {since && (
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">
+                    {since}
+                  </p>
+                )}
+                {snap.lite && (
+                  <p className="mt-2 text-xs text-ink-3">
+                    Re-read {day(snap.at)}. The original receipt wasn&apos;t
+                    kept for this card.
+                  </p>
+                )}
+                <PulledSky
+                  loves={snap.loves}
+                  sel={sel}
+                  onSel={setSel}
+                  pulled={pulled}
+                  decoded={decoded}
+                  onDecode={decode}
+                />
+                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
+                  Tap a star to travel · tap a signal to scratch it open
+                </p>
 
-                <h3 className="mt-7 font-serif text-2xl italic">Sent by {displayName(love.name)}</h3>
+                <h3 className="mt-7 font-serif text-2xl italic">
+                  Sent by {displayName(love.name)}
+                </h3>
                 {pulled.length ? (
                   <ul className="mt-2">
                     {pulled.map((b, i) =>
                       decoded.has(b.id) ? (
-                        <BrandRow key={`${love.id}-${b.id}`} b={b} love={love} loves={snap.loves} code={code} onJump={setSel} src={src} flash={flashId === b.id} />
+                        <BrandRow
+                          key={`${love.id}-${b.id}`}
+                          b={b}
+                          love={love}
+                          loves={snap.loves}
+                          code={code}
+                          onJump={setSel}
+                          src={src}
+                          flash={flashId === b.id}
+                        />
                       ) : (
-                        <li key={`${love.id}-${b.id}`} className="flex items-center gap-4 border-t border-line/70 py-4 first:border-t-0">
-                          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-dashed border-accent/60 font-mono text-accent">?</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-display text-lg font-semibold tracking-[0.2em] text-ink-3" aria-label="Sealed brand">
-                              {"▒".repeat(Math.min(10, Math.max(4, b.name.length)))}
-                            </p>
-                            <p className="mt-0.5 text-sm text-ink-3">Signal {i + 1} · {Math.round((b.explain[love.id] ?? 0) * 100) || "?"}% of the pull</p>
-                          </div>
-                          <button type="button" onClick={() => decode(b)} className="shrink-0 rounded-full border border-accent/60 px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper">
-                            Decode
-                          </button>
+                        <li
+                          key={`${love.id}-${b.id}`}
+                          id={`pulled-${b.id}`}
+                          className="flex items-center gap-4 border-t border-line/70 py-4 first:border-t-0"
+                        >
+                          {scratching === b.id ? (
+                            <ScratchReveal
+                              name={b.name}
+                              image={img(b.image)}
+                              reduce={reduce}
+                              onDone={() => scratched(b)}
+                            />
+                          ) : (
+                            <>
+                              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-dashed border-accent/60 font-mono text-accent">
+                                ?
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className="font-display text-lg font-semibold tracking-[0.2em] text-ink-3"
+                                  aria-label="Sealed brand"
+                                >
+                                  {"▒".repeat(
+                                    Math.min(10, Math.max(4, b.name.length)),
+                                  )}
+                                </p>
+                                <p className="mt-0.5 text-sm text-ink-3">
+                                  Signal {i + 1} ·{" "}
+                                  {Math.round(
+                                    (b.explain[love.id] ?? 0) * 100,
+                                  ) || "?"}
+                                  % of the pull
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => decode(b)}
+                                className="shrink-0 rounded-full border border-accent/60 px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
+                              >
+                                Scratch
+                              </button>
+                            </>
+                          )}
                         </li>
                       ),
                     )}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-ink-2">Nothing on the list leans on this one. Try another star.</p>
+                  <p className="mt-2 text-ink-2">
+                    Nothing on the list leans on this one. Try another star.
+                  </p>
                 )}
 
-                {r?.drift && (r.drift.entered.length > 0 || r.drift.left.length > 0) && (
-                  <section ref={freshRef} className="mt-8 scroll-mt-4">
-                    <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">Fresh this week</h3>
-                    {r.drift.entered.length > 0 && (
-                      <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        {r.drift.entered.map((b) => {
-                          const link = brandLink(b);
-                          return (
-                            <li key={b.id}>
-                              <a
-                                href={link.href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => click(code, b, "drift")}
-                                className="flex items-center gap-3 rounded-xl border border-dashed border-accent/40 p-3 transition hover:border-accent"
-                              >
-                                <Thumb src={img(b.image)} name={b.name} size={32} />
-                                <span className="min-w-0 truncate text-sm font-semibold">{b.name}</span>
-                              </a>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                    {r.drift.left.length > 0 && <p className="mt-3 text-sm text-ink-3">Left your orbit: {r.drift.left.slice(0, 3).map((b) => b.name).join(", ")}.</p>}
-                    <p className="mt-2 text-xs text-ink-3">Suggested by Qloo today for the same loves. Not part of the original card.</p>
-                  </section>
-                )}
+                {r?.drift &&
+                  (r.drift.entered.length > 0 || r.drift.left.length > 0) && (
+                    <section ref={freshRef} className="mt-8 scroll-mt-4">
+                      <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">
+                        Fresh this week
+                      </h3>
+                      {r.drift.entered.length > 0 && (
+                        <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          {r.drift.entered.map((b) => {
+                            const link = brandLink(b);
+                            return (
+                              <li key={b.id}>
+                                <a
+                                  href={link.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => click(code, b, "drift")}
+                                  className="flex items-center gap-3 rounded-xl border border-dashed border-accent/40 p-3 transition hover:border-accent"
+                                >
+                                  <Thumb
+                                    src={img(b.image)}
+                                    name={b.name}
+                                    size={32}
+                                  />
+                                  <span className="min-w-0 truncate text-sm font-semibold">
+                                    {b.name}
+                                  </span>
+                                </a>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                      {r.drift.left.length > 0 && (
+                        <p className="mt-3 text-sm text-ink-3">
+                          Left your orbit:{" "}
+                          {r.drift.left
+                            .slice(0, 3)
+                            .map((b) => b.name)
+                            .join(", ")}
+                          .
+                        </p>
+                      )}
+                      <p className="mt-2 text-xs text-ink-3">
+                        Suggested by Qloo today for the same loves. Not part of
+                        the original card.
+                      </p>
+                    </section>
+                  )}
 
                 {receipt && (
                   <div className="mt-10">
-                    <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">Your receipt</h3>
-                    <ReceiptRoll card={card} result={receipt} note={reprint ? "Reprinted from a re-read. The original wasn't kept." : undefined} />
+                    <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">
+                      Your receipt
+                    </h3>
+                    <ReceiptRoll
+                      card={card}
+                      result={receipt}
+                      note={
+                        reprint
+                          ? "Reprinted from a re-read. The original wasn't kept."
+                          : undefined
+                      }
+                    />
                   </div>
                 )}
 
                 <div className="mt-8 flex flex-wrap items-center gap-3">
-                  <button type="button" onClick={() => void sharePull()} className="rounded-full border border-accent/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper">
+                  <button
+                    type="button"
+                    onClick={() => void sharePull()}
+                    className="rounded-full border border-accent/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
+                  >
                     Share this week&apos;s pull
                   </button>
-                  {shared && <span className="text-xs text-ink-3">{shared}</span>}
+                  {shared && (
+                    <span className="text-xs text-ink-3">{shared}</span>
+                  )}
                 </div>
 
-                {silent.length > 0 && <p className="mt-8 text-sm text-ink-3">Nothing here for {silent.map((l) => displayName(l.name)).join(", ")}.</p>}
-
+                {silent.length > 0 && (
+                  <p className="mt-8 text-sm text-ink-3">
+                    Nothing here for{" "}
+                    {silent.map((l) => displayName(l.name)).join(", ")}.
+                  </p>
+                )}
               </>
             )}
           </motion.aside>

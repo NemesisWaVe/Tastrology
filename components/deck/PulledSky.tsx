@@ -155,7 +155,7 @@ export function PulledSky({
       </div>
 
       <p className="pointer-events-none absolute inset-x-0 top-3 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
-        {pulled.length === 0 ? "Quiet star. Try another." : left ? `${left} signal${left === 1 ? "" : "s"} from ${displayName(at.name)} · tap to decode` : `All decoded · ${displayName(at.name)}`}
+        {pulled.length === 0 ? "Quiet star. Try another." : left ? `${left} signal${left === 1 ? "" : "s"} from ${displayName(at.name)} · tap to scratch` : `All decoded · ${displayName(at.name)}`}
       </p>
     </div>
   );
