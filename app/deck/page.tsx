@@ -1,5 +1,6 @@
 "use client";
 
+import type { Teaser } from "@/lib/brandOpen";
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,7 +21,7 @@ import { SkyBackdrop } from "@/components/site/SkyBackdrop";
 import c from "@/components/site/celestial.module.css";
 import { SiteNav } from "@/components/site/SiteShell";
 import { whenAuthReady } from "@/lib/authBridge";
-import { buildCard, cardCode, SEASON } from "@/lib/card";
+import { buildCard, cardCode, proxied, SEASON } from "@/lib/card";
 import { burnFromDeck, claimDeviceDeck, loadDeck, type BurnReply, type DeckBurn, type DeckEntry } from "@/lib/deck";
 import { isPersonaRequest } from "@/lib/personas";
 import type { AgentRequest, StyleResult } from "@/lib/types";
@@ -75,6 +76,8 @@ export default function DeckPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [hasLocal, setHasLocal] = useState(false);
   const [sheet, setSheet] = useState<DeckEntry | null>(null);
+  // Brand teasers (lib/brandOpen.ts): the brand peeking out, this week's fresh count, and whether the seal is broken.
+  const [teas, setTeas] = useState<Record<string, Teaser>>({});
   const closeSheet = useCallback(() => setSheet(null), []);
 
   useEffect(() => {
@@ -86,6 +89,11 @@ export default function DeckPage() {
       const [d, m] = await Promise.all([loadDeck(), fetch("/api/me", { cache: "no-store" }).then((r) => (r.ok ? (r.json() as Promise<Me>) : null)).catch(() => null)]);
       if (off) return;
       setMe(m);
+      if (d.owner === "user")
+        void fetch("/api/deck/teasers", { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j: { teasers?: Record<string, Teaser> } | null) => j?.teasers && setTeas(j.teasers))
+          .catch(() => {});
       setHasLocal(savedCard() !== null);
       if (d.owner) setOwner(d.owner);
       if (d.burn?.on) setBurn(d.burn);
@@ -235,22 +243,47 @@ export default function DeckPage() {
               return (
                 <li key={code} className="rise flex flex-col items-center" style={{ animationDelay: `${Math.min(i, 9) * 60}ms` }}>
                   <div
+                    className="relative"
                     ref={(el) => {
                       if (el) cardEls.current.set(code, el);
                     }}
                   >
-                    <Link href={`/c/${code}`} aria-label={`Open ${card.archetype}`} className="block transition duration-300 hover:-translate-y-1">
+                    {teas[code]?.top?.image && (
+                      <button
+                        type="button"
+                        onClick={() => setSheet(entry)}
+                        aria-label={`See ${teas[code].top!.name} and the rest`}
+                        className="absolute -right-5 top-14 z-0 h-14 w-14 rotate-[8deg] overflow-hidden rounded-xl border border-line bg-paper-2 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)] transition hover:-right-8 hover:rotate-[4deg]"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={proxied(teas[code].top!.image!)} alt="" className="h-full w-full object-cover" loading="lazy" onError={(e) => (e.currentTarget.parentElement!.style.display = "none")} />
+                      </button>
+                    )}
+                    <Link href={`/c/${code}`} aria-label={`Open ${card.archetype}`} className="relative z-10 block transition duration-300 hover:-translate-y-1">
                       <HoloCard card={card} width={260} idle={false} still={reduce} />
                     </Link>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSheet(entry)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-accent/10 px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent transition hover:bg-accent hover:text-paper"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-                    What it pulled in
-                  </button>
+                  {teas[code] && !teas[code].opened ? (
+                    <button
+                      type="button"
+                      onClick={() => setSheet(entry)}
+                      className="mt-4 inline-flex items-center gap-2.5 rounded-full border border-accent bg-accent/15 py-1.5 pl-1.5 pr-4 font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent shadow-[0_0_24px_-6px_rgba(198,255,61,0.55)] transition hover:bg-accent hover:text-paper"
+                    >
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-[9px] text-paper ring-2 ring-accent/30" aria-hidden>
+                        ✦
+                      </span>
+                      {teas[code].fresh ? `${teas[code].fresh} new · sealed` : "Sealed this week"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSheet(entry)}
+                      className="mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-accent/10 px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent transition hover:bg-accent hover:text-paper"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
+                      What it pulled in
+                    </button>
+                  )}
                   <p className="mt-3 text-center font-serif text-xl italic leading-tight">{card.archetype}</p>
                   <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
                     No. {card.serial} · {card.rarityLabel} · {code}
@@ -322,7 +355,20 @@ export default function DeckPage() {
           </section>
         )}
       </main>
-      {sheet && <BrandSheet code={sheet.code} card={sheet.card} open onClose={closeSheet} />}
+      {sheet && (
+        <BrandSheet
+          code={sheet.code}
+          card={sheet.card}
+          open
+          onClose={closeSheet}
+          sealed={Boolean(teas[sheet.code] && !teas[sheet.code].opened)}
+          owned={Boolean(sheet.minted && owner === "user")}
+          onOpened={(dust) => {
+            setTeas((t) => (t[sheet.code] ? { ...t, [sheet.code]: { ...t[sheet.code], opened: true } } : t));
+            if (dust) setBurn((b) => (b && typeof b.dust === "number" ? { ...b, dust: b.dust + dust } : b));
+          }}
+        />
+      )}
     </div>
   );
 }

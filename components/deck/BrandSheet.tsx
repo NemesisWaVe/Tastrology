@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ReceiptBody, ReceiptPaper } from "@/components/card/Receipt";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
@@ -142,7 +142,27 @@ function BrandRow({ b, love, loves, code, onJump, src }: { b: SnapBrand; love: S
  * "Pulled": a card's brands as a reverse lookup (docs/design/brand-return-ui.md). Pick a love, see only what it
  * brought in; fresh brands this week; the original receipt as a stub. Not the first-mint printer on purpose.
  */
-export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: string; card: CardData; open: boolean; onClose: () => void; src?: string }) {
+export function BrandSheet({
+  code,
+  card,
+  open,
+  onClose,
+  src = "deck",
+  sealed = false,
+  owned = false,
+  onOpened,
+}: {
+  code: string;
+  card: CardData;
+  open: boolean;
+  onClose: () => void;
+  src?: string;
+  /** This week's seal is unbroken: open on the fresh brands. */
+  sealed?: boolean;
+  /** The viewer minted this card: opening breaks the seal and may pay the weekly bonus (lib/brandOpen.ts). */
+  owned?: boolean;
+  onOpened?: (dust: number) => void;
+}) {
   const reduce = useReducedMotion() ?? false;
   const [r, setR] = useState<Reply | null>(null);
   const [sel, setSel] = useState<string>("");
@@ -150,6 +170,27 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
   // The receipt: pinned at the top, folded to its head until unrolled. Never the printing show (that's the first mint's).
   const [full, setFull] = useState<StyleResult | null>(null);
   const [unrolled, setUnrolled] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const freshRef = useRef<HTMLElement>(null);
+  const [shared, setShared] = useState<string | null>(null);
+  const onOpenedRef = useRef(onOpened);
+  onOpenedRef.current = onOpened;
+
+  // Breaking the seal: once per open, owners only. The bonus is for opening, never for clicking out.
+  useEffect(() => {
+    if (!open || !owned) return;
+    void fetch(`/api/card/${encodeURIComponent(code)}/opened`, { method: "POST" })
+      .then((x) => (x.ok ? (x.json() as Promise<{ status: string; dust?: number }>) : null))
+      .then((j) => {
+        if (!j) return;
+        if (j.status === "paid" && j.dust) {
+          setToast(`+${j.dust} Stardust. See you Monday.`);
+          sfx("reveal");
+        }
+        if (j.status === "paid" || j.status === "capped" || j.status === "opened") onOpenedRef.current?.(j.status === "paid" ? (j.dust ?? 0) : 0);
+      })
+      .catch(() => {});
+  }, [open, owned, code]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -185,6 +226,30 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
     if (pick) setSel(pick.id);
     writeSeen(code, snap.brands.map((b) => b.id), seen);
   }, [snap, sel, seen, code]);
+
+  // A sealed week with fresh brands opens on them.
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!sealed || scrolled.current || !r?.drift?.entered.length || !freshRef.current) return;
+    scrolled.current = true;
+    freshRef.current.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [sealed, r, reduce]);
+
+  const sharePull = async () => {
+    const names = (r?.drift?.entered.length ? r.drift.entered : (snap?.brands ?? [])).slice(0, 3).map((b) => b.name);
+    const url = `${location.origin}/c/${code}?b=1`;
+    const text = `My taste pulled in ${names.join(", ")} this week.`;
+    try {
+      const png = await fetch(`/c/${encodeURIComponent(code)}/postcard`).then((x) => (x.ok ? x.blob() : null));
+      const file = png ? new File([png], `tastrology-${code}.png`, { type: "image/png" }) : null;
+      if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text, url });
+      else if (navigator.share) await navigator.share({ text, url });
+      else {
+        await navigator.clipboard.writeText(`${text} ${url}`);
+        setShared("Link copied.");
+      }
+    } catch {}
+  };
 
   const love = snap?.loves.find((l) => l.id === sel);
   const pulled = useMemo(() => {
@@ -242,6 +307,12 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
                 Close
               </button>
             </header>
+
+            {toast && (
+              <p role="status" className="mt-4 rounded-full border border-accent/50 bg-accent/10 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.16em] text-accent">
+                {toast}
+              </p>
+            )}
 
             {receipt && (
               <section className="mt-5">
@@ -315,7 +386,7 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
                 )}
 
                 {r?.drift && (r.drift.entered.length > 0 || r.drift.left.length > 0) && (
-                  <section className="mt-8">
+                  <section ref={freshRef} className="mt-8 scroll-mt-4">
                     <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">Fresh this week</h3>
                     {r.drift.entered.length > 0 && (
                       <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -342,6 +413,13 @@ export function BrandSheet({ code, card, open, onClose, src = "deck" }: { code: 
                     <p className="mt-2 text-xs text-ink-3">Suggested by Qloo today for the same loves. Not part of the original card.</p>
                   </section>
                 )}
+
+                <div className="mt-8 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={() => void sharePull()} className="rounded-full border border-accent/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper">
+                    Share this week&apos;s pull
+                  </button>
+                  {shared && <span className="text-xs text-ink-3">{shared}</span>}
+                </div>
 
                 {silent.length > 0 && <p className="mt-8 text-sm text-ink-3">Nothing here for {silent.map((l) => displayName(l.name)).join(", ")}.</p>}
 
