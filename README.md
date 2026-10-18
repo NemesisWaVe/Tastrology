@@ -16,9 +16,9 @@ Name a few things you love. An AI agent reads **Qloo's cross-domain taste graph*
 
 <br /><br />
 
-<a href="https://tastrology.vercel.app/c/0941-98A0"><img src="https://tastrology.vercel.app/c/0941-98A0/opengraph-image" alt="A real Tastrology card" width="760" /></a>
+<a href="https://tastrology.vercel.app"><img src="docs/readme/banner.webp" alt="The Tastrology intro: the name drawn as a constellation inside a holographic card frame, over the Milky Way" width="100%" /></a>
 
-<sub>A real card, rendered live by the app. Click it to fight it.</sub>
+<sub>The opening of the live site: your name in the stars, before the card is minted.</sub>
 
 <br /><br />
 
