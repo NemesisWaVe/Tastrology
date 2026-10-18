@@ -227,10 +227,9 @@ export function ShareSheet({
     setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(cardCode(card))}?share=1` });
   };
 
-  // X: a web intent can't attach a picture, so the PNG goes onto the clipboard in the tap and gets pasted into the post
-  // (the link stays in the text; its preview, app/c/[code]/opengraph-image.tsx, is the card). On a laptop the paste
-  // step shows first and the "Open X" button opens the post. On a phone the X app's own scheme opens the compose box
-  // (x.com in Safari lands on a login page); the web intent is the fallback.
+  // X: the link's preview (app/c/[code]/opengraph-image.tsx) is the full card, tappable. On a laptop the PNG also goes
+  // onto the clipboard and the paste step shows before "Open X". On a phone, Safari won't put an image on the clipboard,
+  // so the X app's own scheme opens the compose box with the link alone and the preview carries the card.
   const postX = () => {
     sfx("tap");
     setErr(null);
@@ -238,36 +237,24 @@ export function ShareSheet({
     const text = `${caption} ${link("x")}`;
     const intent = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
     // A phone by its user agent, not by touch: touchscreen laptops report a coarse pointer too.
-    const phone = /iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent);
-    // Started inside the tap (Safari needs that); a blob still rendering goes in as a promise.
+    if (/iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent)) {
+      setDone(linkable ? "Opening X · the link shows as your card" : "Opening X");
+      location.href = `twitter://post?message=${encodeURIComponent(text)}`;
+      return;
+    }
+    // Started inside the click; a blob still rendering goes in as a promise.
     let write: Promise<void> | null = null;
     if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
       try {
         write = navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]);
       } catch {}
     }
-    if (!phone) {
-      if (write) {
-        write.catch(() => setNote(null));
-        return setNote({ kind: "x", intent, key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
-      }
-      window.open(intent, "_blank", "noopener,noreferrer");
-      return setDone(linkable ? "Opened X · the card shows as the link's preview" : "Opened X");
+    if (write) {
+      write.catch(() => setNote(null));
+      return setNote({ kind: "x", intent, key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
     }
-    // Phone: leave for the X app only once the copy has landed (leaving earlier cancels it and the old clipboard,
-    // often the link, is what pastes). No automatic x.com fallback: it fired under Safari's "Open in X?" prompt.
-    const open = () => (location.href = `twitter://post?message=${encodeURIComponent(text)}`);
-    setDone("Copying the image…");
-    (write ?? Promise.reject(new Error("no clipboard"))).then(
-      () => {
-        setDone("Image copied · in X, tap the post and Paste");
-        open();
-      },
-      () => {
-        setDone("Couldn't copy the image here · opening X with the link");
-        open();
-      },
-    );
+    window.open(intent, "_blank", "noopener,noreferrer");
+    setDone(linkable ? "Opened X · the card shows as the link's preview" : "Opened X");
   };
 
   const copy = async () => {
@@ -310,7 +297,13 @@ export function ShareSheet({
         <div className="relative overflow-hidden rounded-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-line" style={{ width: size.w * scale, height: size.h * scale }}>
           <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0", width: size.w, height: size.h }}>
             {fmt === "story" ? (
-              <Story ref={node} card={card} mine={mine} href={linkable ? link("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined} />
+              <Story
+                ref={node}
+                card={card}
+                mine={mine}
+                href={linkable ? link("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined}
+                vs={linkable ? `${location.origin}/vs/${encodeURIComponent(cardCode(card))}` : undefined}
+              />
             ) : !result ? null : fmt === "receipt" ? (
               <Receipt ref={node} card={card} result={result} />
             ) : (
@@ -575,7 +568,18 @@ function TopBrands({ result, vertical = false }: { result: StyleResult; vertical
   );
 }
 
-const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?: string }>(function Story({ card, mine = true, href }, ref) {
+const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?: string; vs?: string }>(function Story({ card, mine = true, href, vs }, ref) {
+  // Stories and snaps can't carry a tappable link from the web, so the image carries a way back: a QR to the
+  // challenge page (/vs/<code>: "mint yours and fight it"), scannable from a second phone or a screenshot.
+  const code2d = useMemo(() => {
+    if (!vs) return null;
+    try {
+      const m = qr(vs);
+      return { q: m.length + 8, d: qrPath(m) };
+    } catch {
+      return null;
+    }
+  }, [vs]);
   const [t1, t2] = card.types;
   const a = t1?.a ?? "#a78bfa";
   const b = (t2 ?? t1)?.b ?? "#22d3ee";
@@ -604,15 +608,24 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?
             <br />
             <span className="italic text-ink-2">{BRAND.question}</span>
           </p>
-          <div className="mt-3 opacity-80">
-            <Wordmark size={9} />
-          </div>
-          {/* Stories and snaps can't carry a link from the web, so the card's address rides on the image as a pill
-              that reads as a button (and is where the pasted Link sticker naturally goes). */}
-          {href && (
-            <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full px-3 py-[5px] font-mono text-[9px] font-semibold tracking-[0.04em] text-black" style={{ background: "#c6ff3d", boxShadow: "0 0 18px rgba(198,255,61,0.35)" }}>
-              {href} <span aria-hidden>↗</span>
-            </p>
+          {code2d ? (
+            <div className="mt-3.5 flex items-center gap-3 rounded-2xl bg-black/40 p-2 pr-3.5 ring-1 ring-white/10">
+              <svg viewBox={`-4 -4 ${code2d.q} ${code2d.q}`} shapeRendering="crispEdges" width={58} height={58} className="shrink-0 rounded-md">
+                <rect x="-4" y="-4" width={code2d.q} height={code2d.q} fill="#fff" />
+                <path d={code2d.d} fill="#000" />
+              </svg>
+              <div className="flex min-w-0 flex-col items-start text-left">
+                <span className="font-display text-[12.5px] font-semibold leading-tight text-ink">Scan to fight my card</span>
+                <span className="mt-0.5 font-mono text-[7.5px] uppercase tracking-[0.18em] text-ink-3">mint yours on</span>
+                <span className="mt-1 rounded-full px-2 py-[3px] font-mono text-[8px] font-semibold text-black" style={{ background: "#c6ff3d" }}>
+                  {href}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 opacity-80">
+              <Wordmark size={9} />
+            </div>
           )}
         </div>
       </div>
