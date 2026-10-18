@@ -1,7 +1,7 @@
 import { clerkOn, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
-import { allow } from "@/lib/ratelimit";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, refundRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { allow, clientId } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
 import { TWIN_CODE } from "@/lib/twins";
 
@@ -22,11 +22,12 @@ export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
   const on = clerkOn() && ddbConfigured();
   const pc = q.get("pc")?.toUpperCase();
+  const card = q.get("card")?.toUpperCase();
+  if ((pc || card) && !(await allow(`friends-look:${clientId(request.headers)}`, 120, 10 * 60 * 1000))) return json({ error: "slow down" }, 429);
   if (pc) {
     const p = on ? await lookupPlayer(pc) : null;
     return p ? json({ player: { pc: p.pc, user: p.user, name: p.name, card: p.card, rarity: p.rarity } }) : json({ error: "unknown player" }, 404);
   }
-  const card = q.get("card")?.toUpperCase();
   if (card) {
     const p = on && TWIN_CODE.test(card) ? await playerForCard(card) : null;
     return p ? json({ player: { pc: p.pc, user: p.user, name: p.name, card: p.card, rarity: p.rarity } }) : json({ error: "unknown card" }, 404);
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     const [n] = await Promise.all([inboxCount(uid), markSeen(uid)]);
     return json({ n });
   }
+  if (q.get("alerts") && !(await allow(`alerts:${uid}`, 60, 10 * 60 * 1000))) return json({ bouts: [], requests: 0 });
   if (q.get("alerts")) return json((await alerts(uid)) ?? { bouts: [], requests: 0 });
   const me0 = await ensurePlayer(uid);
   if (!me0) return json({ error: "Couldn't reach the server." }, 503);
@@ -91,17 +93,30 @@ export async function POST(request: Request) {
       }
       const free = await nameFree(uid, u);
       if (free !== "ok") return json({ error: msg[free] }, free === "error" ? 503 : 400);
+      // A rename is paid (and counted) before anything changes, so two at once can't both ride the free one, and
+      // a failed change gives it back.
+      const rename = Boolean(me.user);
+      if (rename) {
+        const paid = await chargeRename(uid, fee, me.renames ?? 0);
+        if (paid === "empty") return json({ error: `Changing again costs ${fee} Stardust.` }, 400);
+        if (paid === "raced") return json({ error: "Your name just changed. Reload and try again." }, 409);
+        if (paid === "error") return json({ error: msg.error }, 503);
+      }
+      const undo = async () => {
+        if (rename) await refundRename(uid, fee);
+      };
       const c = await setClerkUsername(uid, u);
-      if (c === "taken") return json({ error: msg.taken }, 400);
-      if (c === "error") return json({ error: msg.error }, 503);
+      if (c === "taken" || c === "error") {
+        await undo();
+        return c === "taken" ? json({ error: msg.taken }, 400) : json({ error: msg.error }, 503);
+      }
       const r = await setUsername(uid, me, u);
       if (!r.ok) {
         if (c === "ok" && me.user) await setClerkUsername(uid, me.user);
+        await undo();
         return json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);
       }
-      if (!me.user) return json({ ok: true, me: r.me });
-      await chargeRename(uid, fee);
-      return json({ ok: true, me: { ...r.me, renames: (me.renames ?? 0) + 1 } });
+      return json({ ok: true, me: rename ? { ...r.me, renames: (me.renames ?? 0) + 1 } : r.me });
     }
     case "add": {
       if (!me.user) return json({ error: "Pick your username first." }, 400);

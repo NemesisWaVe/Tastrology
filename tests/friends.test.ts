@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, refundRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -141,6 +141,19 @@ describe("accounts", () => {
     expect(dust("ann")).toBe(10);
     expect(await chargeRename("ann", RENAME_DUST)).toBe("empty");
     expect((await ensurePlayer("ann"))!.renames).toBe(2);
+  });
+
+  it("stops two renames priced from the same count, and gives back a failed one", async () => {
+    await pair();
+    wallet("ann", 100);
+    expect(await chargeRename("ann", 0, 0)).toBe("ok");
+    expect(await chargeRename("ann", 0, 0)).toBe("raced");
+    expect(await chargeRename("ann", RENAME_DUST, 1)).toBe("ok");
+    expect(await chargeRename("ann", RENAME_DUST, 1)).toBe("raced");
+    expect(dust("ann")).toBe(50);
+    expect(await refundRename("ann", RENAME_DUST)).toBe(true);
+    expect(dust("ann")).toBe(100);
+    expect((await ensurePlayer("ann"))!.renames).toBe(1);
   });
 
   it("shows friends when you were last around, and what challenges wait for you", async () => {

@@ -14,6 +14,8 @@ export async function GET(request: Request) {
   const a = q.get("a")?.toUpperCase() ?? "";
   const b = q.get("b")?.toUpperCase() ?? "";
   if (!TWIN_CODE.test(a) || !TWIN_CODE.test(b)) return Response.json({ error: "bad code" }, { status: 400 });
+  // A card can't fight itself (it would also stamp its own passport).
+  if (a === b) return Response.json({ error: "same card" }, { status: 400 });
   if (!(await allow(`battle:${clientId(request.headers)}`, 120, 10 * 60 * 1000))) return Response.json({ error: "slow down" }, { status: 429 });
   // A burned card can't fight (docs/design/burn.md). A tombstone that can't be read fails open, like every optional store.
   const [ta, tb] = await Promise.all([burnedAt(a), burnedAt(b)]);

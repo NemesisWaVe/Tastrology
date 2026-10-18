@@ -228,10 +228,16 @@ export async function nameFree(uid: string, raw: string): Promise<"ok" | "bad" |
   return owner && owner !== uid ? "taken" : "ok";
 }
 
-/** Counts a change and takes its fee in one transaction (the fee is 0 for the free change). */
-export async function chargeRename(uid: string, fee: number): Promise<"ok" | "empty" | "error"> {
+/**
+ * Counts a change and takes its fee in one transaction (the fee is 0 for the free change). With `had` (the count the
+ * fee was priced from), a parallel rename that already moved the count fails this one as "raced".
+ */
+export async function chargeRename(uid: string, fee: number, had?: number): Promise<"ok" | "empty" | "raced" | "error"> {
   const now = Date.now();
-  const count: TxOp = { update: { PK: U(uid), SK: "PLAYER" }, set: "ADD renames :one", values: { ":one": 1 } };
+  const count: TxOp =
+    had === undefined
+      ? { update: { PK: U(uid), SK: "PLAYER" }, set: "ADD renames :one", values: { ":one": 1 } }
+      : { update: { PK: U(uid), SK: "PLAYER" }, set: "ADD renames :one", condition: had ? "renames = :had" : "attribute_not_exists(renames) OR renames = :had", values: { ":one": 1, ":had": had } };
   const ops: TxOp[] = fee
     ? [
         { update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust - :f, v = v + :one", condition: "dust >= :f", values: { ":f": fee, ":one": 1 } },
@@ -241,7 +247,21 @@ export async function chargeRename(uid: string, fee: number): Promise<"ok" | "em
     : [count];
   const r = await ddbTransact(ops);
   if (!r) return "error";
-  return r.ok ? "ok" : r.reasons[0] === CCF ? "empty" : "error";
+  if (r.ok) return "ok";
+  if (r.reasons[fee ? 2 : 0] === CCF) return "raced";
+  return r.reasons[0] === CCF ? "empty" : "error";
+}
+
+/** Undoes a charged rename whose name change then failed: the count and any fee go back. */
+export async function refundRename(uid: string, fee: number): Promise<boolean> {
+  const now = Date.now();
+  const ops: TxOp[] = [{ update: { PK: U(uid), SK: "PLAYER" }, set: "ADD renames :m", values: { ":m": -1 } }];
+  if (fee)
+    ops.push(
+      { update: { PK: U(uid), SK: "WALLET" }, set: "SET v = v + :one ADD dust :f", condition: "attribute_exists(PK)", values: { ":f": fee, ":one": 1 } },
+      { put: { PK: U(uid), SK: `LEDGER#dustback#rename#${now.toString(36)}`, delta: fee, unit: "dust", reason: "rename-undo", at: now }, condition: "attribute_not_exists(PK)" },
+    );
+  return Boolean((await ddbTransact(ops))?.ok);
 }
 
 /** The account behind an @username, for adding by name. */

@@ -34,6 +34,7 @@ export function LiveAlerts() {
       seen.current = new Set(j.bouts.map((b) => b.id));
       setWaiting(j.bouts);
       const open = j.bouts.length + j.requests;
+      count.current = open;
       document.title = document.title.replace(/^\(\d+\) /, "");
       if (open) document.title = `(${open}) ${document.title}`;
     };
@@ -66,6 +67,15 @@ export function LiveAlerts() {
 
   // Dismissing hides it on this page only; the next page shows it again.
   useEffect(() => setHidden(null), [path]);
+  // Each page sets its own title on navigation, so the "(n)" count is put back after every move.
+  const count = useRef(0);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const bare = document.title.replace(/^\(\d+\) /, "");
+      document.title = count.current ? `(${count.current}) ${bare}` : bare;
+    }, 300);
+    return () => clearTimeout(t);
+  }, [path]);
   // Opening Friends counts as seeing them: those challenges stop following you around (new ones still pop).
   const [acked, setAcked] = useState<Set<string>>(() => {
     try {
