@@ -90,7 +90,7 @@ export function ShareSheet({
       [...el.querySelectorAll("img")].map((img) => (img.complete ? Promise.resolve() : new Promise((r) => ((img.onload = r), (img.onerror = r))))),
     );
     fontCSS ??= getFontEmbedCSS(el).catch(() => "");
-    const opts = { pixelRatio: size.out[0] / size.w, width: size.w, height: size.h, backgroundColor: "#07070a", fontEmbedCSS: await fontCSS, cacheBust: false, includeQueryParams: true };
+    const opts = { pixelRatio: size.out[0] / size.w, width: size.w, height: size.h, backgroundColor: "#07070a", fontEmbedCSS: await fontCSS, cacheBust: false, includeQueryParams: true, filter: (n: HTMLElement) => !n.dataset?.exportSkip };
     // First pass warms the image/font cache (Safari often drops images on the very first draw).
     let blob = await toBlob(el, opts);
     if (!blob || blob.size < 60_000) blob = await toBlob(el, opts);
@@ -141,6 +141,8 @@ export function ShareSheet({
     if (typeof window === "undefined") return "";
     return linkable ? `${location.origin}/c/${encodeURIComponent(cardCode(card))}?via=${src}` : location.origin;
   };
+  // Stories and snaps send viewers straight to the fight (/vs/<code>: mint yours, battle this one).
+  const fight = (src: string) => link(src).replace("/c/", "/vs/");
 
   const save = (blob: Blob) => {
     const url = URL.createObjectURL(blob);
@@ -181,11 +183,13 @@ export function ShareSheet({
         // Neither app takes a link from a share, so the card's link goes onto the clipboard in the same tap: paste it
         // into a Link sticker (Instagram) or the paperclip (Snapchat). Not awaited, so the share keeps the tap.
         const linked = Boolean(app && linkable && navigator.clipboard?.writeText);
-        if (linked) void navigator.clipboard.writeText(link(mode)).catch(() => {});
+        if (linked) void navigator.clipboard.writeText(fight(mode)).catch(() => {});
         if (app)
           setDone(
             linked
-              ? `Link copied · ${app}, then paste it into ${mode === "insta" ? "a Link sticker" : "the paperclip"}`
+              ? mode === "insta"
+                ? "Link copied · in Stories add a Link sticker, paste, rename it \"Fight my card\", place it under the card"
+                : "Link copied · in Snapchat tap the paperclip and paste"
               : `In the row of apps: ${app}`,
           );
         try {
@@ -301,8 +305,8 @@ export function ShareSheet({
                 ref={node}
                 card={card}
                 mine={mine}
-                href={linkable ? link("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined}
-                vs={linkable ? `${location.origin}/vs/${encodeURIComponent(cardCode(card))}` : undefined}
+                href={linkable ? fight("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined}
+                code={cardCode(card)}
               />
             ) : !result ? null : fmt === "receipt" ? (
               <Receipt ref={node} card={card} result={result} />
@@ -568,27 +572,20 @@ function TopBrands({ result, vertical = false }: { result: StyleResult; vertical
   );
 }
 
-const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?: string; vs?: string }>(function Story({ card, mine = true, href, vs }, ref) {
-  // Stories and snaps can't carry a tappable link from the web, so the image carries a way back: a QR to the
-  // challenge page (/vs/<code>: "mint yours and fight it"), scannable from a second phone or a screenshot.
-  const code2d = useMemo(() => {
-    if (!vs) return null;
-    try {
-      const m = qr(vs);
-      return { q: m.length + 8, d: qrPath(m) };
-    } catch {
-      return null;
-    }
-  }, [vs]);
+/** 9:16 for Instagram Stories and Snapchat (360x640, exported at 3x). Laid out around their UI: the top ~84px sits under
+ *  the progress bar and the bottom ~110px under the reply bar, so both hold nothing that matters. The gap under the card
+ *  is left clear for the Link sticker the user pastes, and the typed link is large enough to read and type. */
+const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?: string; code?: string }>(function Story({ card, mine = true, href, code }, ref) {
   const [t1, t2] = card.types;
   const a = t1?.a ?? "#a78bfa";
   const b = (t2 ?? t1)?.b ?? "#22d3ee";
+  const base = href && code ? href.slice(0, href.length - encodeURIComponent(code).length) : null;
   return (
     <div ref={ref} className="relative overflow-hidden text-ink" style={{ width: 360, height: 640, fontFamily: "var(--nf-sans), system-ui, sans-serif" }}>
       <Backdrop card={card} />
       {/* foil band: one holographic stripe running behind the card */}
       <div
-        className="absolute left-[-20%] right-[-20%] top-[40%] h-[150px] -translate-y-1/2 -rotate-[8deg]"
+        className="absolute left-[-20%] right-[-20%] top-[48%] h-[150px] -translate-y-1/2 -rotate-[8deg]"
         style={{
           background: `linear-gradient(90deg, transparent, ${a} 12%, #ffed5f 30%, #83fff7 48%, #d875ff 66%, ${b} 84%, transparent)`,
           opacity: 0.5,
@@ -597,37 +594,36 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?
         }}
       />
 
-      <div className="relative flex h-full flex-col items-center px-6 pb-7 pt-12">
-        <div className="shrink-0" style={{ transform: "rotate(-6deg)", filter: "drop-shadow(0 30px 40px rgba(0,0,0,0.65))" }}>
-          <HoloCard card={card} width={288} idle={false} still />
-        </div>
+      <p className="absolute inset-x-0 top-[92px] px-6 text-center font-serif text-[32px] leading-[1.05]" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
+        {mine ? "I pulled" : "Spotted"} a <span style={{ color: a }}>{card.rarityLabel}</span>.
+        <br />
+        <span className="italic text-ink-2">{href ? "Can yours beat it?" : BRAND.question}</span>
+      </p>
 
-        <div className="mt-auto flex w-full flex-col items-center text-center">
-          <p className="font-serif text-[25px] leading-[1.08]" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
-            {mine ? "I pulled" : "Spotted"} a <span style={{ color: a }}>{card.rarityLabel}</span>.
-            <br />
-            <span className="italic text-ink-2">{BRAND.question}</span>
+      <div className="absolute left-1/2 top-[184px]" style={{ transform: "translateX(-50%) rotate(-6deg)", filter: "drop-shadow(0 30px 40px rgba(0,0,0,0.65))" }}>
+        <HoloCard card={card} width={176} idle={false} still />
+      </div>
+
+      {href && (
+        <>
+          {/* where the Link sticker goes: outlined in the preview, left out of the export */}
+          <div data-export-skip className="absolute left-1/2 top-[456px] grid h-[42px] w-[176px] -translate-x-1/2 place-items-center rounded-xl border border-dashed border-white/30 font-mono text-[8px] uppercase tracking-[0.2em] text-ink-3">
+            link sticker here
+          </div>
+          <p className="absolute inset-x-0 top-[506px] text-center font-mono text-[13px] font-medium tracking-tight">
+            {base ? (
+              <>
+                {base}
+                <span style={{ color: "#c6ff3d" }}>{encodeURIComponent(code!)}</span>
+              </>
+            ) : (
+              href
+            )}
           </p>
-          {code2d ? (
-            <div className="mt-3.5 flex items-center gap-3 rounded-2xl bg-black/40 p-2 pr-3.5 ring-1 ring-white/10">
-              <svg viewBox={`-4 -4 ${code2d.q} ${code2d.q}`} shapeRendering="crispEdges" width={58} height={58} className="shrink-0 rounded-md">
-                <rect x="-4" y="-4" width={code2d.q} height={code2d.q} fill="#fff" />
-                <path d={code2d.d} fill="#000" />
-              </svg>
-              <div className="flex min-w-0 flex-col items-start text-left">
-                <span className="font-display text-[12.5px] font-semibold leading-tight text-ink">Scan to fight my card</span>
-                <span className="mt-0.5 font-mono text-[7.5px] uppercase tracking-[0.18em] text-ink-3">mint yours on</span>
-                <span className="mt-1 rounded-full px-2 py-[3px] font-mono text-[8px] font-semibold text-black" style={{ background: "#c6ff3d" }}>
-                  {href}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3 opacity-80">
-              <Wordmark size={9} />
-            </div>
-          )}
-        </div>
+        </>
+      )}
+      <div className="absolute inset-x-0 top-[568px] flex justify-center opacity-50">
+        <Wordmark size={9} />
       </div>
     </div>
   );
