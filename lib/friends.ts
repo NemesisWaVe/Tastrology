@@ -45,6 +45,9 @@ export interface Player {
   /** Your bio as typed, and the short line friends see when they hold your star. */
   bio?: string;
   tag?: string;
+  /** Account photo (from Clerk) and how many cards the deck holds, both shown to friends. */
+  img?: string;
+  cards?: number;
   name: string;
   card: string;
   rarity: string;
@@ -106,6 +109,8 @@ const toPlayer = (it: Flat | null): Player | null =>
         ...(typeof it.gender === "string" && GENDERS.includes(it.gender as Audience) ? { gender: it.gender as Audience } : {}),
         ...(str(it.bio) ? { bio: str(it.bio) } : {}),
         ...(str(it.tag) ? { tag: str(it.tag) } : {}),
+        ...(str(it.img) ? { img: str(it.img) } : {}),
+        ...(it.cards !== undefined ? { cards: Number(it.cards) || 0 } : {}),
         name: str(it.name),
         card: str(it.card),
         rarity: str(it.rarity) || "common",
@@ -144,8 +149,18 @@ const indexedAt = new Map<string, number>();
 export async function indexCards(uid: string, pc: string): Promise<void> {
   if ((indexedAt.get(uid) ?? 0) > Date.now()) return;
   indexedAt.set(uid, Date.now() + 10 * 60 * 1000);
-  const cards = (await ownCards(uid)) ?? [];
-  await Promise.allSettled(cards.map((c) => ddbPutIfAbsent({ PK: `CARDPC#${c.code}`, SK: "META", pc, at: Date.now() })));
+  const [cards, held] = await Promise.all([ownCards(uid), ddbQuery(`OWNER#${uid}`, "CARD#", 200, undefined, ["code"])]);
+  await Promise.allSettled([
+    ...(cards ?? []).map((c) => ddbPutIfAbsent({ PK: `CARDPC#${c.code}`, SK: "META", pc, at: Date.now() })),
+    // The deck size friends see, refreshed on the same beat.
+    held ? ddbUpdate(U(uid), "PLAYER", "SET cards = :n", { values: { ":n": held.items.length }, condition: "attribute_exists(pc)" }) : null,
+  ]);
+}
+
+/** Keeps the account photo friends see in step with Clerk (written only when it changed). */
+export async function stampImage(uid: string, me: Player, img: string): Promise<void> {
+  if (img === (me.img ?? "")) return;
+  await ddbUpdate(U(uid), "PLAYER", "SET img = :i", { values: { ":i": img }, condition: "attribute_exists(pc)" });
 }
 
 /** Whoever minted a card, as a public player (username, code and fighter), or null. */
@@ -179,6 +194,8 @@ export async function listFriends(uid: string): Promise<Friend[] | null> {
         seen: Number(p?.seen) || undefined,
         ...(str(p?.bio) ? { bio: str(p?.bio) } : {}),
         ...(str(p?.tag) ? { tag: str(p?.tag) } : {}),
+        ...(str(p?.img) ? { img: str(p?.img) } : {}),
+        ...(p?.cards !== undefined ? { cards: Number(p?.cards) || 0 } : {}),
       };
     })
     .filter((f) => f.pc)

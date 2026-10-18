@@ -39,7 +39,7 @@ export async function isAdmin(userId: string | null): Promise<boolean> {
   return admin;
 }
 
-const nameCache = new Map<string, { u: string | null; until: number }>();
+const nameCache = new Map<string, { u: string | null; img?: string; until: number }>();
 
 /** The Clerk username (picked at sign-up), lowercased; null if none; undefined if Clerk couldn't be read. Cached a minute. */
 export async function clerkUsername(userId: string): Promise<string | null | undefined> {
@@ -48,12 +48,21 @@ export async function clerkUsername(userId: string): Promise<string | null | und
   if (hit && hit.until > Date.now()) return hit.u;
   try {
     const { clerkClient } = await import("@clerk/nextjs/server");
-    const u = (await (await clerkClient()).users.getUser(userId)).username?.toLowerCase() || null;
-    nameCache.set(userId, { u, until: Date.now() + 60_000 });
+    const user = await (await clerkClient()).users.getUser(userId);
+    const u = user.username?.toLowerCase() || null;
+    // Only a photo the person set (Google sign-in or an upload); Clerk's generated placeholder is left out.
+    const img = user.hasImage && /^https:\/\/img\.clerk\.com\//.test(user.imageUrl) ? user.imageUrl : "";
+    nameCache.set(userId, { u, img, until: Date.now() + 60_000 });
     return u;
   } catch {
     return undefined;
   }
+}
+
+/** The account photo from Clerk ("" when none), read with the username; undefined when Clerk can't be reached. */
+export async function clerkImage(userId: string): Promise<string | undefined> {
+  if ((await clerkUsername(userId)) === undefined) return undefined;
+  return nameCache.get(userId)?.img;
 }
 
 /** Writes the username to Clerk. "taken" when another Clerk account has it; "off" when Clerk usernames aren't enabled. */

@@ -30,7 +30,7 @@ export default function Page() {
             ["Your loves", "“Kendrick Lamar”, “Spirited Away”", "To build your reading with Qloo data and AI"],
             ["Your card", "Archetype, stats, brand picks, rarity, verify code", "To show, share and verify it"],
             ["Account", "Email, and name and photo if you use Google sign-in; sign-in history", "To run your account and deck, and block fake sign-ups (via Clerk)"],
-            ["Profile", "Username, bio and the short line made from it, and who readings are for (woman, man, non-binary or rather not say)", "Friends see your username, bio line, fighter card and when you were last online. Who readings are for is never shown: it only keeps items that don't fit you out of your picks"],
+            ["Profile", "Username, bio and the short line made from it, and who readings are for (woman, man, non-binary or rather not say)", "Friends see your username, account photo, bio line, fighter card, how many cards you hold and when you were last online. Who readings are for is never shown: it only keeps items that don't fit you out of your picks"],
             ["Friends and fights", "Friend list, requests, fights and Stardust stakes, last-online time", "To run friends, fights and the sky"],
             ["Device id", "Random id in the tm_d cookie", "To keep your deck in this browser"],
             ["Network data", "IP address, browser type", "Rate limits, security, delivering pages. The IP is salted and hashed before storage"],

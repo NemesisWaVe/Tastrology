@@ -72,6 +72,8 @@ type Body = {
   tag?: string;
   seen?: number;
   fighter?: string;
+  img?: string;
+  cards?: number;
 };
 
 const HOLD_MS = 380;
@@ -188,6 +190,8 @@ export function FriendSky({
       tag: f.tag,
       seen: f.seen,
       fighter: f.name,
+      img: f.img,
+      cards: f.cards,
     })),
     ...incoming.map((f) => ({
       pc: f.pc,
@@ -479,12 +483,26 @@ export function FriendSky({
             className="absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md rounded-[22px] border border-white/10 bg-paper/75 p-4 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-5"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border" style={{ borderColor: TINT[target.level], boxShadow: `0 0 18px -4px ${TINT[target.level]}` }}>
+                {target.img ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`${target.img}?width=96`} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center bg-paper font-serif text-xl italic" style={{ color: TINT[target.level] }}>
+                    {target.label.replace(/^@/, "").slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: TINT[target.level] }}>
                   {target.level === "New" ? "New star" : `${target.level} friends`} · {target.days} day{target.days === 1 ? "" : "s"} fought
                 </p>
                 <p className="mt-1 truncate font-serif text-[26px] italic leading-tight text-ink">{target.label}</p>
-                {target.fighter && <p className="truncate text-xs text-ink-3">Fights as {target.fighter}</p>}
+                <p className="truncate text-xs text-ink-3">
+                  {target.cards !== undefined ? `${target.cards} card${target.cards === 1 ? "" : "s"} held` : ""}
+                  {target.cards !== undefined && target.fighter ? " · " : ""}
+                  {target.fighter ? `fights as ${target.fighter}` : ""}
+                </p>
               </div>
               <p className={`shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] ${ago(target.seen) === "Online" ? "text-accent" : "text-ink-3"}`}>{ago(target.seen)}</p>
             </div>
