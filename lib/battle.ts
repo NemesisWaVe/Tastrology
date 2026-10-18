@@ -8,7 +8,7 @@ import type { QEntity, StyleResult } from "./types";
  */
 
 /** Bump when battle() output changes; part of the stored-result key. */
-export const ENGINE_V = "1";
+export const ENGINE_V = "2";
 
 export type Side = "a" | "b";
 export type StatName = "Range" | "Edge" | "Cohesion" | "Signal";
@@ -52,6 +52,8 @@ export interface BattleResult {
     sharedBrands: string[];
     sharedKeywords: string[];
     weights: { brands: number; keywords: number };
+    /** Each level's match, 0-100 (brands, genre, aesthetic, domains, shape). */
+    levels?: Record<"brands" | "genre" | "aesthetic" | "domains" | "shape", number>;
     formula: string;
   };
   verdict: { label: string; line: string };
@@ -62,8 +64,14 @@ export interface BattleResult {
   crossover: Crossover | null;
 }
 
-const W_BRANDS = 0.4;
-const W_KEYWORDS = 0.6;
+/**
+ * Compatibility is a blend over levels, coarse to exact, the way music matching counts a shared genre and not only a
+ * shared song: exact brands, the Qloo tags and styles those brands carry, aesthetic words, the domains your loves come
+ * from, and how alike the two stat lines are. Two people rarely share a brand id; they often share a register.
+ */
+const LEVELS = { brands: 0.15, genre: 0.3, aesthetic: 0.2, domains: 0.15, shape: 0.2 } as const;
+const W_BRANDS = LEVELS.brands;
+const W_KEYWORDS = LEVELS.aesthetic;
 
 const MEASURES: Record<StatName, string> = {
   Range: "how many taste domains your loves span",
@@ -73,6 +81,26 @@ const MEASURES: Record<StatName, string> = {
 };
 
 const norm = (s: string) => s.trim().toLowerCase();
+
+function bag(xs: [string, number][]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const [k, w] of xs) if (k) m.set(norm(k), (m.get(norm(k)) ?? 0) + w);
+  return m;
+}
+
+function cosine(a: Map<string, number>, b: Map<string, number>): number {
+  let dot = 0;
+  for (const [k, v] of a) dot += v * (b.get(k) ?? 0);
+  const n = (m: Map<string, number>) => Math.sqrt([...m.values()].reduce((t, v) => t + v * v, 0));
+  const d = n(a) * n(b);
+  return d ? dot / d : 0;
+}
+
+/** The genre level: every tag and style on a side's brands, weighted by how strongly Qloo matched the brand. */
+const genreBag = (r: StyleResult) => bag(r.brands.flatMap((b) => [...b.entity.tags.map((t) => t.name), ...(b.entity.style ?? [])].map((t): [string, number] => [t, b.affinity || 0.5])));
+/** The aesthetic level, word by word: "Quiet Luxury" and "Luxury Streetwear" share "luxury". */
+const wordBag = (ks: string[]) => bag(ks.flatMap((k) => k.split(/[^A-Za-z0-9]+/).filter((w) => w.length > 2).map((w): [string, number] => [w, 1])));
+const domainBag = (r: StyleResult) => bag(r.seeds.map((x): [string, number] => [x.kind, 1]));
 
 export function jaccard<T>(a: Iterable<T>, b: Iterable<T>): { score: number; shared: T[] } {
   const A = new Set(a);
@@ -242,11 +270,12 @@ function pickCrossover(a: StyleResult, b: StyleResult): Crossover | null {
 const SIGN_HOUSES = ["Conjunction", "Eclipse", "Transit", "Alignment"];
 
 function verdictFor(c: number): { label: string; line: string } {
-  if (c >= 70) return { label: "Taste twins", line: "Same group chat energy. Suspiciously so." };
-  if (c >= 45) return { label: "Co-signers", line: "You'd swap recommendations and actually take them." };
-  if (c >= 25) return { label: "Situationship", line: "Overlap exists. Nobody is ready to define it." };
-  if (c >= 10) return { label: "Opposites, attractive", line: "Different planets, same orbit. The crossover brand is your treaty." };
-  return { label: "Parallel universes", line: "Zero shared language. Which is exactly why the joint sign is interesting." };
+  // Cuts sit higher than a plain overlap score would: the blend counts shared genre and shape, so strangers land near 40.
+  if (c >= 80) return { label: "Taste twins", line: "Same group chat energy. Suspiciously so." };
+  if (c >= 65) return { label: "Co-signers", line: "You'd swap recommendations and actually take them." };
+  if (c >= 50) return { label: "Situationship", line: "Overlap exists. Nobody is ready to define it." };
+  if (c >= 35) return { label: "Opposites, attractive", line: "Different planets, same orbit. The crossover brand is your treaty." };
+  return { label: "Parallel universes", line: "Little shared language. Which is exactly why the joint sign is interesting." };
 }
 
 export function battle(a: StyleResult, b: StyleResult): BattleResult {
@@ -260,8 +289,16 @@ export function battle(a: StyleResult, b: StyleResult): BattleResult {
   const ak = keywordNames(a);
   const bk = keywordNames(b);
   const kj = jaccard(ak.map(norm), bk.map(norm));
-  // Square-root curve so small real overlaps register on a 0-100 dial; identical = 100, disjoint = 0.
-  const compatibility = Math.round(100 * (W_BRANDS * Math.sqrt(bj.score) + W_KEYWORDS * Math.sqrt(kj.score)));
+  const shapeGap = ca.stats.reduce((t, s, i) => t + Math.abs(s.value - cb.stats[i].value), 0) / (100 * ca.stats.length);
+  const levels = {
+    brands: Math.sqrt(bj.score),
+    genre: Math.sqrt(cosine(genreBag(a), genreBag(b))),
+    aesthetic: Math.sqrt(cosine(wordBag(ak), wordBag(bk))),
+    domains: cosine(domainBag(a), domainBag(b)),
+    shape: Math.max(0, 1 - 2 * shapeGap),
+  };
+  // Square roots so small real overlaps register on a 0-100 dial; identical = 100.
+  const compatibility = Math.round(100 * (Object.keys(LEVELS) as (keyof typeof LEVELS)[]).reduce((t, k) => t + LEVELS[k] * levels[k], 0));
 
   const stats: StatName[] = ["Range", "Edge", "Cohesion", "Signal"];
   const rounds: BattleRound[] = stats.map((stat, i) => {
@@ -300,7 +337,8 @@ export function battle(a: StyleResult, b: StyleResult): BattleResult {
       sharedBrands,
       sharedKeywords,
       weights: { brands: W_BRANDS, keywords: W_KEYWORDS },
-      formula: `${W_BRANDS * 100}% shared brands (√Jaccard ${bj.shared.length}/${new Set([...a.brands, ...b.brands].map((x) => x.entity.id)).size}) + ${W_KEYWORDS * 100}% shared aesthetic (√Jaccard ${kj.shared.length}/${new Set([...ak, ...bk].map(norm)).size})`,
+      levels: Object.fromEntries(Object.entries(levels).map(([k, v]) => [k, Math.round(v * 100)])) as Record<keyof typeof LEVELS, number>,
+      formula: `a blend of shared brands ${Math.round(levels.brands * 100)} (×${W_BRANDS}), shared genre tags ${Math.round(levels.genre * 100)} (×${LEVELS.genre}), shared aesthetic words ${Math.round(levels.aesthetic * 100)} (×${W_KEYWORDS}), shared domains ${Math.round(levels.domains * 100)} (×${LEVELS.domains}) and stat shape ${Math.round(levels.shape * 100)} (×${LEVELS.shape})`,
     },
     verdict: verdictFor(compatibility),
     rounds,

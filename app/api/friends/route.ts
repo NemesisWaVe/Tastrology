@@ -1,6 +1,6 @@
 import { clerkOn, currentUserId } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, addFriend, BOUT_SK, closeBout, ensurePlayer, listBouts, listFriends, lookupPlayer, openBout, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, closeBout, dropRequest, ensurePlayer, listBouts, listFriends, listRequests, lookupPlayer, openBout, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
 import { TWIN_CODE } from "@/lib/twins";
@@ -31,8 +31,8 @@ export async function GET(request: Request) {
   if (!me) return json({ error: "Couldn't reach the server." }, 503);
   if (q.get("whoami")) return json({ on: true, signedIn: true, me });
   const dOn = dustOn();
-  const [friends, bouts, ds] = await Promise.all([listFriends(uid), dOn ? listBouts(uid) : [], dOn ? dustStatus(uid).catch(() => null) : null]);
-  return json({ on: true, signedIn: true, me, friends: friends ?? [], bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES });
+  const [friends, requests, bouts, ds] = await Promise.all([listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
+  return json({ on: true, signedIn: true, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES });
 }
 
 type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string };
@@ -52,8 +52,15 @@ export async function POST(request: Request) {
       if (!PLAYER_CODE.test(pc)) return json({ error: "That code doesn't look right. It's 6 letters and numbers." }, 400);
       const r = await addFriend(uid, me, pc);
       const msg = { self: "That's your own code.", unknown: "No player with that code.", full: "Your friends list is full.", error: "Couldn't reach the server." } as const;
-      return r === "added" || r === "exists" ? json({ ok: true, status: r }) : json({ error: msg[r] }, r === "error" ? 503 : 400);
+      return r in msg ? json({ error: msg[r as keyof typeof msg] }, r === "error" ? 503 : 400) : json({ ok: true, status: r });
     }
+    case "accept-friend": {
+      const r = await acceptFriend(uid, me, pc);
+      const msg = { unknown: "That request is gone.", full: "Your friends list is full.", error: "Couldn't reach the server." } as const;
+      return r in msg ? json({ error: msg[r as keyof typeof msg] }, r === "error" ? 503 : 400) : json({ ok: true, status: r });
+    }
+    case "drop-request":
+      return (await dropRequest(uid, me, pc)) ? json({ ok: true }) : json({ error: "Couldn't reach the server." }, 503);
     case "remove":
       return (await removeFriend(uid, me, pc)) ? json({ ok: true }) : json({ error: "Couldn't reach the server." }, 503);
     case "card": {
@@ -63,21 +70,21 @@ export async function POST(request: Request) {
       return p ? json({ ok: true, me: p }) : json({ error: "You can fight only with cards you minted." }, 400);
     }
     case "challenge": {
-      if (!dustOn()) return json({ error: "Stardust is off." }, 404);
-      const r = await openBout(uid, me, pc, Number(b.stake));
+      const stake = Number(b.stake) || 0;
+      if (stake && !dustOn()) return json({ error: "Stardust is off." }, 404);
+      const r = await openBout(uid, me, pc, stake);
       const msg = { "friends-only": "You can only challenge friends.", stake: "Pick a stake.", empty: "Not enough Stardust.", daily: "That's today's five bouts. More tomorrow.", error: "Couldn't reach the server." } as const;
       return r === "open" ? json({ ok: true }) : json({ error: msg[r] }, r === "error" ? 503 : 400);
     }
     case "accept":
     case "decline": {
-      if (!dustOn()) return json({ error: "Stardust is off." }, 404);
       const id = String(b.id ?? "");
       if (!BOUT_SK.test(id)) return json({ error: "bad bout" }, 400);
       if (b.op === "decline") {
         const r = await closeBout(uid, id);
         return r === "error" ? json({ error: "Couldn't reach the server." }, 503) : json({ ok: true, status: r });
       }
-      const r = await acceptBout(uid, id);
+      const r = await acceptBout(uid, me, id);
       if (r.ok) return json({ ok: true, a: r.a, b: r.b, outcome: r.outcome });
       const msg = { gone: "That bout is already settled.", empty: "You need the stake in Stardust to accept.", "no-cards": "One of you has no card that can fight.", error: "Couldn't reach the server." } as const;
       return json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);

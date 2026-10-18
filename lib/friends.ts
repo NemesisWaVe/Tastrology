@@ -5,6 +5,7 @@ import { ddbDelete, ddbGet, ddbPutIfAbsent, ddbQuery, ddbTransact, ddbUpdate, ty
 import { fromSheet, getFighterStatus } from "./fighters";
 import { recordBattle } from "./stamps";
 import { burnedAt } from "./twins";
+export { levelOf } from "./friendLevels";
 
 /**
  * Friends and friend bouts. One hop only: no friends-of-friends, no feed, no search.
@@ -22,7 +23,10 @@ const ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const FRIENDS_MAX = 200;
 export const STAKES = [10, 25, 50] as const;
 export const BOUTS_PER_DAY = 5;
-export const BOUT_SK = /^BOUT#[0-9a-z]{6,12}#[0-9A-Za-z]{8}$/;
+/** An unanswered challenge lapses after three days; the challenger can then take any stake back. */
+export const BOUT_TTL_MS = 3 * 24 * 3600 * 1000;
+const DAY_MS = 86_400_000;
+export const BOUT_SK = /^BOUT#[0-9a-z]{6,12}#[0-9A-Za-z_-]{8}$/;
 
 const U = (uid: string) => `USER#${uid}`;
 const CCF = "ConditionalCheckFailed";
@@ -36,6 +40,8 @@ export interface Player {
 }
 export interface Friend extends Player {
   at: number;
+  /** Days you've fought each other (friendship level). */
+  days?: number;
 }
 export interface Bout {
   id: string;
@@ -43,7 +49,7 @@ export interface Bout {
   pc: string;
   name: string;
   stake: number;
-  status: "open" | "done" | "declined" | "cancelled";
+  status: "open" | "done" | "declined" | "cancelled" | "expired";
   at: number;
   /** Settled bouts: the drawn cards (a = challenger) and how it went for you. */
   a?: string;
@@ -117,19 +123,64 @@ export async function listFriends(uid: string): Promise<Friend[] | null> {
   const page = await ddbQuery(U(uid), "FRIEND#", FRIENDS_MAX);
   if (!page) return null;
   return page.items
-    .map((it) => ({ ...(toPlayer(it) as Player), at: Number(it.at) || 0 }))
+    .map((it) => ({ ...(toPlayer(it) as Player), at: Number(it.at) || 0, days: Number(it.days) || 0 }))
     .filter((f) => f.pc)
-    .sort((x, y) => y.at - x.at);
+    .sort((x, y) => (y.days ?? 0) - (x.days ?? 0) || y.at - x.at);
+}
+
+/** One friendship day per pair per UTC day, on both rows. AND binds tighter than OR, so the row must exist either way. */
+async function bumpFriendship(uid: string, pc: string, now = Date.now()) {
+  const d = Math.floor(now / DAY_MS);
+  await ddbUpdate(U(uid), `FRIEND#${pc}`, "SET lastDay = :d ADD days :one", {
+    condition: "attribute_exists(pc) AND attribute_not_exists(lastDay) OR attribute_exists(pc) AND lastDay <= :y",
+    values: { ":d": d, ":y": d - 1, ":one": 1 },
+  });
 }
 
 const edge = (p: Player & { uid: string }, at: number) => ({ uid: p.uid, pc: p.pc, name: p.name, card: p.card, rarity: p.rarity, at });
 
-/** Adds both sides at once. Having someone's code (they shared it) is the consent; either side can remove it. */
-export async function addFriend(uid: string, me: Player, pc: string): Promise<"added" | "exists" | "self" | "unknown" | "full" | "error"> {
+export interface Requests {
+  /** People asking to be your friend. */
+  incoming: Friend[];
+  /** Requests you sent that are still waiting. */
+  sent: Friend[];
+}
+
+export async function listRequests(uid: string): Promise<Requests | null> {
+  const [i, s] = await Promise.all([ddbQuery(U(uid), "REQ#", 50), ddbQuery(U(uid), "SENT#", 50)]);
+  if (!i || !s) return null;
+  const rows = (xs: Flat[]) => xs.map((it) => ({ ...(toPlayer(it) as Player), at: Number(it.at) || 0 })).filter((f) => f.pc).sort((x, y) => y.at - x.at);
+  return { incoming: rows(i.items), sent: rows(s.items) };
+}
+
+/**
+ * Asks to be friends: a REQ# row on their side, a SENT# row on yours. Friends only once they accept.
+ * If they had already asked you, asking back is the handshake and makes you friends at once.
+ */
+export async function addFriend(uid: string, me: Player, pc: string): Promise<"added" | "sent" | "pending" | "exists" | "self" | "unknown" | "full" | "error"> {
   if (pc === me.pc) return "self";
   const them = await lookupPlayer(pc);
   if (!them) return "unknown";
   if (them.uid === uid) return "self";
+  const [already, asked] = await Promise.all([ddbGet(U(uid), `FRIEND#${pc}`), ddbGet(U(uid), `REQ#${pc}`)]);
+  if (already) return "exists";
+  if (asked) return acceptFriend(uid, me, pc);
+  const now = Date.now();
+  const r = await ddbTransact([
+    { put: { PK: U(them.uid), SK: `REQ#${me.pc}`, ...edge({ ...me, uid }, now) }, condition: "attribute_not_exists(PK)" },
+    { put: { PK: U(uid), SK: `SENT#${pc}`, ...edge(them, now) }, condition: "attribute_not_exists(PK)" },
+  ]);
+  if (!r) return "error";
+  if (r.ok) return "sent";
+  return r.reasons.includes(CCF) ? "pending" : "error";
+}
+
+/** Accepting a request writes both friend rows and clears the request pair, in one transaction. */
+export async function acceptFriend(uid: string, me: Player, pc: string): Promise<"added" | "exists" | "unknown" | "full" | "error"> {
+  const req = await ddbGet(U(uid), `REQ#${pc}`);
+  if (!req) return (await ddbGet(U(uid), `FRIEND#${pc}`)) ? "exists" : "unknown";
+  const them = await lookupPlayer(pc);
+  if (!them) return "unknown";
   const mine = await ddbQuery(U(uid), "FRIEND#", FRIENDS_MAX, undefined, ["pc"]);
   if (!mine) return "error";
   if (mine.items.length >= FRIENDS_MAX) return "full";
@@ -137,10 +188,21 @@ export async function addFriend(uid: string, me: Player, pc: string): Promise<"a
   const r = await ddbTransact([
     { put: { PK: U(uid), SK: `FRIEND#${pc}`, ...edge(them, now) }, condition: "attribute_not_exists(PK)" },
     { put: { PK: U(them.uid), SK: `FRIEND#${me.pc}`, ...edge({ ...me, uid }, now) }, condition: "attribute_not_exists(PK)" },
+    { delete: { PK: U(uid), SK: `REQ#${pc}` } },
+    { delete: { PK: U(them.uid), SK: `SENT#${me.pc}` } },
   ]);
   if (!r) return "error";
   if (r.ok) return "added";
   return r.reasons.includes(CCF) ? "exists" : "error";
+}
+
+/** Declines an incoming request or withdraws one you sent. */
+export async function dropRequest(uid: string, me: Player, pc: string): Promise<boolean> {
+  const [inc, out] = await Promise.all([ddbGet(U(uid), `REQ#${pc}`), ddbGet(U(uid), `SENT#${pc}`)]);
+  const ops: Promise<string>[] = [];
+  if (inc) ops.push(ddbDelete(U(uid), `REQ#${pc}`), ddbDelete(U(str(inc.uid)), `SENT#${me.pc}`));
+  if (out) ops.push(ddbDelete(U(uid), `SENT#${pc}`), ddbDelete(U(str(out.uid)), `REQ#${me.pc}`));
+  return !(await Promise.all(ops)).includes("error");
 }
 
 export async function removeFriend(uid: string, me: Player, pc: string): Promise<boolean> {
@@ -166,7 +228,9 @@ export async function setFighter(uid: string, me: Player, code: string): Promise
   return { ...me, name: c.name, card: c.code, rarity: c.rarity };
 }
 
-/* ------------------------------------------------------------ Stardust bouts */
+/* ------------------------------------------------------------ bouts: friendly (stake 0) or Stardust */
+
+const lapsed = (it: Flat, now = Date.now()) => it.status === "open" && (Number(it.at) || 0) < now - BOUT_TTL_MS;
 
 const toBout = (it: Flat): Bout => ({
   id: str(it.SK),
@@ -174,7 +238,7 @@ const toBout = (it: Flat): Bout => ({
   pc: str(it.pc),
   name: str(it.name),
   stake: Number(it.stake) || 0,
-  status: (str(it.status) || "open") as Bout["status"],
+  status: lapsed(it) ? "expired" : ((str(it.status) || "open") as Bout["status"]),
   at: Number(it.at) || 0,
   ...(it.a ? { a: str(it.a), b: str(it.b), outcome: str(it.outcome) as Bout["outcome"] } : {}),
 });
@@ -184,9 +248,12 @@ export async function listBouts(uid: string): Promise<Bout[] | null> {
   return page ? page.items.map(toBout) : null;
 }
 
-/** Opens a bout: takes the stake from you now (escrow), and puts the challenge on both lists. */
+/**
+ * Opens a bout: a challenge on both lists that the friend has to accept before anything is fought.
+ * Stardust bouts also take the stake from you now (escrow) and count toward the daily cap.
+ */
 export async function openBout(uid: string, me: Player, pc: string, stake: number): Promise<"open" | "friends-only" | "stake" | "empty" | "daily" | "error"> {
-  if (!(STAKES as readonly number[]).includes(stake)) return "stake";
+  if (stake !== 0 && !(STAKES as readonly number[]).includes(stake)) return "stake";
   const f = await ddbGet(U(uid), `FRIEND#${pc}`);
   const other = str(f?.uid);
   if (!other) return "friends-only";
@@ -194,12 +261,19 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   const SK = `BOUT#${now.toString(36)}#${randomBytes(6).toString("base64url")}`;
   const day = new Date(now).toISOString().slice(0, 10);
   const base = { stake, status: "open", at: now };
+  const rows: TxOp[] = [
+    { put: { PK: U(uid), SK, role: "out", uid: other, pc, name: str(f?.name), ...base } },
+    { put: { PK: U(other), SK, role: "in", uid, pc: me.pc, name: me.name, ...base } },
+  ];
+  if (!stake) {
+    const r = await ddbTransact(rows);
+    return r?.ok ? "open" : "error";
+  }
   const r = await ddbTransact([
     { update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust - :s, v = v + :one", condition: "dust >= :s", values: { ":s": stake, ":one": 1 } },
     { put: { PK: U(uid), SK: `LEDGER#dust#bout#${SK}`, delta: -stake, unit: "dust", reason: "bout", ref: SK, at: now }, condition: "attribute_not_exists(PK)" },
     { update: { PK: U(uid), SK: `BOUTDAY#${day}` }, set: "ADD n :one", condition: "attribute_not_exists(n) OR n <= :last", values: { ":one": 1, ":last": BOUTS_PER_DAY - 1 } },
-    { put: { PK: U(uid), SK, role: "out", uid: other, pc, name: str(f?.name), ...base } },
-    { put: { PK: U(other), SK, role: "in", uid, pc: me.pc, name: me.name, ...base } },
+    ...rows,
   ]);
   if (!r) return "error";
   if (r.ok) return "open";
@@ -221,13 +295,23 @@ async function draw(uid: string): Promise<string | null> {
   return null;
 }
 
-/** The friend answers: matches the stake, one card is drawn from each deck, and the winner takes both stakes (a tie refunds). */
-export async function acceptBout(uid: string, sk: string): Promise<{ ok: true; result: BattleResult; a: string; b: string; outcome: Bout["outcome"] } | { ok: false; why: "gone" | "empty" | "no-cards" | "error" }> {
+/** Each side's chosen fighter, for friendly bouts. */
+async function fighterOf(uid: string): Promise<string | null> {
+  const card = str((await ddbGet(U(uid), "PLAYER"))?.card);
+  return card || draw(uid);
+}
+
+/**
+ * The friend answers. Friendly: both chosen fighters meet. Stardust: the friend matches the stake, one card is drawn
+ * from each deck, and the winner takes both stakes (a tie refunds).
+ */
+export async function acceptBout(uid: string, me: Player, sk: string): Promise<{ ok: true; result: BattleResult; a: string; b: string; outcome: Bout["outcome"] } | { ok: false; why: "gone" | "empty" | "no-cards" | "error" }> {
   const mine = await ddbGet(U(uid), sk);
-  if (!mine || mine.role !== "in" || mine.status !== "open") return { ok: false, why: "gone" };
+  if (!mine || mine.role !== "in" || mine.status !== "open" || lapsed(mine)) return { ok: false, why: "gone" };
   const challenger = str(mine.uid);
   const stake = Number(mine.stake) || 0;
-  const [a, b] = await Promise.all([draw(challenger), draw(uid)]);
+  const pick = stake ? draw : fighterOf;
+  const [a, b] = await Promise.all([pick(challenger), pick(uid)]);
   if (!a || !b) return { ok: false, why: "no-cards" };
   const [fa, fb] = await Promise.all([getFighterStatus(a), getFighterStatus(b)]);
   if (!fa.sheet || !fb.sheet) return { ok: false, why: "error" };
@@ -245,11 +329,8 @@ export async function acceptBout(uid: string, sk: string): Promise<{ ok: true; r
     names: { "#s": "status", "#a": "a", "#b": "b", "#o": "outcome" },
     values: { ":done": "done", ":open": "open", ":a": a, ":b": b, ":o": outcome, ":now": now },
   });
-  const ops: TxOp[] = [
-    settle(challenger, side("a")),
-    settle(uid, side("b")),
-    { update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust + :d, v = v + :one", condition: "dust >= :s", values: { ":d": bDelta, ":s": stake, ":one": 1 } },
-  ];
+  const ops: TxOp[] = [settle(challenger, side("a")), settle(uid, side("b"))];
+  if (stake) ops.push({ update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust + :d, v = v + :one", condition: "dust >= :s", values: { ":d": bDelta, ":s": stake, ":one": 1 } });
   if (bDelta) ops.push({ put: { PK: U(uid), SK: `LEDGER#dust#bout#${sk}`, delta: bDelta, unit: "dust", reason: "bout", ref: sk, at: now }, condition: "attribute_not_exists(PK)" });
   if (aGets) {
     ops.push({ update: { PK: U(challenger), SK: "WALLET" }, set: "SET v = v + :one ADD dust :d", condition: "attribute_exists(PK)", values: { ":d": aGets, ":one": 1 } });
@@ -258,11 +339,11 @@ export async function acceptBout(uid: string, sk: string): Promise<{ ok: true; r
   const r = await ddbTransact(ops);
   if (!r) return { ok: false, why: "error" };
   if (!r.ok) return { ok: false, why: r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : r.reasons[2] === CCF ? "empty" : "error" };
-  await recordBattle(a, b, result).catch(() => {});
+  await Promise.allSettled([recordBattle(a, b, result), bumpFriendship(uid, str(mine.pc), now), bumpFriendship(challenger, me.pc, now)]);
   return { ok: true, result, a, b, outcome: side("b") };
 }
 
-/** Declined by the friend or cancelled by the challenger: the stake goes back to the challenger. */
+/** Declined by the friend or cancelled by the challenger: any stake goes back to the challenger. */
 export async function closeBout(uid: string, sk: string): Promise<"closed" | "gone" | "error"> {
   const mine = await ddbGet(U(uid), sk);
   if (!mine || mine.status !== "open") return "gone";
@@ -278,12 +359,13 @@ export async function closeBout(uid: string, sk: string): Promise<"closed" | "go
     names: { "#s": "status" },
     values: { ":x": status, ":open": "open", ":now": now },
   });
-  const r = await ddbTransact([
-    close(uid),
-    close(other),
-    { update: { PK: U(challenger), SK: "WALLET" }, set: "SET v = v + :one ADD dust :s", condition: "attribute_exists(PK)", values: { ":s": stake, ":one": 1 } },
-    { put: { PK: U(challenger), SK: `LEDGER#dustback#bout#${sk}`, delta: stake, unit: "dust", reason: status, ref: sk, at: now }, condition: "attribute_not_exists(PK)" },
-  ]);
+  const refund: TxOp[] = stake
+    ? [
+        { update: { PK: U(challenger), SK: "WALLET" }, set: "SET v = v + :one ADD dust :s", condition: "attribute_exists(PK)", values: { ":s": stake, ":one": 1 } },
+        { put: { PK: U(challenger), SK: `LEDGER#dustback#bout#${sk}`, delta: stake, unit: "dust", reason: status, ref: sk, at: now }, condition: "attribute_not_exists(PK)" },
+      ]
+    : [];
+  const r = await ddbTransact([close(uid), close(other), ...refund]);
   if (!r) return "error";
   if (r.ok) return "closed";
   return r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : "error";

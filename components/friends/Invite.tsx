@@ -84,9 +84,9 @@ export function Invite({ pc }: { pc: string }) {
         </div>
       )}
       <button type="button" disabled={busy || !authOn} onClick={() => void add()} className="mt-8 rounded-full bg-accent px-7 py-3.5 font-semibold text-paper disabled:opacity-50">
-        {busy ? "Adding…" : "Add friend"}
+        {busy ? "Sending…" : "Send friend request"}
       </button>
-      <p className="mt-3 text-sm text-ink-3">Then fight free, or put Stardust on it. No card yet? You&apos;ll mint one in a minute.</p>
+      <p className="mt-3 text-sm text-ink-3">Once they accept, you can challenge each other. No card yet? Minting one takes a minute.</p>
       {msg && <p className="mt-4 text-sm text-ink-2" role="status">{msg}</p>}
       {p.card && (
         <Link href={`/vs/${p.card}`} className="mt-6 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline decoration-dotted underline-offset-4 hover:text-accent">

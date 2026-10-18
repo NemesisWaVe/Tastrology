@@ -4,7 +4,7 @@ import { recordBattle } from "@/lib/stamps";
 import { fromSheet, getFighterStatus, putFighterMemory, type FighterSheet } from "@/lib/fighters";
 import { allow, clientId } from "@/lib/ratelimit";
 import { s3Get, s3PutIfAbsent } from "@/lib/s3";
-import { burnedAt, TWIN_CODE } from "@/lib/twins";
+import { burnedAt, getTwin, TWIN_CODE } from "@/lib/twins";
 
 export const runtime = "nodejs";
 
@@ -25,6 +25,10 @@ export async function GET(request: Request) {
     return Response.json({ error: "unavailable" }, { status: 503, headers: { "cache-control": "no-store", "retry-after": "5" } });
   if (!fa || !fb) return Response.json({ error: "unknown fighter" }, { status: 404, headers: { "cache-control": "public, max-age=30, s-maxage=30" } });
   const out = battle(fromSheet(fa), fromSheet(fb));
+  // Sheets carry no images, so the cards come back from their twins (art, style, rarity number) when they can.
+  const [twa, twb] = await Promise.all([getTwin(a).catch(() => null), getTwin(b).catch(() => null)]);
+  if (twa?.art?.length) out.cards.a = { ...out.cards.a, art: twa.art, evolvesFrom: twa.evolvesFrom, living: twa.living, rarityNo: twa.rarityNo };
+  if (twb?.art?.length) out.cards.b = { ...out.cards.b, art: twb.art, evolvesFrom: twb.evolvesFrom, living: twb.living, rarityNo: twb.rarityNo };
   const [x, y] = [a, b].sort();
   // Sides matter in the result, so a swapped order gets its own key.
   const key = `battles/v1/${x}_${y}_${ENGINE_V}${a === x ? "" : "_r"}.json`;

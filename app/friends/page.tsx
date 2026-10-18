@@ -13,7 +13,7 @@ export default async function FriendsPage({ searchParams }: { searchParams: Prom
       <h1 className="mt-2 font-serif text-5xl italic leading-[0.95] sm:text-6xl">
         Friends, then <span className="text-accent">fights.</span>
       </h1>
-      <p className="mb-8 mt-4 max-w-xl text-ink-2">Add people by code. Fight them free with your card, or put Stardust on a blind draw from both decks.</p>
+      <p className="mb-8 mt-4 max-w-xl text-ink-2">Add people by code. Challenge them to a friendly fight, or put Stardust on a blind draw. Nothing starts until they accept.</p>
       <FriendsView prefill={add} />
     </SiteShell>
   );

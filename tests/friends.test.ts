@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, addFriend, closeBout, ensurePlayer, listBouts, listFriends, openBout, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, listBouts, listFriends, listRequests, openBout, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -51,7 +51,8 @@ async function pair(): Promise<[Player, Player]> {
   own("bo", 1);
   const a = (await ensurePlayer("ann"))!;
   const b = (await ensurePlayer("bo"))!;
-  expect(await addFriend("ann", a, b.pc)).toBe("added");
+  expect(await addFriend("ann", a, b.pc)).toBe("sent");
+  expect(await acceptFriend("bo", b, a.pc)).toBe("added");
   return [a, b];
 }
 
@@ -64,7 +65,25 @@ describe("friends", () => {
     expect((await ensurePlayer("ann"))!.pc).toBe(a!.pc);
   });
 
-  it("adds both sides at once, no self-adds, and removes both sides", async () => {
+  it("needs the other side to accept; asking back is the handshake", async () => {
+    own("ann", 0);
+    own("bo", 1);
+    const a = (await ensurePlayer("ann"))!;
+    const b = (await ensurePlayer("bo"))!;
+    expect(await addFriend("ann", a, b.pc)).toBe("sent");
+    expect(await addFriend("ann", a, b.pc)).toBe("pending");
+    expect(await listFriends("ann")).toEqual([]);
+    expect((await listRequests("bo"))!.incoming.map((r) => r.pc)).toEqual([a.pc]);
+    expect((await listRequests("ann"))!.sent.map((r) => r.pc)).toEqual([b.pc]);
+    expect(await dropRequest("bo", b, a.pc)).toBe(true);
+    expect(await listRequests("ann")).toEqual({ incoming: [], sent: [] });
+    await addFriend("ann", a, b.pc);
+    expect(await addFriend("bo", b, a.pc)).toBe("added");
+    expect((await listFriends("ann"))!.map((f) => f.pc)).toEqual([b.pc]);
+    expect(await listRequests("bo")).toEqual({ incoming: [], sent: [] });
+  });
+
+  it("adds both sides on accept, no self-adds, and removes both sides", async () => {
     const [a, b] = await pair();
     expect(await addFriend("ann", a, b.pc)).toBe("exists");
     expect(await addFriend("ann", a, a.pc)).toBe("self");
@@ -95,12 +114,12 @@ describe("stardust bouts", () => {
     const [bout] = (await listBouts("bo"))!;
     expect(bout).toMatchObject({ role: "in", pc: a.pc, stake: 25, status: "open" });
     expect(bout).not.toHaveProperty("a");
-    const r = await acceptBout("bo", bout.id);
+    const r = await acceptBout("bo", b, bout.id);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const want = { won: [75, 125], lost: [125, 75], tied: [100, 100] }[r.outcome!];
     expect([dust("ann"), dust("bo")]).toEqual(want);
-    expect(await acceptBout("bo", bout.id)).toMatchObject({ ok: false, why: "gone" });
+    expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "gone" });
     expect((await listBouts("ann"))![0]).toMatchObject({ status: "done", a: cards[0], b: cards[1] });
   });
 
@@ -111,10 +130,37 @@ describe("stardust bouts", () => {
     await openBout("ann", a, b.pc, 50);
     expect(await openBout("ann", a, b.pc, 10)).toBe("empty");
     const [bout] = (await listBouts("bo"))!;
-    expect(await acceptBout("bo", bout.id)).toMatchObject({ ok: false, why: "empty" });
+    expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "empty" });
     expect(await closeBout("bo", bout.id)).toBe("closed");
     expect(dust("ann")).toBe(50);
     expect(await closeBout("ann", bout.id)).toBe("gone");
+  });
+
+  it("friendly fights need accepting, use each side's fighter, and raise friendship once a day", async () => {
+    const [a, b] = await pair();
+    expect(await openBout("ann", a, b.pc, 0)).toBe("open");
+    const [bout] = (await listBouts("bo"))!;
+    expect(bout).toMatchObject({ stake: 0, status: "open" });
+    const r = await acceptBout("bo", b, bout.id);
+    expect(r).toMatchObject({ ok: true, a: cards[0], b: cards[1] });
+    await openBout("ann", a, b.pc, 0);
+    await acceptBout("bo", b, (await listBouts("bo"))![0].id);
+    expect((await listFriends("ann"))![0].days).toBe(1);
+    expect((await listFriends("bo"))![0].days).toBe(1);
+  });
+
+  it("lets challenges lapse after three days", async () => {
+    const [a, b] = await pair();
+    wallet("ann", 50);
+    await openBout("ann", a, b.pc, 10);
+    const [bout] = (await listBouts("bo"))!;
+    const row = db.items.get(`USER#bo|${bout.id}`)!;
+    row.at = N(Date.now() - BOUT_TTL_MS - 1);
+    db.items.get(`USER#ann|${bout.id}`)!.at = N(Date.now() - BOUT_TTL_MS - 1);
+    expect((await listBouts("bo"))![0].status).toBe("expired");
+    expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "gone" });
+    expect(await closeBout("ann", bout.id)).toBe("closed");
+    expect(dust("ann")).toBe(50);
   });
 
   it("caps bouts per day", async () => {

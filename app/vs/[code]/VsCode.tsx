@@ -13,6 +13,7 @@ import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import type { BattleResult } from "@/lib/battle";
 import type { CardData } from "@/lib/card";
+import { loadDeck, type DeckEntry } from "@/lib/deck";
 import { TWIN_CODE } from "@/lib/twins";
 
 type State = { kind: "loading" } | { kind: "missing" } | { kind: "burned"; code: string } | { kind: "unavailable" } | { kind: "card"; card: CardData } | { kind: "fight"; out: BattleResult };
@@ -44,6 +45,19 @@ export function VsCode({ code }: { code: string }) {
       off = true;
     };
   }, [code, b, attempt]);
+
+  // Your own card: no "wants a fight" pitch. Offer your other cards (self-fight) and your friends instead.
+  const [deck, setDeck] = useState<DeckEntry[] | null>(null);
+  useEffect(() => {
+    if (st.kind !== "card") return;
+    let off = false;
+    void loadDeck().then((d) => !off && setDeck(d.cards));
+    return () => {
+      off = true;
+    };
+  }, [st.kind]);
+  const own = Boolean(deck?.some((c) => c.code === code));
+  const others = (deck ?? []).filter((c) => c.code !== code);
 
   // The challenger's card hangs in their sky.
   const reduce = Boolean(useReducedMotion());
@@ -85,16 +99,41 @@ export function VsCode({ code }: { code: string }) {
       )}
       {st.kind === "card" && (
         <>
-          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{st.card.archetype} wants a fight</p>
+          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{own ? "Your card" : `${st.card.archetype} wants a fight`}</p>
           <div className="relative">
             <Galaxies reduce={reduce} sides={[{ card: st.card, side: "a", anchor: cardRef, colour: "#c6ff3d" }]} solo className="absolute left-1/2 top-1/2 h-[820px] w-[min(100vw,900px)] -translate-x-1/2 -translate-y-1/2" />
             <div ref={cardRef} className="relative">
               <FlipCard card={st.card} width={300} idle flipButton />
             </div>
           </div>
-          <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
-          <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
-          <FriendChip className="relative" />
+          {own ? (
+            <div className="relative flex w-full flex-col items-center gap-3">
+              <Link href="/friends" className="rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Challenge a friend</Link>
+              {others.length > 0 ? (
+                <>
+                  <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Or fight your other cards</p>
+                  <ul className="flex w-full flex-col gap-2">
+                    {others.slice(0, 6).map((o) => (
+                      <li key={o.code}>
+                        <Link href={`/vs/${code}?vs=${o.code}`} className="flex items-center justify-between gap-3 rounded-full border border-line px-5 py-2.5 text-left text-sm text-ink-2 transition hover:border-accent hover:text-ink">
+                          <span className="truncate">{o.card.archetype}</span>
+                          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">{o.card.rarityLabel}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="text-[13px] text-ink-3">Mint a second card and you can fight yourself.</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
+              <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
+              <FriendChip className="relative" />
+            </>
+          )}
         </>
       )}
     </main>
