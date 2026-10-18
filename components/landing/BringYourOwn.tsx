@@ -1,5 +1,6 @@
 "use client";
 
+import type { EntityKind } from "@/lib/types";
 import { CursorArrow } from "@/components/CursorArrow";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -37,13 +38,17 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   useEffect(() => {
     if (restored.current) saveDraft({ seeds, budget, goal });
   }, [seeds, budget, goal]);
-  const need = Math.max(0, 3 - seeds.length);
+  // Vibes (lib/vibes.ts) ride along with named loves: at least 2 named things, 3 picks in all.
+  const named = seeds.filter((s) => s.kind !== "vibe");
+  const vibes = seeds.filter((s) => s.kind === "vibe");
+  const need = Math.max(0, 3 - seeds.length, 2 - named.length);
   const ready = need === 0;
 
   const go = () => {
     if (!ready) return;
     onStart({
-      seeds: seeds.map(({ id, name, kind }) => ({ id, name, kind })),
+      seeds: named.map(({ id, name, kind }) => ({ id, name, kind: kind as EntityKind })),
+      ...(vibes.length ? { vibes: vibes.map(({ id, name }) => ({ id, name })) } : {}),
       budget,
       goal: goal.trim() || undefined,
     });
@@ -128,7 +133,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
               }`}
             >
               <span className="flex items-center gap-3">
-                {ready ? "Mint my taste sign" : `Add ${need} more love${need === 1 ? "" : "s"}`}
+                {ready ? "Mint my taste sign" : named.length < 2 && seeds.length >= 3 ? "Add a named love too" : `Add ${need} more love${need === 1 ? "" : "s"}`}
                 {ready ? (
                   <CursorArrow className="h-9 w-9 bg-paper text-accent" />
                 ) : (

@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveVibes } from "./vibes";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BRAND } from "./brand";
 import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
@@ -41,6 +42,10 @@ class RunState {
   filterTags: string[] = [];
   /** Qloo aesthetic tags fed back into the brand query as signal.interests.tags. */
   signalTags: string[] = [];
+  /** From the vibes (lib/vibes.ts): entities that join the brand signal, and tags that join signalTags. */
+  vibeAnchors: QEntity[] = [];
+  vibeTags: string[] = [];
+  vibeVia: Record<string, string[]> = {};
   seedTags = new Map<string, QTag[]>();
   inert: string[] = [];
   inertInfo: { id: string; influence: number }[] = [];
@@ -183,6 +188,18 @@ async function resolveSeeds(st: RunState) {
   st.done.add("resolve");
   st.emit({ type: "step", id: "resolve", label: "Seeds resolved", status: "done", detail: st.seeds.map((s) => s.name).join(" · ") });
   if (st.seeds.length < 2) throw new Error("Need at least 2 seeds that Qloo recognises.");
+  if (st.req.vibes?.length) {
+    const vibes = st.req.vibes;
+    await logged(st, "resolve_vibes", vibes.map((v) => v.name).join(", "), async (log) => {
+      const r = await resolveVibes(vibes, log).catch(() => ({ anchors: [], tags: [], via: {} as Record<string, string[]> }));
+      const seedIds = new Set(st.seeds.map((s) => s.id));
+      st.vibeAnchors = r.anchors.filter((a, i) => !seedIds.has(a.id) && r.anchors.findIndex((x) => x.id === a.id) === i);
+      st.vibeTags = r.tags;
+      st.vibeVia = r.via;
+      st.ledger.record(st.vibeAnchors);
+      return { value: null, summary: `Vibes read as ${[...st.vibeAnchors.map((a) => a.name), ...(r.tags.length ? [`${r.tags.length} tag signal${r.tags.length > 1 ? "s" : ""}`] : [])].join(", ") || "nothing usable"}` };
+    });
+  }
   return { seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind })) };
 }
 
@@ -209,7 +226,7 @@ async function brandInsights(st: RunState) {
   if (!st.done.has("resolve")) return { error: "call resolve_seeds first" };
   if (!st.done.has("tags_dna")) return { error: "call get_style_tags first: its aesthetic tags steer the brand query" };
   st.emit({ type: "step", id: "insights", label: "Asking Qloo for brands that share your taste and aesthetic", status: "run" });
-  const signal = [...st.mainSeeds.map((s) => s.id), ...st.liked];
+  const signal = [...st.mainSeeds.map((s) => s.id), ...st.vibeAnchors.map((a) => a.id), ...st.liked];
   const run = (filterTags: string[], tagIds: string[], log: QlooCallLog[]) =>
     insights({ type: "brand", entityIds: signal, tagIds, filterTags, excludeIds: st.disliked, popularity: POP_BAND(), take: 40, explain: true }, log).then(styleBrands);
   const cands = await logged(
@@ -435,7 +452,7 @@ async function styleTags(st: RunState) {
     });
     // Consensus: a tag scores by how many seeds share it, so one loud seed can't hijack the DNA.
     st.keywords = consensus(st, st.seeds.map((s) => s.id)).slice(0, 8);
-    st.signalTags = st.keywords.slice(0, 5).map((k) => k.id);
+    st.signalTags = [...st.keywords.slice(0, 5).map((k) => k.id), ...st.vibeTags];
     return { value: null, summary: `Consensus: ${st.keywords.slice(0, 5).map((k) => k.name).join(", ")}` };
   });
   aestheticSplit(st);
@@ -504,7 +521,7 @@ function aestheticSplit(st: RunState) {
   const A = st.seeds.map((s) => s.id).filter((id) => !B.includes(id));
   st.lobes = [A, B].map((seedIds) => ({ seedIds, keywords: consensus(st, seedIds).slice(0, 3) }));
   st.keywords = consensus(st, A).slice(0, 8);
-  st.signalTags = st.keywords.slice(0, 5).map((k) => k.id);
+  st.signalTags = [...st.keywords.slice(0, 5).map((k) => k.id), ...st.vibeTags];
   const other = A.reduce((best, id) => (jac(id, odd.id) < jac(best, odd.id) ? id : best), A[0]);
   st.contradictions.push({ a: other, b: odd.id, overlap: round(jac(other, odd.id)) });
   st.critique.push(
@@ -859,6 +876,15 @@ async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal
     planner,
     createdAt: Date.now(),
     seeds: st.seeds,
+    ...(st.req.vibes?.length
+      ? {
+          vibes: st.req.vibes.map((v) => ({
+            id: v.id,
+            name: v.name,
+            via: st.vibeVia[v.id] ?? [],
+          })),
+        }
+      : {}),
     dna: { name: st.name, tagline: st.tagline, keywords: st.keywords.slice(0, 5), lobes: st.lobes },
     brands: st.final,
     rejected: st.rejected,

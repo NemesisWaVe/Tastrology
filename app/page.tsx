@@ -207,15 +207,14 @@ export default function Home() {
   );
 
   // Back from a sign-in that left the page (e.g. Google): start the reading that was waiting on it.
+  // Runs once: the wait can last through a whole sign-up, so a changing `start` must not drop the parked reading.
+  const startRef = useRef(start);
+  startRef.current = start;
   useEffect(() => {
-    let off = false;
     void takePendingRun().then((r) => {
-      if (r && !off) start(r);
+      if (r) startRef.current(r);
     });
-    return () => {
-      off = true;
-    };
-  }, [start]);
+  }, []);
 
   const toResult = () => {
     setStage("result");
@@ -318,6 +317,7 @@ export default function Home() {
     setReplanning(true);
     const next = await run({
       seeds: result.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind })),
+      ...(result.vibes?.length ? { vibes: result.vibes.map(({ id, name }) => ({ id, name })) } : {}),
       budget: req?.budget,
       goal: req?.goal,
       feedback: { liked, disliked },

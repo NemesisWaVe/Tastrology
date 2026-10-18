@@ -8,7 +8,8 @@ import type { EntityKind } from "@/lib/types";
 export interface Seed {
   id: string;
   name: string;
-  kind: EntityKind;
+  /** "vibe": a Qloo tag ("ramen", "shoegaze"), not one named thing (lib/vibes.ts). */
+  kind: EntityKind | "vibe";
   subtitle?: string;
   image?: string;
 }
@@ -22,6 +23,7 @@ export const KIND_LABEL: Record<string, string> = {
   podcast: "Podcast",
   videogame: "Game",
   brand: "Brand",
+  vibe: "Vibe",
 };
 
 export const KIND_ICON: Record<string, string> = {
@@ -33,11 +35,13 @@ export const KIND_ICON: Record<string, string> = {
   podcast: "◉",
   videogame: "✦",
   brand: "◆",
+  vibe: "∿",
 };
 
 const FILTERS: (EntityKind | "all")[] = ["all", "artist", "movie", "tv_show", "book", "place", "podcast", "videogame"];
-const TRY = ["Frank Ocean", "Aftersun", "Hades", "Fleabag", "Kyoto", "The Secret History"];
+const TRY = ["Frank Ocean", "Aftersun", "Hades", "Fleabag", "ramen", "shoegaze", "The Secret History"];
 const MAX = 8;
+const VIBES_MAX = 2;
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -81,10 +85,17 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind !== "all" ? `&types=${kind}` : ""}`);
-        const data = (await res.json()) as { results: Seed[] };
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind !== "all" ? `&types=${kind}` : "&vibes=1"}`);
+        const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[] };
         if (id === req.current) {
-          setHits(dedupe(data.results ?? []).slice(0, 6));
+          const ents = dedupe(data.results ?? []);
+          const vs: Seed[] = (data.vibes ?? []).slice(0, 2).map((v) => ({ id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` }));
+          // A vibe that matches the words exactly ("ramen") goes first; otherwise it follows the top named hits.
+          const exact = vs.filter((v) => norm(v.name) === norm(q));
+          const rest = exact.length ? [] : vs;
+          // With the vibe on offer, places that are only called "Ramen" are noise, not what was meant.
+          const named = exact.length ? ents.filter((e) => !(e.kind === "place" && norm(e.name) === norm(q))) : ents;
+          setHits([...exact, ...named.slice(0, 3), ...rest, ...named.slice(3)].slice(0, 7));
           setActive(0);
         }
       } catch {
@@ -113,6 +124,10 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     if (dup) {
       setNote(`${dup.name} is already in.`);
       setFlash(dup.id);
+      return;
+    }
+    if (h.kind === "vibe" && seeds.filter((x) => x.kind === "vibe").length >= VIBES_MAX) {
+      setNote(`Two vibes is the limit. Add something you love by name.`);
       return;
     }
     setNote(null);

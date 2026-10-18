@@ -1,4 +1,5 @@
 import { searchEntities } from "@/lib/qloo";
+import { searchVibes } from "@/lib/vibes";
 import { allow, clientId } from "@/lib/ratelimit";
 import { SEED_KINDS, type EntityKind } from "@/lib/types";
 
@@ -13,9 +14,10 @@ export async function GET(request: Request) {
   if (!(await allow(`search:${clientId(request.headers)}`, 120, 10 * 60 * 1000)))
     return Response.json({ results: [], error: "Too many searches. Give it a minute." }, { status: 429 });
   try {
-    const results = await searchEntities(q, kinds.length ? kinds : SEED_KINDS, 10);
+    const wantVibes = url.searchParams.get("vibes") === "1" && !kinds.length && q.length >= 3;
+    const [results, vibes] = await Promise.all([searchEntities(q, kinds.length ? kinds : SEED_KINDS, 10), wantVibes ? searchVibes(q).catch(() => []) : []]);
     return Response.json(
-      { results: results.map((r) => ({ id: r.id, name: r.name, kind: r.kind, subtitle: r.subtitle, image: r.image })) },
+      { results: results.map((r) => ({ id: r.id, name: r.name, kind: r.kind, subtitle: r.subtitle, image: r.image })), vibes },
       { headers: { "cache-control": "public, max-age=300" } },
     );
   } catch (err) {

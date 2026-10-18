@@ -96,8 +96,28 @@ export async function takePendingRun(): Promise<AgentRequest | null> {
     return null;
   }
   const b = await whenAuthReady();
-  clearPendingRun();
-  return b?.signedIn() ? parked.req : null;
+  if (!b) return null;
+  if (b.signedIn()) {
+    clearPendingRun();
+    return parked.req;
+  }
+  // Not signed in yet: Clerk may still be finishing the sign-up this page came back to (Google, then the terms step).
+  // Keep the reading parked and hand it over the moment the account exists, instead of throwing it away.
+  const left = PENDING_TTL_MS - (Date.now() - (parked.at ?? 0));
+  const req = parked.req;
+  return new Promise((resolve) => {
+    const t = setTimeout(() => {
+      off();
+      resolve(null);
+    }, left);
+    const off = b.onChange((on) => {
+      if (!on) return;
+      clearTimeout(t);
+      off();
+      clearPendingRun();
+      resolve(req);
+    });
+  });
 }
 
 /** What someone typed into "Bring your own", kept in this browser until their reading lands. */

@@ -1,6 +1,7 @@
 import { AGENT_VERSION } from "@/lib/agent";
 import { qlooMode } from "@/lib/qloo";
 import { SEED_KINDS, type AgentRequest } from "@/lib/types";
+import { VIBE_ID_RE, VIBES_MAX } from "@/lib/vibes";
 
 export const GOAL_MAX = 200;
 export const BODY_MAX_BYTES = 16 * 1024;
@@ -22,6 +23,12 @@ export function normalizeRequest(raw: unknown): AgentRequest | string {
   if (seeds.some((s) => !SEED_KINDS.includes(s.kind))) return "One of those picks isn't a type we can read.";
   if (seeds.some((s) => s.id && !ID_RE.test(s.id))) return "One of those picks has a bad id. Pick it from the search list.";
   const req: AgentRequest = { seeds };
+  if (Array.isArray(b.vibes) && b.vibes.length) {
+    if (b.vibes.length > VIBES_MAX) return `Pick up to ${VIBES_MAX} vibes.`;
+    const vibes = (b.vibes as Record<string, unknown>[]).map((v) => ({ id: String(v?.id ?? ""), name: String(v?.name ?? "").trim().slice(0, 60) }));
+    if (vibes.some((v) => !VIBE_ID_RE.test(v.id) || !v.name)) return "One of those vibes isn't one we can read. Pick it from the search list.";
+    req.vibes = vibes.filter((v, i) => vibes.findIndex((x) => x.id === v.id) === i);
+  }
   if (b.budget === 1 || b.budget === 2 || b.budget === 3) req.budget = b.budget;
   const goal = typeof b.goal === "string" ? b.goal.trim().slice(0, GOAL_MAX) : "";
   if (goal) req.goal = goal;
@@ -49,5 +56,7 @@ export function cacheKey(req: AgentRequest, llm = process.env.LLM_MODEL ?? ""): 
     l: [...(req.feedback?.liked ?? [])].sort(),
     d: [...(req.feedback?.disliked ?? [])].sort(),
     p: [...(req.previous?.brandIds ?? [])].sort(),
+    // Only when present, so every key minted before vibes stays the same.
+    ...(req.vibes?.length ? { vb: req.vibes.map((v) => v.id).sort() } : {}),
   });
 }

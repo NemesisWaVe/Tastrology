@@ -140,6 +140,17 @@ export function ResultsView({
                   <span className="max-w-[160px] truncate">{s.name}</span>
                 </span>
               ))}
+              {result.vibes?.map((v) => (
+                <span
+                  key={v.id}
+                  title={v.via?.length ? `Read through ${v.via.join(" and ")}` : "Read as a taste signal"}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-line px-3 py-0.5 text-[12.5px] text-ink-2"
+                >
+                  <span className="text-ink-3">∿</span>
+                  {v.name}
+                  {!!v.via?.length && <span className="text-ink-3">· via {v.via[0]}</span>}
+                </span>
+              ))}
             </div>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">

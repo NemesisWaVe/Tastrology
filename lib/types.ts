@@ -123,6 +123,8 @@ export interface StyleResult {
   cached?: boolean;
   createdAt: number;
   seeds: QEntity[];
+  /** Tastes that aren't one named thing (Qloo tags), and what they were read as. Never part of rarity. */
+  vibes?: { id: string; name: string; via: string[] }[];
   dna: {
     name: string;
     tagline: string;
@@ -167,6 +169,8 @@ export type TraceEvent =
 
 export interface AgentRequest {
   seeds: { id: string; name: string; kind: EntityKind }[];
+  /** Up to 2 Qloo tags ("ramen", "shoegaze") picked next to the named loves (lib/vibes.ts). */
+  vibes?: { id: string; name: string }[];
   budget?: 1 | 2 | 3;
   goal?: string;
   feedback?: { liked: string[]; disliked: string[] };
