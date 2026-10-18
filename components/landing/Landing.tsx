@@ -42,12 +42,31 @@ export function Landing({ onStart }: { onStart: (req: AgentRequest) => void }) {
         // phones scroll natively: iOS momentum is already smooth, and a JS scroll loop on top of it stutters
         <LandingBody onStart={onStart} touch />
       ) : (
-        <ReactLenis root options={{ lerp: 0.11, smoothWheel: !reduce }}>
+        <ReactLenis root options={{ lerp: 0.075, wheelMultiplier: 0.9, smoothWheel: !reduce, virtualScroll: paceIntro }}>
           <LandingBody onStart={onStart} />
         </ReactLenis>
       )}
     </MotionConfig>
   );
+}
+
+/**
+ * Desktop pacing for the intro. One trackpad fling or a few wheel notches used to carry the whole story (drop, ripples,
+ * the card forming) off screen in a second; a thumb on a phone moves far less per swipe, which is why it felt right
+ * there. While the intro is on screen, each wheel event moves it a little less and a fling is capped (about 30 wheel notches end to end), so every
+ * beat gets its moment. Past the intro, scrolling is untouched.
+ */
+const INTRO_PACE = 0.8;
+const INTRO_MAX_DELTA = 110;
+function paceIntro(e: { deltaY: number }): boolean {
+  const el = document.querySelector<HTMLElement>("section[aria-label=Intro]");
+  if (!el) return true;
+  const end = el.offsetTop + el.offsetHeight - window.innerHeight;
+  if (window.scrollY < end - 4 || (e.deltaY < 0 && window.scrollY <= end + window.innerHeight * 0.2)) {
+    const d = e.deltaY * INTRO_PACE;
+    e.deltaY = Math.max(-INTRO_MAX_DELTA, Math.min(INTRO_MAX_DELTA, d));
+  }
+  return true;
 }
 
 /** Coarse pointer (phones, tablets): decided once on mount. */

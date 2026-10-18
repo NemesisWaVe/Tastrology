@@ -4,7 +4,7 @@
   position: relative;
   z-index: 30;
   pointer-events: none; /* it overlaps the hero; only the stage takes input, and only while the intro runs */
-  height: 320vh;
+  height: 380vh; /* desktop: more room for the story; phones keep 240vh below */
   margin-bottom: -100svh;
 }
 @media (max-width: 767px) {
