@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { signInForRun } from "./authBridge";
+import { clearPendingRun, signInForRun } from "./authBridge";
 import { splitNdjson } from "./ndjson";
 import { turnstileToken } from "./turnstile";
 import type { AgentRequest, StyleResult, TraceEvent } from "./types";
@@ -145,6 +145,9 @@ export function useAgentRun() {
         setEvents((prev) => prev.filter((e) => !isThought(e, SIGNIN_MARK)));
         if (ok) res = await open();
       }
+      // The server has answered this reading (started it, or turned it away): a parked copy must never start it again
+      // on the next page load, or a finished mint comes back as "out of cards".
+      if (res.status !== 401) clearPendingRun();
       // Bot check requested (fresh runs only): get a Turnstile token once, then the server's cookie covers retries.
       if (res.status === 403 && ((await res.clone().json().catch(() => ({}))) as { reason?: string }).reason === "verify") {
         const token = await turnstileToken().catch(() => "");

@@ -367,6 +367,42 @@ export default function Home() {
       </>
     );
 
+  // Turned away before any reading started (no card left this month, a full deck, or a regret on the same picks):
+  // that's a wait, not a crash, so it gets a calm screen instead of the "something broke" reveal.
+  if (stage === "reveal" && error && (errorReason === "credits" || errorReason === "deckfull" || errorReason === "samepicks"))
+    return (
+      <div className="relative isolate grid min-h-screen place-items-center px-5">
+        {sky && <Sky f={sky} reduce={reduce} drawn fixed quiet dim={0.5} />}
+        <div className="rise w-full max-w-md text-center">
+          <Mark size={44} className="mx-auto" />
+          <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">
+            {errorReason === "credits" ? "Between new moons" : errorReason === "deckfull" ? "Deck full" : "Same picks"}
+          </p>
+          <h1 className="mt-3 font-serif text-4xl italic leading-tight text-ink">
+            {errorReason === "credits" ? "Your next card is on its way." : errorReason === "deckfull" ? "Your deck has no room left." : "Pick something different."}
+          </h1>
+          <p className="mt-4 text-ink-2">{error}</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {errorReason === "samepicks" ? (
+              <button type="button" onClick={goHome} className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper">
+                Change my picks
+              </button>
+            ) : (
+              <Link href="/vs" className="rounded-full bg-accent px-5 py-2.5 font-semibold text-paper">
+                Find a fight
+              </Link>
+            )}
+            <Link href="/deck" className="rounded-full border border-line px-5 py-2.5 text-ink-2 hover:text-ink">
+              Your deck
+            </Link>
+            <button type="button" onClick={goHome} className="px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 hover:text-ink">
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
   if (stage === "reveal")
     return (
       <Reveal
