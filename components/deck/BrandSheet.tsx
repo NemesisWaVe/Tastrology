@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ReceiptRoll } from "@/components/card/ReceiptRoll";
+import { PulledSky, readDecoded, writeDecoded } from "@/components/deck/PulledSky";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
 import { readSeen, writeSeen, type Seen } from "@/lib/brandSeen";
@@ -48,61 +49,13 @@ function click(code: string, b: { id: string }, src: string) {
   } catch {}
 }
 
-/** The loves as a small constellation: tap a star to see what it pulled in. Pure SVG, no animation loop. */
-function LoveSky({ loves, sel, onSel }: { loves: Snap["loves"]; sel: string; onSel: (id: string) => void }) {
-  const W = 480;
-  const H = 120;
-  const pts = loves.map((l, i) => {
-    const x = loves.length === 1 ? W / 2 : 40 + (i * (W - 80)) / (loves.length - 1);
-    const y = 46 + Math.sin(i * 2.1 + 0.7) * 22;
-    return { ...l, x, y };
-  });
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="group" aria-label="Your loves">
-      {pts.slice(1).map((p, i) => (
-        <line key={p.id} x1={pts[i].x} y1={pts[i].y} x2={p.x} y2={p.y} stroke="rgb(255 255 255 / .18)" strokeWidth="1" />
-      ))}
-      {pts.map((p, i) => {
-        const on = p.id === sel;
-        return (
-          <g
-            key={p.id}
-            role="button"
-            tabIndex={0}
-            aria-pressed={on}
-            aria-label={p.name}
-            className="cursor-pointer outline-none"
-            onClick={() => {
-              sfx("tick", { i });
-              onSel(p.id);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onSel(p.id);
-              }
-            }}
-          >
-            <circle cx={p.x} cy={p.y} r="18" fill="transparent" />
-            {on && <circle cx={p.x} cy={p.y} r="11" fill="none" stroke="#c6ff3d" strokeOpacity=".5" />}
-            <circle cx={p.x} cy={p.y} r={on ? 5.5 : 3.5} fill={on ? "#c6ff3d" : "#e9f0ff"} />
-            <text x={p.x} y={p.y + 30} textAnchor="middle" className={`font-mono text-[10px] ${on ? "fill-[#c6ff3d]" : "fill-[rgb(255_255_255/.45)]"}`}>
-              {displayName(p.name).slice(0, 16)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function BrandRow({ b, love, loves, code, onJump, src }: { b: SnapBrand; love: Snap["loves"][number]; loves: Snap["loves"]; code: string; onJump: (id: string) => void; src: string }) {
+function BrandRow({ b, love, loves, code, onJump, src, flash = false }: { b: SnapBrand; love: Snap["loves"][number]; loves: Snap["loves"]; code: string; onJump: (id: string) => void; src: string; flash?: boolean }) {
   const share = Math.round((b.explain[love.id] ?? 0) * 100);
   const drop = Math.round(b.ablation[love.id] ?? 0);
   const others = b.because.filter((id) => id !== love.id).map((id) => loves.find((l) => l.id === id)).filter((x): x is Snap["loves"][number] => Boolean(x)).slice(0, 2);
   const link = brandLink(b);
   return (
-    <li className="rise flex gap-4 border-t border-line/70 py-4 first:border-t-0">
+    <li id={`pulled-${b.id}`} className={`rise flex gap-4 rounded-2xl border-t border-line/70 py-4 transition-shadow duration-700 first:border-t-0 ${flash ? "shadow-[0_0_0_1px_rgba(198,255,61,0.6),0_0_30px_-6px_rgba(198,255,61,0.5)]" : ""}`}>
       <Thumb src={img(b.image)} name={b.name} size={44} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
@@ -250,11 +203,29 @@ export function BrandSheet({
     } catch {}
   };
 
+  // Decoded signals (components/deck/PulledSky.tsx): remembered per card on this device.
+  const [decoded, setDecoded] = useState<Set<string>>(new Set());
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (open) setDecoded(new Set(readDecoded(code)));
+  }, [open, code]);
+  const decode = (b: SnapBrand) => {
+    if (!decoded.has(b.id)) {
+      const next = new Set(decoded).add(b.id);
+      setDecoded(next);
+      writeDecoded(code, [...next]);
+      sfx("reveal");
+    }
+    setFlashId(b.id);
+    setTimeout(() => document.getElementById(`pulled-${b.id}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }), 60);
+    setTimeout(() => setFlashId((f) => (f === b.id ? null : f)), 1800);
+  };
+
   const love = snap?.loves.find((l) => l.id === sel);
   const pulled = useMemo(() => {
     if (!snap || !love) return [];
     const by = snap.brands.filter((b) => b.because.includes(love.id) || (b.explain[love.id] ?? 0) > 0);
-    return by.sort((a, b) => (b.explain[love.id] ?? 0) - (a.explain[love.id] ?? 0)).slice(0, 3);
+    return by.sort((a, b) => (b.explain[love.id] ?? 0) - (a.explain[love.id] ?? 0)).slice(0, 4);
   }, [snap, love]);
   const silent = snap ? snap.loves.filter((l) => !snap.brands.some((b) => b.because.includes(l.id) || (b.explain[l.id] ?? 0) > 0)) : [];
 
@@ -313,7 +284,6 @@ export function BrandSheet({
               </p>
             )}
 
-            {receipt && <ReceiptRoll card={card} result={receipt} note={reprint ? "Reprinted from a re-read. The original wasn't kept." : undefined} />}
 
             {!r && <p className="mt-10 font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding what it pulled in…</p>}
 
@@ -334,17 +304,30 @@ export function BrandSheet({
               <>
                 {since && <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">{since}</p>}
                 {snap.lite && <p className="mt-2 text-xs text-ink-3">Re-read {day(snap.at)}. The original receipt wasn&apos;t kept for this card.</p>}
-                <div className="mt-5 rounded-2xl border border-line/70 bg-black/30 px-2 pt-2">
-                  <LoveSky loves={snap.loves} sel={sel} onSel={setSel} />
-                </div>
-                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">Tap a star to see what it brought</p>
+                <PulledSky loves={snap.loves} sel={sel} onSel={setSel} pulled={pulled} decoded={decoded} onDecode={decode} />
+                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">Tap a star to travel · tap a signal to decode it</p>
 
                 <h3 className="mt-7 font-serif text-2xl italic">Sent by {displayName(love.name)}</h3>
                 {pulled.length ? (
                   <ul className="mt-2">
-                    {pulled.map((b) => (
-                      <BrandRow key={`${love.id}-${b.id}`} b={b} love={love} loves={snap.loves} code={code} onJump={setSel} src={src} />
-                    ))}
+                    {pulled.map((b, i) =>
+                      decoded.has(b.id) ? (
+                        <BrandRow key={`${love.id}-${b.id}`} b={b} love={love} loves={snap.loves} code={code} onJump={setSel} src={src} flash={flashId === b.id} />
+                      ) : (
+                        <li key={`${love.id}-${b.id}`} className="flex items-center gap-4 border-t border-line/70 py-4 first:border-t-0">
+                          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-dashed border-accent/60 font-mono text-accent">?</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-display text-lg font-semibold tracking-[0.2em] text-ink-3" aria-label="Sealed brand">
+                              {"▒".repeat(Math.min(10, Math.max(4, b.name.length)))}
+                            </p>
+                            <p className="mt-0.5 text-sm text-ink-3">Signal {i + 1} · {Math.round((b.explain[love.id] ?? 0) * 100) || "?"}% of the pull</p>
+                          </div>
+                          <button type="button" onClick={() => decode(b)} className="shrink-0 rounded-full border border-accent/60 px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper">
+                            Decode
+                          </button>
+                        </li>
+                      ),
+                    )}
                   </ul>
                 ) : (
                   <p className="mt-2 text-ink-2">Nothing on the list leans on this one. Try another star.</p>
@@ -377,6 +360,13 @@ export function BrandSheet({
                     {r.drift.left.length > 0 && <p className="mt-3 text-sm text-ink-3">Left your orbit: {r.drift.left.slice(0, 3).map((b) => b.name).join(", ")}.</p>}
                     <p className="mt-2 text-xs text-ink-3">Suggested by Qloo today for the same loves. Not part of the original card.</p>
                   </section>
+                )}
+
+                {receipt && (
+                  <div className="mt-10">
+                    <h3 className="font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">Your receipt</h3>
+                    <ReceiptRoll card={card} result={receipt} note={reprint ? "Reprinted from a re-read. The original wasn't kept." : undefined} />
+                  </div>
                 )}
 
                 <div className="mt-8 flex flex-wrap items-center gap-3">
