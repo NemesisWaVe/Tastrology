@@ -88,6 +88,7 @@ export function PulledSky({
     prev.current = idx;
   }, [idx]);
   const [stage, setStage] = useState<SnapBrand | null>(null);
+  const [auto, setAuto] = useState(0);
   useEffect(() => setStage(null), [sel]);
   const left = pulled.filter((b) => !decoded.has(b.id)).length;
 
@@ -319,18 +320,36 @@ export function PulledSky({
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.3, ease: [0.2, 0.7, 0.2, 1] }}
             >
-              <ScratchReveal
-                name={stage.name}
-                image={img(stage.image)}
-                reduce={reduce}
-                onDone={() => {
-                  onScratched(stage);
-                  setTimeout(
-                    () => setStage((s) => (s?.id === stage.id ? null : s)),
-                    900,
-                  );
-                }}
-              />
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <ScratchReveal
+                    name={stage.name}
+                    image={img(stage.image)}
+                    loveId={at?.id ?? ""}
+                    brandId={stage.id}
+                    strength={Math.min(
+                      1,
+                      (stage.explain[at?.id ?? ""] ?? 0) * 2,
+                    )}
+                    reduce={reduce}
+                    autoRun={auto}
+                    onDone={() => {
+                      onScratched(stage);
+                      setTimeout(
+                        () => setStage((s) => (s?.id === stage.id ? null : s)),
+                        700,
+                      );
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAuto((n) => n + 1)}
+                  className="mt-2.5 shrink-0 rounded-full border border-accent/60 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
+                >
+                  Auto
+                </button>
+              </div>
             </motion.div>
           ) : (
             <motion.p

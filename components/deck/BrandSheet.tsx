@@ -323,10 +323,11 @@ export function BrandSheet({
   useEffect(() => {
     if (open) setDecoded(new Set(readDecoded(code)));
   }, [open, code]);
-  // A sealed brand is scratched open on its row first (ScratchReveal), then kept decoded.
-  const [scratching, setScratching] = useState<string | null>(null);
+  // A sealed brand is scratched open by hand on its row (ScratchReveal); Auto (or a tap from the sky) runs it for you.
+  const [autoRun, setAutoRun] = useState<Record<string, number>>({});
   const decode = (b: SnapBrand) => {
-    if (!decoded.has(b.id)) setScratching(b.id);
+    if (!decoded.has(b.id))
+      setAutoRun((m) => ({ ...m, [b.id]: (m[b.id] ?? 0) + 1 }));
     else {
       setFlashId(b.id);
       setTimeout(() => setFlashId((f) => (f === b.id ? null : f)), 1800);
@@ -346,7 +347,12 @@ export function BrandSheet({
       writeDecoded(code, [...next]);
       return next;
     });
-    setScratching((s) => (s === b.id ? null : s));
+    // the last of a love's signals: a little set chord
+    if (
+      pulled.length > 1 &&
+      pulled.every((p) => p.id === b.id || decoded.has(p.id))
+    )
+      setTimeout(() => sfx("form", { gain: 0.6 }), 700);
     setFlashId(b.id);
     setTimeout(() => setFlashId((f) => (f === b.id ? null : f)), 1800);
   };
@@ -542,44 +548,34 @@ export function BrandSheet({
                           id={`pulled-${b.id}`}
                           className="flex items-center gap-4 border-t border-line/70 py-4 first:border-t-0"
                         >
-                          {scratching === b.id ? (
+                          <div className="min-w-0 flex-1">
                             <ScratchReveal
                               name={b.name}
                               image={img(b.image)}
+                              loveId={love.id}
+                              brandId={b.id}
+                              strength={Math.min(
+                                1,
+                                (b.explain[love.id] ?? 0) * 2,
+                              )}
                               reduce={reduce}
+                              autoRun={autoRun[b.id] ?? 0}
                               onDone={() => scratched(b)}
                             />
-                          ) : (
-                            <>
-                              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-dashed border-accent/60 font-mono text-accent">
-                                ?
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p
-                                  className="font-display text-lg font-semibold tracking-[0.2em] text-ink-3"
-                                  aria-label="Sealed brand"
-                                >
-                                  {"▒".repeat(
-                                    Math.min(10, Math.max(4, b.name.length)),
-                                  )}
-                                </p>
-                                <p className="mt-0.5 text-sm text-ink-3">
-                                  Signal {i + 1} ·{" "}
-                                  {Math.round(
-                                    (b.explain[love.id] ?? 0) * 100,
-                                  ) || "?"}
-                                  % of the pull
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => decode(b)}
-                                className="shrink-0 rounded-full border border-accent/60 px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
-                              >
-                                Scratch
-                              </button>
-                            </>
-                          )}
+                            <p className="mt-0.5 pl-2 text-sm text-ink-3">
+                              Signal {i + 1} ·{" "}
+                              {Math.round((b.explain[love.id] ?? 0) * 100) ||
+                                "?"}
+                              % of the pull
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => decode(b)}
+                            className="shrink-0 self-start rounded-full border border-accent/60 px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
+                          >
+                            Auto
+                          </button>
                         </li>
                       ),
                     )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { setEngine, type Sfx, type SfxOpts } from "./sound";
+import { type ScrubMaterial, setEngine, type Sfx, type SfxOpts } from "./sound";
 
 /**
  * Synthesized WebAudio palette (no files). Soft transients, low-passed noise, pentatonic pitches,
@@ -18,7 +18,7 @@ let noiseBuf: AudioBuffer | null = null;
 let on = false;
 let loaded = false;
 const last: Partial<Record<Sfx, number>> = {};
-const MIN_GAP: Partial<Record<Sfx, number>> = { rustle: 90, pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { rustle: 90, pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120, flake: 50, scratchDone: 150 };
 
 function load() {
   if (loaded) return;
@@ -219,6 +219,14 @@ function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
       noise(c, t, 0.16, 0.12 * gv, { type: "bandpass", f0: 260 + Math.random() * 120, f1: 520, q: 0.7, attack: 0.05, send: 0.15, pan: (Math.random() - 0.5) * 0.4 });
       noise(c, t + 0.02, 0.08, 0.035 * gv, { type: "highpass", f0: 2600, attack: 0.03, send: 0.05 });
       break;
+    case "flake": // a fleck of foil: a tiny bright click
+      noise(c, t, 0.014, 0.05 * gv, { type: "highpass", f0: 6000 + (Math.random() - 0.5) * 600, attack: 0.001, send: 0.04, pan: (Math.random() - 0.5) * 0.5 });
+      break;
+    case "scratchDone": // foil cleared: a reverse whoosh, a soft thock, then a chord that climbs with the streak
+      noise(c, t, 0.14, 0.18 * gv, { type: "bandpass", f0: 600, f1: 5000, q: 0.9, attack: 0.11, send: 0.25 });
+      tone(c, t + 0.1, 160, 0.08, 0.35 * gv, { to: 90, send: 0.1 });
+      [0, 2, 4].forEach((k, n) => tone(c, t + 0.12 + n * 0.03, pent(784, i + k), 0.9, 0.12 * gv, { type: "triangle", send: 0.6, pan: (n - 1) * 0.3 }));
+      break;
     case "whoosh": // airy sweep up, quick settle
       noise(c, t, 0.35, 0.2 * gv, { type: "bandpass", f0: 400, f1: 2400, q: 0.8, attack: 0.12, send: 0.3, pan: 0.15 });
       break;
@@ -238,6 +246,100 @@ function play(name: Sfx, o: SfxOpts = {}) {
   } catch {}
 }
 
+const MATS: Record<ScrubMaterial, { f: number; q: number; g0: number; g1: number; gv: number; ring?: boolean }> = {
+  silver: { f: 2400, q: 1.6, g0: 4000, g1: 7000, gv: 1 },
+  gold: { f: 1600, q: 1.2, g0: 2500, g1: 5000, gv: 0.8 },
+  carbon: { f: 900, q: 0.9, g0: 1500, g1: 3000, gv: 1 },
+  holo: { f: 3200, q: 2.4, g0: 5000, g1: 8000, gv: 1, ring: true },
+};
+
+/** The held scratch: a bed of filtered noise that follows speed, plus grains scattered at a speed-driven rate. */
+let sc: { src: AudioBufferSourceNode; bp: BiquadFilterNode; g: GainNode; pan: StereoPannerNode; m: (typeof MATS)[ScrubMaterial]; det: number; gj: number; next: number; s: number } | null = null;
+
+function scrubEnd() {
+  const c = ctx;
+  if (!sc || !c) return;
+  const t = c.currentTime;
+  sc.g.gain.cancelScheduledValues(t);
+  sc.g.gain.setTargetAtTime(0, t, 0.06);
+  sc.src.stop(t + 0.5);
+  sc = null;
+}
+
+function scrubStart(mat: ScrubMaterial) {
+  scrubEnd();
+  if (!soundOn()) return;
+  const c = ctx;
+  if (!c || c.state !== "running" || !noiseBuf) return;
+  try {
+    const m = MATS[mat] ?? MATS.silver;
+    const src = c.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    const hp = c.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 1200;
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.Q.value = m.q;
+    const det = Math.pow(2, ((Math.random() - 0.5) * 160) / 1200); // ±80 cents a stroke
+    bp.frequency.value = m.f * det;
+    const g = c.createGain();
+    g.gain.value = 0;
+    const pan = c.createStereoPanner();
+    let node: AudioNode = src.connect(hp).connect(bp);
+    if (m.ring) {
+      const pk = c.createBiquadFilter();
+      pk.type = "peaking";
+      pk.frequency.value = 6200;
+      pk.gain.value = 6;
+      pk.Q.value = 4;
+      node = node.connect(pk);
+    }
+    node.connect(g).connect(pan).connect(dry!);
+    const send = c.createGain();
+    send.gain.value = 0.05;
+    pan.connect(send).connect(wet!);
+    src.start(c.currentTime, Math.random() * 1.5);
+    sc = { src, bp, g, pan, m, det, gj: Math.pow(10, ((Math.random() - 0.5) * 3) / 20), next: c.currentTime, s: 0 };
+  } catch {
+    sc = null;
+  }
+}
+
+function scrubMove(speed: number, x: number, cover: number) {
+  const c = ctx;
+  if (!sc || !c) return;
+  const t = c.currentTime;
+  const v = Math.min(1, Math.max(0, speed));
+  const target = 0.22 * Math.pow(v, 0.7) * sc.gj * sc.m.gv;
+  sc.g.gain.setTargetAtTime(target, t, target > sc.s ? 0.015 : 0.04);
+  sc.bp.frequency.setTargetAtTime((sc.m.f * sc.det + 2600 * v) * (1 + 0.25 * cover), t, 0.03);
+  sc.pan.pan.setTargetAtTime((x - 0.5) * 0.6, t, 0.05);
+  sc.s = target;
+  // grit: grains at 25..115 a second while moving
+  if (v < 0.05) {
+    sc.next = t;
+    return;
+  }
+  const rate = 25 + 90 * v;
+  let n = 0;
+  while (sc.next < t + 0.03 && n++ < 6) {
+    const at = Math.max(t, sc.next);
+    noise(c, at, 0.006 + Math.random() * 0.008, (0.04 + Math.random() * 0.06) * sc.m.gv, {
+      type: "bandpass",
+      f0: (sc.m.g0 + Math.random() * (sc.m.g1 - sc.m.g0)) * sc.det,
+      q: 3,
+      attack: 0.001,
+      send: 0.03,
+      pan: (x - 0.5) * 0.6 + (Math.random() - 0.5) * 0.4,
+    });
+    sc.next = at + 1 / (rate * (0.85 + Math.random() * 0.3));
+  }
+}
+
+const scrubApi = { start: scrubStart, move: scrubMove, end: scrubEnd };
+
 /** Turn sound on/off. Call from a user gesture when enabling (resumes the context). */
 export function enableSound(v: boolean): void {
   if (typeof window === "undefined") return;
@@ -250,8 +352,9 @@ export function enableSound(v: boolean): void {
     if (v) {
       const c = ensure();
       if (c && c.state !== "running") void c.resume().catch(() => {});
-      setEngine({ play });
+      setEngine({ play, scrub: scrubApi });
     } else {
+      scrubEnd();
       setEngine(null);
     }
   } catch {}
@@ -261,7 +364,7 @@ export function enableSound(v: boolean): void {
 /** On a returning visit sound is remembered, but the context can only start after a gesture. */
 export function armSound(): void {
   if (typeof window === "undefined" || !soundOn()) return;
-  setEngine({ play });
+  setEngine({ play, scrub: scrubApi });
   const events = ["pointerdown", "keydown", "touchend"];
   const unlock = () => {
     const c = ensure();
@@ -295,7 +398,7 @@ export function installClickPops(): void {
     const el = (e.target as Element | null)?.closest?.("button, a, [role=button], summary, label");
     if (!el || el.closest("[data-nopop]")) return;
     const now = performance.now();
-    if (["tap", "flip", "whoosh", "reveal", "ripple", "drop", "tear", "burn", "collide"].some((n) => now - (last[n as Sfx] ?? -1e9) < 120)) return;
+    if (["tap", "flip", "whoosh", "reveal", "ripple", "drop", "tear", "burn", "collide", "scratchDone"].some((n) => now - (last[n as Sfx] ?? -1e9) < 120)) return;
     play("pop");
   });
 }

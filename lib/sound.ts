@@ -23,11 +23,17 @@ export type Sfx =
   | "stamp" // rubber stamp thunk
   | "tear" // paper tearing off
   | "ding" // microwave-style bell: the card is done
-  | "rustle"; // card turning in the hand: soft low air
+  | "rustle" // card turning in the hand: soft low air
+  | "flake" // a fleck of foil coming off
+  | "scratchDone"; // foil cleared: a whoosh, a thock and a chord ({i} walks it up the scale)
+
+/** The foil a scrub is on: sets the colour of its sound. */
+export type ScrubMaterial = "silver" | "gold" | "carbon" | "holo";
 
 export type SfxOpts = { i?: number; gain?: number };
 
-type Engine = { play: (name: Sfx, o?: SfxOpts) => void };
+type Scrub = { start: (m: ScrubMaterial) => void; move: (speed: number, x: number, cover: number) => void; end: () => void };
+type Engine = { play: (name: Sfx, o?: SfxOpts) => void; scrub?: Scrub };
 
 let engine: Engine | null = null;
 
@@ -44,3 +50,25 @@ export function sfx(name: Sfx, o?: SfxOpts) {
     /* sound must never break the page */
   }
 }
+
+/**
+ * A held scratching sound: start when a finger or cursor goes down on foil, move as it travels (speed 0..1, x 0..1
+ * across the foil, cover 0..1 how much is gone), end when it lifts. No-op when muted.
+ */
+export const scrub: Scrub = {
+  start: (m) => {
+    try {
+      engine?.scrub?.start(m);
+    } catch {}
+  },
+  move: (s, x, c) => {
+    try {
+      engine?.scrub?.move(s, x, c);
+    } catch {}
+  },
+  end: () => {
+    try {
+      engine?.scrub?.end();
+    } catch {}
+  },
+};
