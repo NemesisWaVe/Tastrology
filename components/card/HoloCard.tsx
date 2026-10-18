@@ -283,8 +283,9 @@ function Constellation({ card }: { card: CardData }) {
   return (
     <div className={s.constellation} aria-hidden>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-        <polyline points={path.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")} />
-        {path.length > 3 && <line x1={path[0].x * 100} y1={path[0].y * 100} x2={path[2].x * 100} y2={path[2].y * 100} className={s.faint} />}
+        {/* Presentation attributes as well as the CSS: the PNG export (html-to-image) can drop the class styles, which leaves an SVG polyline filled black. */}
+        <polyline points={path.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")} fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth={0.9} vectorEffect="non-scaling-stroke" />
+        {path.length > 3 && <line x1={path[0].x * 100} y1={path[0].y * 100} x2={path[2].x * 100} y2={path[2].y * 100} className={s.faint} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={0.9} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />}
       </svg>
       {stars.map((p) => (
         <span key={p.name} className={s.star} style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, ["--w" as string]: p.weight.toFixed(2) }}>
@@ -450,7 +451,7 @@ export function CardBack({ card, className = "", crack = false, printSafe = fals
                 <path d={art.ticks} className={s.ticks} />
                 <circle cx="50" cy="50" r="40" className={s.orbit} />
                 <circle cx="50" cy="50" r="30" className={s.orbit} strokeDasharray="0.6 2.2" />
-                <polyline points={path.map((p) => `${p.cx},${p.cy}`).join(" ")} />
+                <polyline points={path.map((p) => `${p.cx},${p.cy}`).join(" ")} fill="none" stroke="rgba(255,255,255,0.55)" />
                 {chords.map(([a, b]) => (
                   <line key={`${a}-${b}`} x1={path[a].cx} y1={path[a].cy} x2={path[b].cx} y2={path[b].cy} className={s.faint} />
                 ))}

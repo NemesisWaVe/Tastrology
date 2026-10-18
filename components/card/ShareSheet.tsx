@@ -163,7 +163,16 @@ export function ShareSheet({
       if (mode !== "save" && canShare && navigator.canShare?.({ files: [file] })) {
         // The phone decides the sheet's order (most-messaged people first), so say where to look before it opens.
         const app = mode === "insta" ? "Instagram → Stories" : mode === "snap" ? "Snapchat" : null;
-        if (app) setDone(`In the row of apps: ${app}`);
+        // Neither app takes a link from a share, so the card's link goes onto the clipboard in the same tap: paste it
+        // into a Link sticker (Instagram) or the paperclip (Snapchat). Not awaited, so the share keeps the tap.
+        const linked = Boolean(app && linkable && navigator.clipboard?.writeText);
+        if (linked) void navigator.clipboard.writeText(link(mode)).catch(() => {});
+        if (app)
+          setDone(
+            linked
+              ? `Link copied · ${app}, then paste it into ${mode === "insta" ? "a Link sticker" : "the paperclip"}`
+              : `In the row of apps: ${app}`,
+          );
         try {
           // Instagram and Snapchat take the picture as the post itself, and drop it on some phones when text rides
           // along, so those shares send the file alone.
@@ -273,7 +282,7 @@ export function ShareSheet({
         <div className="relative overflow-hidden rounded-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-line" style={{ width: size.w * scale, height: size.h * scale }}>
           <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0", width: size.w, height: size.h }}>
             {fmt === "story" ? (
-              <Story ref={node} card={card} mine={mine} />
+              <Story ref={node} card={card} mine={mine} href={linkable ? link("img").replace(/^https?:\/\//, "").replace(/\?.*$/, "") : undefined} />
             ) : !result ? null : fmt === "receipt" ? (
               <Receipt ref={node} card={card} result={result} />
             ) : (
@@ -532,7 +541,7 @@ function TopBrands({ result, vertical = false }: { result: StyleResult; vertical
   );
 }
 
-const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean }>(function Story({ card, mine = true }, ref) {
+const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?: string }>(function Story({ card, mine = true, href }, ref) {
   const [t1, t2] = card.types;
   const a = t1?.a ?? "#a78bfa";
   const b = (t2 ?? t1)?.b ?? "#22d3ee";
@@ -564,6 +573,8 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean }>(fun
           <div className="mt-3 opacity-80">
             <Wordmark size={9} />
           </div>
+          {/* Stories and snaps can't carry a link from the web, so the card's address rides on the image itself. */}
+          {href && <p className="mt-1.5 font-mono text-[8.5px] tracking-[0.08em] text-ink-2">{href}</p>}
         </div>
       </div>
     </div>
