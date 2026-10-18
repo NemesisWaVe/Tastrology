@@ -117,7 +117,13 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
     void loadDeck().then((x) => setDeck(x.cards));
     let off: (() => void) | undefined;
     void whenAuthReady().then((b) => (off = b?.onChange(() => void load())));
-    return () => off?.();
+    // The username step after sign-in saved a name: show it here straight away.
+    const named = () => void load();
+    window.addEventListener("tastrology:username", named);
+    return () => {
+      off?.();
+      window.removeEventListener("tastrology:username", named);
+    };
   }, [load]);
 
   // Live: poll the one-number change counter while the tab is visible (hot, then cooling); reload only when it moves.

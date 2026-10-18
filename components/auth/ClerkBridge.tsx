@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { setBridge } from "@/lib/authBridge";
 import { forgetPlayerCode } from "@/lib/player";
+import { UsernameGate } from "./UsernameGate";
 
 /**
  * Lives inside <ClerkProvider> (app/layout.tsx, only when accounts are on). Registers the auth bridge for plain
@@ -101,22 +102,26 @@ export function ClerkBridge() {
   }
 
   // The /sign-in and /sign-up pages carry their own form: never stack the sheet on top of it.
-  if (!open || /^\/sign-(in|up)/.test(pathname)) return null;
+  const gate = <UsernameGate signedIn={Boolean(isLoaded && isSignedIn)} />;
+  if (!open || /^\/sign-(in|up)/.test(pathname)) return gate;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Sign in">
-      <button aria-label="Close" onClick={dismiss} className="absolute inset-0 bg-paper/80 backdrop-blur-sm" />
-      <div className="relative flex flex-col items-center gap-4">
-        {age === "ok" || resuming ? (
-          <SignIn routing="hash" withSignUp forceRedirectUrl={back} signUpForceRedirectUrl={back} />
-        ) : age === "no" ? (
-          <AgeBlocked />
-        ) : age === null ? (
-          <AgeGate onAnswer={setAge} />
-        ) : null}
-        <button onClick={dismiss} className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
-          Not now
-        </button>
+    <>
+      {gate}
+      <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Sign in">
+        <button aria-label="Close" onClick={dismiss} className="absolute inset-0 bg-paper/80 backdrop-blur-sm" />
+        <div className="relative flex flex-col items-center gap-4">
+          {age === "ok" || resuming ? (
+            <SignIn routing="hash" withSignUp forceRedirectUrl={back} signUpForceRedirectUrl={back} />
+          ) : age === "no" ? (
+            <AgeBlocked />
+          ) : age === null ? (
+            <AgeGate onAnswer={setAge} />
+          ) : null}
+          <button onClick={dismiss} className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3 transition hover:text-ink">
+            Not now
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
