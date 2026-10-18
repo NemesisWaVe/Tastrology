@@ -4,7 +4,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "r
 import { motion } from "motion/react";
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import type { StyleResult } from "@/lib/types";
-import { buildCard, proxied, type CardData } from "@/lib/card";
+import { buildCard, cardCode, proxied, type CardData } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { sfx } from "@/lib/sound";
 import { HoloCard, glyph } from "./HoloCard";
@@ -21,23 +21,32 @@ const SIZE: Record<Format, { w: number; h: number; out: [number, number]; label:
 const SPRING = { type: "spring" as const, stiffness: 500, damping: 28 };
 let fontCSS: Promise<string> | null = null;
 
-/** Share sheet: live preview of the export, then a 1080px PNG via the native share sheet (mobile) or a download. */
-export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: () => void }) {
+type Target = "insta" | "snap" | "x";
+
+/**
+ * Share sheet: live preview of the export, then straight to a platform. X and Snapchat take the card's link (its
+ * preview image is the card, app/c/[code]/opengraph-image.tsx). Instagram has no way in from the web except the
+ * phone's share sheet, so on a phone it hands the PNG to the sheet (pick Instagram → Story); without one it saves
+ * the PNG and opens Instagram's story camera.
+ * `linkable`: the card is filed on the server (live readings only), so /c/<code> resolves for whoever taps it.
+ */
+export function ShareSheet({ result, onClose, linkable = false }: { result: StyleResult; onClose: () => void; linkable?: boolean }) {
   const card = useMemo(() => buildCard(result), [result]);
   const [fmt, setFmt] = useState<Format>("story");
-  const [busy, setBusy] = useState<null | "share" | "save">(null);
+  const [busy, setBusy] = useState<null | "share" | "save" | Target>(null);
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
   const [vp, setVp] = useState({ w: 400, h: 800 });
   const node = useRef<HTMLDivElement>(null);
+  const coarse = useRef(false);
 
   useEffect(() => {
     sfx("whoosh");
     try {
       const f = new File([new Blob(["x"], { type: "image/png" })], "x.png", { type: "image/png" });
-      const coarse = window.matchMedia("(pointer: coarse)").matches;
-      setCanShare(Boolean(navigator.canShare?.({ files: [f] })) && coarse);
+      coarse.current = window.matchMedia("(pointer: coarse)").matches;
+      setCanShare(Boolean(navigator.canShare?.({ files: [f] })) && coarse.current);
     } catch {
       setCanShare(false);
     }
@@ -75,35 +84,74 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
     return blob;
   }, [size]);
 
-  const go = async (mode: "share" | "save") => {
+  const caption = `I pulled a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}`;
+  const link = (src: string) => {
+    if (typeof window === "undefined") return "";
+    return linkable ? `${location.origin}/c/${encodeURIComponent(cardCode(card))}?s=${src}` : location.origin;
+  };
+
+  const save = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const go = async (mode: "share" | "save" | "insta") => {
     setBusy(mode);
     setErr(null);
     setDone(null);
     try {
       const blob = await render();
       const file = new File([blob], fileName, { type: "image/png" });
-      if (mode === "share" && navigator.canShare?.({ files: [file] })) {
+      if (mode !== "save" && navigator.canShare?.({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: BRAND.name, text: `I pulled a ${card.rarityLabel}: ${card.archetype}. ${BRAND.question}` });
-          setDone("Shared");
+          // Instagram drops the image when text rides along on some phones, so the story share sends the file alone.
+          await navigator.share(mode === "insta" ? { files: [file] } : { files: [file], title: BRAND.name, text: caption });
+          setDone(mode === "insta" ? "Pick Instagram, then Story" : "Shared");
         } catch (e) {
           if ((e as Error).name !== "AbortError") throw e;
         }
+      } else if (mode === "insta") {
+        save(blob);
+        if (coarse.current) {
+          setDone("Saved. Opening Instagram: add it from your camera roll");
+          setTimeout(() => (location.href = "instagram://story-camera"), 600);
+        } else setDone("Saved. Instagram only posts stories from the phone app, so send this to your phone");
       } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        save(blob);
         setDone(`Saved ${size.out[0]}×${size.out[1]} PNG · ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
       }
     } catch (e) {
       setErr((e as Error).message || "Couldn't render the image");
     } finally {
       setBusy(null);
+    }
+  };
+
+  // X and Snapchat open from the click itself (no await first), so the browser doesn't block the new tab.
+  const openLink = (t: "snap" | "x") => {
+    sfx("tap");
+    setErr(null);
+    const u = link(t);
+    const href =
+      t === "x"
+        ? `https://x.com/intent/post?text=${encodeURIComponent(caption)}&url=${encodeURIComponent(u)}`
+        : `https://www.snapchat.com/share?link=${encodeURIComponent(u)}`;
+    window.open(href, "_blank", "noopener,noreferrer");
+    setDone(linkable ? `Opened ${t === "x" ? "X" : "Snapchat"} · the link previews as your card` : `Opened ${t === "x" ? "X" : "Snapchat"}`);
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${caption} ${link("copy")}`);
+      setDone("Link copied");
+    } catch {
+      setErr("Couldn't copy the link");
     }
   };
 
@@ -148,21 +196,38 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
         </div>
 
         <div className="flex w-full max-w-[400px] flex-col gap-2">
-          <div className="flex gap-2">
-            {canShare && (
-              <motion.button whileTap={{ scale: 0.97 }} transition={SPRING} onClick={() => { sfx("tap"); go("share"); }} disabled={!!busy} className="flex-1 rounded-full bg-accent py-3.5 text-[15px] font-semibold text-black disabled:opacity-60">
-                {busy === "share" ? "Minting…" : "Share"}
-              </motion.button>
+          <div className="grid grid-cols-4 gap-2" data-share-targets>
+            <Tile label="Story" sub="Instagram" busy={busy === "insta"} disabled={!!busy} onClick={() => { sfx("tap"); go("insta"); }}>
+              <InstaIcon />
+            </Tile>
+            <Tile label="Snap" sub="Snapchat" disabled={!!busy} onClick={() => openLink("snap")}>
+              <SnapIcon />
+            </Tile>
+            <Tile label="Post" sub="X" disabled={!!busy} onClick={() => openLink("x")}>
+              <XIcon />
+            </Tile>
+            {canShare ? (
+              <Tile label="More" sub="Share sheet" busy={busy === "share"} disabled={!!busy} onClick={() => { sfx("tap"); go("share"); }}>
+                <MoreIcon />
+              </Tile>
+            ) : (
+              <Tile label="Copy" sub="Link" disabled={!!busy} onClick={() => { sfx("tap"); copy(); }}>
+                <LinkIcon />
+              </Tile>
             )}
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING}
-              onClick={() => go("save")}
-              disabled={!!busy}
-              className={`flex-1 rounded-full py-3.5 text-[15px] font-semibold disabled:opacity-60 ${canShare ? "border border-line text-ink" : "bg-accent text-black"}`}
-            >
-              {busy === "save" ? "Minting PNG…" : canShare ? "Save image" : `Download ${SIZE[fmt].label.toLowerCase()} PNG`}
-            </motion.button>
+          </div>
+          <div className="flex items-center justify-center gap-4 font-mono text-[11px] text-ink-2">
+            <button onClick={() => go("save")} disabled={!!busy} className="underline-offset-4 hover:text-ink hover:underline disabled:opacity-60">
+              {busy === "save" ? "Minting PNG…" : `Save ${SIZE[fmt].label.toLowerCase()} PNG`}
+            </button>
+            {canShare && (
+              <>
+                <span className="text-ink-3">·</span>
+                <button onClick={copy} disabled={!!busy} className="underline-offset-4 hover:text-ink hover:underline disabled:opacity-60">
+                  Copy link
+                </button>
+              </>
+            )}
           </div>
           <p className="min-h-[18px] text-center font-mono text-[11px] text-ink-3" aria-live="polite" data-share-status>
             {err ? <span className="text-bad">{err}</span> : done ?? `${size.out[0]}×${size.out[1]} · made for ${size.for}`}
@@ -170,6 +235,65 @@ export function ShareSheet({ result, onClose }: { result: StyleResult; onClose: 
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ share targets */
+
+function Tile({ label, sub, busy, disabled, onClick, children }: { label: string; sub: string; busy?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.94 }}
+      transition={SPRING}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${label} · ${sub}`}
+      className="group flex flex-col items-center gap-1.5 rounded-2xl border border-line bg-card px-1 py-3 text-ink transition hover:border-accent/60 disabled:opacity-60"
+    >
+      <span className={`grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] transition group-hover:bg-accent group-hover:text-black ${busy ? "animate-pulse" : ""}`}>{children}</span>
+      <span className="text-[12.5px] font-semibold leading-none">{busy ? "Minting…" : label}</span>
+      <span className="font-mono text-[9px] uppercase leading-none tracking-[0.16em] text-ink-3">{sub}</span>
+    </motion.button>
+  );
+}
+
+const ICON = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+
+function InstaIcon() {
+  return (
+    <svg {...ICON}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function SnapIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M12 3.5c-3 0-5 2.2-5 5.1v2.3l-1.7.5c-.5.2-.5.8 0 1l1.6.6c-.6 1.7-1.8 3-3.4 3.6.4.8 1.6 1 2.6 1.1.2.6.3 1.2 1 1.1 1.6-.2 2.6.9 4.9.9s3.3-1.1 4.9-.9c.7.1.8-.5 1-1.1 1-.1 2.2-.3 2.6-1.1-1.6-.6-2.8-1.9-3.4-3.6l1.6-.6c.5-.2.5-.8 0-1l-1.7-.5V8.6c0-2.9-2-5.1-5-5.1Z" />
+    </svg>
+  );
+}
+function XIcon() {
+  return (
+    <svg {...ICON} width={15} height={15} stroke="none" fill="currentColor">
+      <path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.36 5.77L17.75 3Zm-1.08 16.17h1.7L7.4 4.74H5.58l11.09 14.43Z" />
+    </svg>
+  );
+}
+function MoreIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" />
+    </svg>
+  );
+}
+function LinkIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </svg>
   );
 }
 
