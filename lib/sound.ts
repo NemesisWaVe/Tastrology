@@ -25,6 +25,8 @@ export type Sfx =
   | "ding" // microwave-style bell: the card is done
   | "rustle" // card turning in the hand: soft low air
   | "flake" // a fleck of foil coming off
+  | "warp" // lightspeed jump between stars
+  | "recede" // the camera pulls back out to the whole sky
   | "scratchDone"; // foil cleared: a whoosh, a thock and a chord ({i} walks it up the scale)
 
 /** The foil a scrub is on: sets the colour of its sound. */

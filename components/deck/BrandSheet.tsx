@@ -358,15 +358,17 @@ export function BrandSheet({
   };
 
   const love = snap?.loves.find((l) => l.id === sel);
-  const pulled = useMemo(() => {
-    if (!snap || !love) return [];
-    const by = snap.brands.filter(
-      (b) => b.because.includes(love.id) || (b.explain[love.id] ?? 0) > 0,
-    );
-    return by
-      .sort((a, b) => (b.explain[love.id] ?? 0) - (a.explain[love.id] ?? 0))
-      .slice(0, 4);
-  }, [snap, love]);
+  // Each love's planets: the brands it pulled hardest, at most four.
+  const brandsOf = useMemo(() => {
+    const out: Record<string, SnapBrand[]> = {};
+    for (const l of snap?.loves ?? [])
+      out[l.id] = snap!.brands
+        .filter((b) => b.because.includes(l.id) || (b.explain[l.id] ?? 0) > 0)
+        .sort((a, b) => (b.explain[l.id] ?? 0) - (a.explain[l.id] ?? 0))
+        .slice(0, 4);
+    return out;
+  }, [snap]);
+  const pulled = love ? (brandsOf[love.id] ?? []) : [];
   const silent = snap
     ? snap.loves.filter(
         (l) =>
@@ -459,9 +461,8 @@ export function BrandSheet({
               <PulledSky
                 header={head}
                 loves={snap.loves}
-                sel={sel}
                 onSel={setSel}
-                pulled={pulled}
+                brandsOf={brandsOf}
                 decoded={decoded}
                 onDecode={decode}
                 onScratched={scratched}

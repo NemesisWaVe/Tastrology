@@ -18,7 +18,7 @@ let noiseBuf: AudioBuffer | null = null;
 let on = false;
 let loaded = false;
 const last: Partial<Record<Sfx, number>> = {};
-const MIN_GAP: Partial<Record<Sfx, number>> = { rustle: 90, pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120, flake: 50, scratchDone: 150 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { rustle: 90, pop: 60, print: 45, beep: 50, tick: 40, tap: 60, ripple: 50, drop: 120, flake: 50, scratchDone: 150, warp: 200, recede: 200 };
 
 function load() {
   if (loaded) return;
@@ -218,6 +218,14 @@ function voice(c: AudioContext, name: Sfx, o: SfxOpts, t: number) {
     case "rustle": // a card turning: low, soft air with a papery edge
       noise(c, t, 0.16, 0.12 * gv, { type: "bandpass", f0: 260 + Math.random() * 120, f1: 520, q: 0.7, attack: 0.05, send: 0.15, pan: (Math.random() - 0.5) * 0.4 });
       noise(c, t + 0.02, 0.08, 0.035 * gv, { type: "highpass", f0: 2600, attack: 0.03, send: 0.05 });
+      break;
+    case "warp": // lightspeed: a rushing sweep up, then a low thump on arrival
+      noise(c, t, 0.22, 0.2 * gv, { type: "bandpass", f0: 400, f1: 5000, q: 0.8, attack: 0.03, send: 0.3 });
+      tone(c, t + 0.17, 60, 0.12, 0.35 * gv, { to: 42, send: 0.1 });
+      break;
+    case "recede": // pulling back to the whole sky: a soft falling shimmer
+      noise(c, t, 0.45, 0.13 * gv, { type: "bandpass", f0: 2400, f1: 600, q: 0.9, attack: 0.05, send: 0.5 });
+      [12, 7, 0].forEach((st, k) => tone(c, t + k * 0.07, pent(392, st), 0.7, 0.05 * gv, { attack: 0.02, send: 0.6, pan: (k - 1) * 0.3 }));
       break;
     case "flake": // a fleck of foil: a tiny bright click
       noise(c, t, 0.014, 0.05 * gv, { type: "highpass", f0: 6000 + (Math.random() - 0.5) * 600, attack: 0.001, send: 0.04, pan: (Math.random() - 0.5) * 0.5 });
