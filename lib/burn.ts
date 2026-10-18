@@ -40,7 +40,8 @@ export function regretWhy(item: Flat, newestAddedAt: number, used: number, charg
   if (at < newestAddedAt) return "not-newest";
   return null;
 }
-const REGRET_FUNDING = new Set(["free", "paid", "regret"]);
+/** A regret gives back a free card's credit; a card bought with money is outside the Stardust economy (no regret). */
+const REGRET_FUNDING = new Set(["free", "regret"]);
 
 const CCF = "ConditionalCheckFailed";
 const RARITIES: Rarity[] = ["common", "rare", "holo", "secret"];

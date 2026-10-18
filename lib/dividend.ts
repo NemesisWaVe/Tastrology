@@ -1,7 +1,7 @@
 import { tierOf } from "./burn";
 import { upstash } from "./cache";
 import { ddbGet, ddbQuery, ddbTransact } from "./ddb";
-import { dustOn } from "./stardust";
+import { dustOn, earnsDust } from "./stardust";
 
 /**
  * Holding pays: once a calendar month (UTC), every Holo you minted and still hold pays HOLO_DIVIDEND Stardust and
@@ -31,9 +31,10 @@ export async function payDividend(userId: string, now = Date.now()): Promise<{ p
   const chk = `tm:divchk:${userId}:${m}`;
   const seen = await upstash([["GET", chk]]);
   if (seen?.[0]) return null;
-  const page = await ddbQuery(`OWNER#${userId}`, "CARD#", 50, undefined, ["card", "minted", "rarityScore"]);
+  const page = await ddbQuery(`OWNER#${userId}`, "CARD#", 50, undefined, ["card", "minted", "rarityScore", "funding"]);
   if (!page) return null;
-  const tiers = page.items.filter((x) => Number(x.minted) === 1).map(tierOf);
+  // Only free-funded cards: a card bought with money (or Stardust) never pays a dividend.
+  const tiers = page.items.filter((x) => Number(x.minted) === 1 && earnsDust(x.funding)).map(tierOf);
   const paid = dividendFor(tiers);
   if (paid <= 0) {
     await upstash([["SET", chk, "1", "EX", 86_400]]);

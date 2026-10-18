@@ -1,7 +1,7 @@
 import { driftFor } from "./drift";
 import { ddbGetStatus, ddbQuery, ddbTransact, ddbPutIfAbsent } from "./ddb";
 import { getReceipt, snapOf, type SnapBrand } from "./receipt";
-import { dustOn, isoWeek } from "./stardust";
+import { dustOn, earnsDust, isoWeek } from "./stardust";
 
 /**
  * Brands as the reason to come back (docs/design/brand-return-ui.md):
@@ -51,10 +51,12 @@ export async function claimOpen(userId: string, code: string, now = Date.now()):
   const own = await ddbGetStatus(`OWNER#${userId}`, `CARD#${code}`);
   if (own.status === "error" || own.status === "off") return { status: "error" };
   if (own.status !== "found" || Number(own.value.minted) !== 1) return { status: "not-owner" };
+  // A card bought with money breaks its seal like any other, but never earns Stardust.
+  const pays = earnsDust(own.value.funding);
   const week = isoWeek(now);
   const U = `USER#${userId}`;
   const seal = { PK: U, SK: `OPEN#${week}#${code}`, at: now };
-  if (!dustOn()) {
+  if (!dustOn() || !pays) {
     const r = await ddbPutIfAbsent(seal);
     return r === "created" ? { status: "opened" } : r === "exists" ? { status: "already" } : { status: "error" };
   }

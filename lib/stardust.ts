@@ -3,8 +3,10 @@ import { ddbGet, ddbTransact } from "./ddb";
 import { creditsOn, RUN_ID_RE } from "./ledger";
 
 /**
- * Stardust: the free, closed-loop reward for burning a card (docs/design/burn.md, legal "Burn rewards").
- * It buys readings and nothing else: no cash value, never sold, transferred or refunded, never converted into credits.
+ * Stardust: the free, closed-loop reward for retiring a card (docs/design/burn.md, legal "Burn rewards").
+ * Earned only, never sold, transferred or refunded, no cash value, never converted into credits. It buys Battle Packs,
+ * Recasts and Living sigils (lib/economy.ts). Money never reaches it: a card bought with money earns no Stardust in any
+ * way (retire, dividend, regret, brand-sheet bonus), so no rupee can reach a random pack or roll.
  * On only with credits (CREDITS_ON=1 and the table configured). With it off, burning is a pure ritual and earns nothing.
  *   USER#<id>  WALLET               + dust, dustAt
  *   USER#<id>  DUSTWEEK#<yyyy-Www>  earned, ttl                  weekly cap counter
@@ -16,8 +18,10 @@ export const dustOn = creditsOn;
 
 /** Published rates. Rule 1 (legal): every burn returns less than a reading costs. */
 export const DUST_RATES: Record<Rarity, number> = { common: 15, rare: 30, holo: 75, secret: 95 };
-/** A card minted with a paid credit burns at this flat rate whatever its tier (none exist during the free beta). */
-export const PAID_FLAT_DUST = 10;
+/** A card minted with a paid credit retires for nothing: money must never turn into Stardust (legal review 2026-10-18). */
+export const PAID_FLAT_DUST = 0;
+/** Funding that may earn Stardust: the free monthly card, a regret credit (itself from a free card), and older cards with none recorded. */
+export const earnsDust = (funding: unknown) => funding === undefined || funding === null || funding === "" || funding === "free" || funding === "regret";
 export const READING_DUST = 100;
 export const WEEKLY_DUST_CAP = 150;
 

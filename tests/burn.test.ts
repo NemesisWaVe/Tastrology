@@ -48,7 +48,7 @@ afterEach(() => {
 describe("rates", () => {
   it("every burn returns less than a reading costs (legal Rule 1)", () => {
     for (const v of Object.values(DUST_RATES)) expect(v).toBeLessThan(READING_DUST);
-    expect(PAID_FLAT_DUST).toBeLessThan(READING_DUST);
+    expect(PAID_FLAT_DUST).toBe(0);
   });
   it("paid mints burn flat, free mints by tier, dust-paid mints earn nothing", () => {
     expect(dustFor("secret", "paid")).toBe(PAID_FLAT_DUST);
@@ -83,7 +83,7 @@ describe("burnCard", () => {
     expect(await ddbGet(`CARD#${code}`, "TOMBSTONE")).toMatchObject({ revived: 0 });
   });
 
-  it("pays the flat rate for paid mints and the tier rate for free ones", async () => {
+  it("pays nothing for paid mints and the tier rate for free ones", async () => {
     const [c1, c2] = [nextCode(), nextCode()];
     await mint("u2", c1, "secret", { funding: "paid" });
     await mint("u2", c2, "rare", { funding: "free" });

@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   for (const it of page.items) {
     try {
       const minted = it.minted === 1;
-      const canRegret = rOn && minted && !regretWhy(it, newest, used, ["free", "paid", "regret"].includes(String(it.funding)) && Boolean(it.runId));
+      const canRegret = rOn && minted && !regretWhy(it, newest, used, ["free", "regret"].includes(String(it.funding)) && Boolean(it.runId));
       cards.push({
         code: String(it.code),
         card: JSON.parse(String(it.card)) as CardData,

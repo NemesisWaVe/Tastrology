@@ -52,6 +52,12 @@ describe("dividend", () => {
     expect(await payDividend(U, Date.UTC(2026, 10, 2))).toMatchObject({ paid: 35, month: "2026-11" });
     expect(await dust()).toBe(70);
   });
+  it("never pays for a card bought with money or Stardust", async () => {
+    await wallet(0);
+    await ddbPutIfAbsent({ PK: `OWNER#${U}`, SK: "CARD#0011-AAAA", code: "0011-AAAA", card: JSON.stringify({ rarity: "secret" }), rarityScore: 50, minted: 1, addedAt: 1, funding: "paid" });
+    await ddbPutIfAbsent({ PK: `OWNER#${U}`, SK: "CARD#0012-AAAA", code: "0012-AAAA", card: JSON.stringify({ rarity: "holo" }), rarityScore: 50, minted: 1, addedAt: 1, funding: "dust" });
+    expect(await payDividend(U, NOW)).toBeNull();
+  });
   it("pays nothing for a deck of commons", async () => {
     await wallet(0);
     await own("0004-AAAA", "common");

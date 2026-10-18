@@ -29,6 +29,11 @@ describe("brand sheet opens", () => {
     // Next week pays again.
     expect((await claimOpen(U, codes[0], NOW + 7 * 86_400_000)).status).toBe("paid");
   });
+  it("breaks the seal on a paid card without paying", async () => {
+    await ddbPutIfAbsent({ PK: `OWNER#${U}`, SK: "CARD#0020-AAAA", code: "0020-AAAA", minted: 1, addedAt: 1, funding: "paid" });
+    expect(await claimOpen(U, "0020-AAAA", NOW)).toEqual({ status: "opened" });
+    expect(await dust()).toBe(0);
+  });
   it("only for cards you minted", async () => {
     await own("0009-AAAA", 0);
     expect((await claimOpen(U, "0009-AAAA", NOW)).status).toBe("not-owner");

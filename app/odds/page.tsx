@@ -46,6 +46,11 @@ export default function OddsPage() {
           </p>
         )}
         <p>Cards minted before rolls keep the tier their taste score gave them. Battle Packs use the same table.</p>
+        <p>
+          <b className="text-ink">Money never buys a chance.</b> Battle Packs and any boosted packs cost earned Stardust only, and Stardust is never
+          sold. If paid items arrive, they&apos;ll be things you see before you buy, they won&apos;t roll, and a card bought with money earns no
+          Stardust.
+        </p>
       </div>
       <Link href="/" className="mt-10 inline-block font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">
         Make your card
