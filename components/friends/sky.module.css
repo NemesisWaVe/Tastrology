@@ -17,6 +17,12 @@
     height: 400px;
   }
 }
+/* Desktop: the sky is the page. It fills the screen under the heading, so the lists sit below the fold. */
+@media (min-width: 1024px) {
+  .sky {
+    height: clamp(460px, calc(100svh - 336px), 820px);
+  }
+}
 
 .svg {
   position: absolute;
@@ -231,4 +237,4 @@
     stroke-dashoffset: 0;
   }
 }
-.sky { transition: height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.sky { transition: height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), min-height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }

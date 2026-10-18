@@ -280,3 +280,9 @@ html[data-gate] [data-orb] { opacity: 0; pointer-events: none; }
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
 }
+
+/* Decorative glows bleed past the page edge on purpose; never let them make the page scroll sideways. */
+html,
+body {
+  overflow-x: clip;
+}

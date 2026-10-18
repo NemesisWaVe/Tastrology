@@ -260,7 +260,7 @@ export function FriendSky({
   const whisper = !focus && held ? placed.find((b) => b.pc === held) : undefined;
 
   return (
-    <div ref={box} className={s.sky} style={target ? { height: compact ? 540 : 480 } : undefined} onClick={(e) => e.target === e.currentTarget && setFocus(null)}>
+    <div ref={box} className={s.sky} style={{ minHeight: target ? (compact ? 540 : 480) : 0 }} onClick={(e) => e.target === e.currentTarget && setFocus(null)}>
       <svg className={s.svg} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Your sky: ${stars} friend${stars === 1 ? "" : "s"}, ${forming} forming`}>
         <defs>
           <radialGradient id="sky-core" cx="50%" cy="50%" r="50%">
