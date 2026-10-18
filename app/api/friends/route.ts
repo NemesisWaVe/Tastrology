@@ -1,6 +1,6 @@
 import { clerkOn, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, ensurePlayer, inboxCount, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
 import { TWIN_CODE } from "@/lib/twins";
@@ -25,6 +25,11 @@ export async function GET(request: Request) {
     const p = on ? await lookupPlayer(pc) : null;
     return p ? json({ player: { pc: p.pc, user: p.user, name: p.name, card: p.card, rarity: p.rarity } }) : json({ error: "unknown player" }, 404);
   }
+  const card = q.get("card")?.toUpperCase();
+  if (card) {
+    const p = on && TWIN_CODE.test(card) ? await playerForCard(card) : null;
+    return p ? json({ player: { pc: p.pc, user: p.user, name: p.name, card: p.card, rarity: p.rarity } }) : json({ error: "unknown card" }, 404);
+  }
   if (!on) return json({ on: false });
   const uid = await currentUserId();
   if (!uid) return json({ on: true, signedIn: false });
@@ -35,7 +40,7 @@ export async function GET(request: Request) {
   if (q.get("whoami")) return json({ on: true, signedIn: true, me: me0 });
   const me = await syncName(uid, me0);
   const dOn = dustOn();
-  const [inbox, friends, requests, bouts, ds] = await Promise.all([inboxCount(uid), listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
+  const [[inbox], friends, requests, bouts, ds] = await Promise.all([Promise.all([inboxCount(uid), indexCards(uid, me.pc)]), listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
   return json({ on: true, signedIn: true, inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES, rename: { fee: renameFee(me), free: FREE_RENAMES, cost: RENAME_DUST } });
 }
 

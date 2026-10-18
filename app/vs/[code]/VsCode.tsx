@@ -56,7 +56,24 @@ export function VsCode({ code }: { code: string }) {
       off = true;
     };
   }, [st.kind]);
-  const own = Boolean(deck?.some((c) => c.code === code));
+  // Whoever minted this card (when they've opened Friends since): lets a visitor add them or read the card.
+  const [owner, setOwner] = useState<{ pc: string; user?: string } | null>(null);
+  useEffect(() => {
+    if (st.kind !== "card") return;
+    let off = false;
+    void fetch(`/api/friends?card=${code}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { player?: { pc: string; user?: string } } | null) => !off && setOwner(j?.player ?? null))
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [st.kind, code]);
+  let myPc = "";
+  try {
+    myPc = typeof window === "undefined" ? "" : (localStorage.getItem("tastrology:pc") ?? "");
+  } catch {}
+  const own = Boolean(deck?.some((c) => c.code === code)) || Boolean(owner && myPc && owner.pc === myPc);
   const others = (deck ?? []).filter((c) => c.code !== code);
 
   // The challenger's card hangs in their sky.
@@ -99,7 +116,7 @@ export function VsCode({ code }: { code: string }) {
       )}
       {st.kind === "card" && (
         <>
-          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{own ? "Your card" : `${st.card.archetype} wants a fight`}</p>
+          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{own ? "Your card" : owner?.user ? `@${owner.user} wants a fight` : `${st.card.archetype} wants a fight`}</p>
           <div className="relative">
             <Galaxies reduce={reduce} sides={[{ card: st.card, side: "a", anchor: cardRef, colour: "#c6ff3d" }]} solo className="absolute left-1/2 top-1/2 h-[820px] w-[min(100vw,900px)] -translate-x-1/2 -translate-y-1/2" />
             <div ref={cardRef} className="relative">
@@ -129,9 +146,38 @@ export function VsCode({ code }: { code: string }) {
             </div>
           ) : (
             <>
-              <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
-              <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
-              <FriendChip className="relative" />
+              {others.length > 0 ? (
+                <div className="relative flex w-full flex-col items-center gap-2">
+                  <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Answer with one of yours</p>
+                  <ul className="flex w-full flex-col gap-2">
+                    {others.slice(0, 4).map((o) => (
+                      <li key={o.code}>
+                        <Link href={`/vs/${code}?vs=${o.code}`} className="flex items-center justify-between gap-3 rounded-full border border-line bg-paper/60 px-5 py-2.5 text-left text-sm text-ink-2 backdrop-blur-sm transition hover:border-accent hover:text-ink">
+                          <span className="truncate">{o.card.archetype}</span>
+                          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Fight</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <>
+                  <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
+                  <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
+                </>
+              )}
+              <div className="relative flex flex-wrap items-center justify-center gap-2">
+                {owner ? (
+                  <Link href={`/f/${owner.pc}`} className="rounded-full border border-accent/50 bg-paper/60 px-5 py-2.5 text-sm font-semibold text-accent backdrop-blur-sm transition hover:bg-accent hover:text-paper">
+                    Add {owner.user ? `@${owner.user}` : "them"} as a friend
+                  </Link>
+                ) : (
+                  <FriendChip />
+                )}
+                <Link href={`/c/${code}`} className="rounded-full border border-line bg-paper/60 px-5 py-2.5 text-sm text-ink-2 backdrop-blur-sm transition hover:border-ink-3 hover:text-ink">
+                  Read the full card
+                </Link>
+              </div>
             </>
           )}
         </>

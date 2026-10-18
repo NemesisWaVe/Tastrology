@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -141,6 +141,14 @@ describe("accounts", () => {
     expect(dust("ann")).toBe(10);
     expect(await chargeRename("ann", RENAME_DUST)).toBe("empty");
     expect((await ensurePlayer("ann"))!.renames).toBe(2);
+  });
+
+  it("leads a scanned card back to the player who minted it", async () => {
+    const [a] = await pair();
+    expect(await playerForCard(cards[0])).toBeNull();
+    await indexCards("ann", a.pc);
+    expect((await playerForCard(cards[0]))?.pc).toBe(a.pc);
+    expect(await playerForCard("9999-ZZZZ")).toBeNull();
   });
 
   it("checks a name is free before Clerk is asked", async () => {

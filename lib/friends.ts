@@ -124,6 +124,24 @@ export async function ensurePlayer(uid: string): Promise<Player | null> {
   return null;
 }
 
+/**
+ * Card → owner's player code (CARDPC#<code>), so a scanned or shared card leads to whoever minted it. Written
+ * write-once from the owner's side whenever their friends data loads (at most every 10 minutes per instance).
+ */
+const indexedAt = new Map<string, number>();
+export async function indexCards(uid: string, pc: string): Promise<void> {
+  if ((indexedAt.get(uid) ?? 0) > Date.now()) return;
+  indexedAt.set(uid, Date.now() + 10 * 60 * 1000);
+  const cards = (await ownCards(uid)) ?? [];
+  await Promise.allSettled(cards.map((c) => ddbPutIfAbsent({ PK: `CARDPC#${c.code}`, SK: "META", pc, at: Date.now() })));
+}
+
+/** Whoever minted a card, as a public player (username, code and fighter), or null. */
+export async function playerForCard(code: string): Promise<(Player & { uid: string }) | null> {
+  const pc = str((await ddbGet(`CARDPC#${code}`, "META"))?.pc);
+  return pc ? lookupPlayer(pc) : null;
+}
+
 /** The public face of a player code (invite pages): name and fighter card, never the account. */
 export async function lookupPlayer(pc: string): Promise<(Player & { uid: string }) | null> {
   if (!PLAYER_CODE.test(pc)) return null;
