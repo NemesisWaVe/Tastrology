@@ -24,7 +24,7 @@ let fontCSS: Promise<string> | null = null;
 
 type Target = "insta" | "snap" | "x";
 /** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR), or paste the image into X. */
-type Note = { kind: "phone"; url: string } | { kind: "x"; intent: string; key: string } | null;
+type Note = { kind: "phone"; url: string } | { kind: "x"; intent: string; key: string } | { kind: "sticker"; app: "insta" | "snap" } | null;
 
 /**
  * Share sheet: live preview of the export, then straight to a platform. X and Snapchat take the card's link (its
@@ -91,9 +91,11 @@ export function ShareSheet({
     );
     fontCSS ??= getFontEmbedCSS(el).catch(() => "");
     const opts = { pixelRatio: size.out[0] / size.w, width: size.w, height: size.h, backgroundColor: "#07070a", fontEmbedCSS: await fontCSS, cacheBust: false, includeQueryParams: true, filter: (n: HTMLElement) => !n.dataset?.exportSkip };
-    // First pass warms the image/font cache (Safari often drops images on the very first draw).
+    // Early passes warm the image/font cache: WebKit (every iPhone browser) drops some images from the first draws
+    // without failing, so it gets three passes; elsewhere a second pass only if the first came out thin.
+    const webkit = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Android/.test(navigator.userAgent));
     let blob = await toBlob(el, opts);
-    if (!blob || blob.size < 60_000) blob = await toBlob(el, opts);
+    for (let i = 0; i < (webkit ? 2 : 1); i++) if (webkit || !blob || blob.size < 60_000) blob = (await toBlob(el, opts)) ?? blob;
     if (!blob) throw new Error("Render failed");
     return blob;
   }, [size]);
@@ -224,9 +226,17 @@ export function ShareSheet({
   // sheet shows a QR that opens this card on the phone with the share sheet up (/c/<code>?share=1), plus a plain save.
   const toPhone = (mode: "insta" | "snap") => {
     sfx("tap");
-    if (canShare) return go(mode);
     setErr(null);
     setDone(null);
+    // Neither app takes a link from the web, so the link goes onto the clipboard now and a step card says where it
+    // goes (a Link sticker, the paperclip) before the share sheet hides everything; its button starts the share.
+    if (canShare) {
+      if (linkable && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(fight(mode)).catch(() => {});
+        return setNote({ kind: "sticker", app: mode });
+      }
+      return go(mode);
+    }
     if (!linkable) return go("save");
     setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(cardCode(card))}?share=1` });
   };
@@ -317,7 +327,7 @@ export function ShareSheet({
         </div>
 
         <div className="flex w-full max-w-[400px] flex-col gap-2">
-          {note && <NoteCard note={note} onSave={() => go("save")} onClose={() => setNote(null)} />}
+          {note && <NoteCard note={note} onSave={() => go("save")} onShare={go} onClose={() => setNote(null)} />}
           <div className="grid grid-cols-4 gap-2" data-share-targets>
             <Tile label="Story" sub="Instagram" busy={busy === "insta"} disabled={!!busy} onClick={() => toPhone("insta")}>
               <InstaIcon />
@@ -362,11 +372,36 @@ export function ShareSheet({
 
 /* ------------------------------------------------------------------ share targets */
 
-function NoteCard({ note, onSave, onClose }: { note: NonNullable<Note>; onSave: () => void; onClose: () => void }) {
+function NoteCard({ note, onSave, onShare, onClose }: { note: NonNullable<Note>; onSave: () => void; onShare: (app: "insta" | "snap") => void; onClose: () => void }) {
   const code = useMemo(() => {
     const m = qr(note.kind === "phone" ? note.url : "-");
     return { q: m.length + 8, d: qrPath(m) };
   }, [note]);
+  if (note.kind === "sticker") {
+    const insta = note.app === "insta";
+    const steps = insta
+      ? ["Share, then Instagram, then Stories", "Stickers, then Link, then paste", "Rename it “Fight my card” and drop it under the card"]
+      : ["Share, then Snapchat", "Tap the paperclip and paste"];
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={SPRING} className="relative rounded-2xl border border-accent/50 bg-accent/10 p-3.5 pr-9 text-left" data-share-note="sticker">
+        <p className="font-serif text-[19px] italic leading-tight text-ink">Link copied</p>
+        <ol className="mt-2 flex flex-col gap-1.5">
+          {steps.map((t, i) => (
+            <li key={t} className="flex items-start gap-2.5 text-[13px] leading-snug text-ink-2">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ink font-mono text-[10.5px] font-semibold text-paper">{i + 1}</span>
+              {t}
+            </li>
+          ))}
+        </ol>
+        <button onClick={() => onShare(note.app)} className="mt-3 rounded-full bg-accent px-4 py-2 text-[13.5px] font-semibold text-black">
+          Share to {insta ? "Instagram" : "Snapchat"} →
+        </button>
+        <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
+          ✕
+        </button>
+      </motion.div>
+    );
+  }
   if (note.kind === "x")
     return (
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={SPRING} className="relative flex items-center gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3 pr-9" data-share-note="x">
