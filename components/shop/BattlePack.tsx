@@ -14,6 +14,8 @@ interface PackInfo {
   cost: number;
   odds: Odds;
   packs?: { kind: Kind; name: string; cost: number; blurb: string; odds: Odds }[];
+  /** Stardust bundles are on sale (payments live). */
+  sale?: boolean;
   dust?: number | null;
   today?: { day: string; cards: { code: string; card: CardData }[] } | null;
 }
@@ -34,7 +36,7 @@ const SKIN: Record<Kind, { box: string; glow: string; ink: string; btn: string }
 
 /**
  * The one thing Stardust buys: one card from someone else's sky, to fight, in three packs with published odds. One
- * pack a day across all three; Stardust is earned only (never sold), per docs/design/regret-burn-legal.md.
+ * pack a day across all three. Stardust is earned, or bought in bundles once payments are live (lib/products.ts dustSaleOn).
  */
 export function BattlePack() {
   const [info, setInfo] = useState<PackInfo | null>(null);
@@ -134,7 +136,11 @@ export function BattlePack() {
         </>
       )}
       {msg && <p className="mt-4 text-sm text-warn">{msg}</p>}
-      <p className="mt-6 text-xs text-ink-3">Stardust comes only from retiring or regretting cards. It can&apos;t be bought, sold, traded or cashed out.</p>
+      <p className="mt-6 text-xs text-ink-3">
+        {info?.sale
+          ? "Stardust comes from retiring or regretting cards, or from a bundle. It also pays for recasts and living sigils. It can't be sold, traded or cashed out."
+          : "Stardust comes only from retiring or regretting cards. It can't be bought, sold, traded or cashed out."}
+      </p>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { BRAND } from "@/lib/brand";
 import { SEASON } from "@/lib/card";
 import { ROLL_ODDS } from "@/lib/odds";
 import { commitment, rollOn } from "@/lib/roll";
+import { dustSaleOn } from "@/lib/products";
 
 export const metadata: Metadata = { title: `Odds · ${BRAND.name}` };
 export const dynamic = "force-dynamic";
@@ -47,9 +48,19 @@ export default function OddsPage() {
         )}
         <p>Cards minted before rolls keep the tier their taste score gave them. The Star Pack uses the same table; the Flare and Supernova packs publish their boosted tables on the shop page.</p>
         <p>
-          <b className="text-ink">Money never buys a chance.</b> Battle Packs and any boosted packs cost earned Stardust only, and Stardust is never
-          sold. If paid items arrive, they&apos;ll be things you see before you buy, they won&apos;t roll, and a card bought with money earns no
-          Stardust.
+          {dustSaleOn() ? (
+            <>
+              <b className="text-ink">Packs cost Stardust, never money directly.</b> Stardust is earned by retiring cards, or bought in bundles, and also pays
+              for recasts and living sigils. Every pack&apos;s odds are published before you open it, there is one pack a day at most, and nothing you pull
+              can be sold or cashed out.
+            </>
+          ) : (
+            <>
+              <b className="text-ink">Money never buys a chance.</b> Battle Packs and any boosted packs cost earned Stardust only, and Stardust is never
+              sold. If paid items arrive, they&apos;ll be things you see before you buy, they won&apos;t roll, and a card bought with money earns no
+              Stardust.
+            </>
+          )}
         </p>
       </div>
       <Link href="/" className="mt-10 inline-block font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">

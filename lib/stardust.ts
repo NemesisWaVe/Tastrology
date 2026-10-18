@@ -13,8 +13,26 @@ import { creditsOn, RUN_ID_RE } from "./ledger";
  *   USER#<id>  LEDGER#burn#<code>   +dust for the first burn of a code (write-once)
  *   USER#<id>  LEDGER#dust#<runId>  -READING_DUST for one reading paid in dust (write-once per run id)
  *   USER#<id>  LEDGER#dustback#<runId>  the refund when that run failed
+ *   USER#<id>  LEDGER#dustbuy#<orderId>  +dust for a paid bundle (write-once per order; only with dustSaleOn)
+ * Purchased dust never counts toward the weekly earning cap and is still never cashed out.
  */
 export const dustOn = creditsOn;
+
+/**
+ * Credits a paid Stardust bundle, once per payment order (the payment webhook may retry). Call it only after the
+ * provider has confirmed the payment server-side; the order id is the provider's.
+ */
+export async function creditPurchasedDust(userId: string, orderId: string, dust: number): Promise<"credited" | "dup" | "error"> {
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(orderId) || !Number.isInteger(dust) || dust <= 0 || dust > 5000) return "error";
+  const now = Date.now();
+  const r = await ddbTransact([
+    { put: { ...key(userId, `LEDGER#dustbuy#${orderId}`), delta: dust, unit: "dust", reason: "purchase", ref: orderId, at: now }, condition: "attribute_not_exists(PK)" },
+    { update: key(userId, "WALLET"), set: "SET v = if_not_exists(v, :zero) + :one ADD dust :d", values: { ":d": dust, ":one": 1, ":zero": 0 } },
+  ]);
+  if (!r) return "error";
+  if (r.ok) return "credited";
+  return r.reasons[0] === CCF ? "dup" : "error";
+}
 
 /** Published rates. Rule 1 (legal): every burn returns less than a reading costs. */
 export const DUST_RATES: Record<Rarity, number> = { common: 15, rare: 30, holo: 75, secret: 95 };

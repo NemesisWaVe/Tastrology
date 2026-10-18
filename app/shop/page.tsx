@@ -6,7 +6,7 @@ import { SiteShell } from "@/components/site/SiteShell";
 import { SkyBackdrop } from "@/components/site/SkyBackdrop";
 import c from "@/components/site/celestial.module.css";
 import { BRAND } from "@/lib/brand";
-import { formatPaise, paymentsProvider, printsEnabled, PRODUCTS, type Product } from "@/lib/products";
+import { DUST_BUNDLES, dustSaleOn, formatPaise, paymentsProvider, printsEnabled, PRODUCTS, type Product } from "@/lib/products";
 
 export const metadata: Metadata = { title: `Shop · ${BRAND.name}` };
 // Reads PAYMENTS_PROVIDER / PRINTS_ENABLED at request time, so flipping a flag needs no rebuild.
@@ -43,6 +43,31 @@ export default function ShopPage() {
           <ProductCard key={p.id} p={p} paid={paid} soon={Boolean(p.physical) && !prints} i={i} />
         ))}
       </ul>
+
+      {dustSaleOn() && (
+        <section className="mt-16">
+          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">Stardust</p>
+          <h2 className="mt-2 font-serif text-4xl italic leading-tight">Top up your dust.</h2>
+          <p className="mt-3 max-w-xl text-ink-2">For packs, recasts and living sigils. You can also earn it by retiring cards.</p>
+          <ul className="mt-6 grid gap-4 sm:grid-cols-3">
+            {DUST_BUNDLES.map((b) => (
+              <li key={b.id} className={`${c.panel} flex flex-col gap-4 p-6`}>
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">{b.name}</p>
+                <p className="font-display text-4xl font-semibold tracking-[-0.03em] text-accent">
+                  {b.dust}
+                  <span className="ml-1.5 align-middle text-sm font-normal text-ink-3">dust</span>
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="font-display text-xl font-semibold text-ink">{formatPaise(b.pricePaise)}</span>
+                  <span aria-disabled className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-3">
+                    Checkout soon
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <BattlePack />
       <Atelier />

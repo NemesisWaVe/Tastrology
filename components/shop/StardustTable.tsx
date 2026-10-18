@@ -73,7 +73,9 @@ export function StardustTable({ e, dust, weekLeft }: { e: Economy; dust?: number
           </p>
         )}
         <p className="mt-4 text-[12.5px] text-ink-3">
-          Stardust has no cash value. It can&apos;t be bought, sold, transferred or refunded. Rate changes get 14 days&apos; notice and never reduce dust you already have.
+          {e.sale
+            ? "Stardust can be earned or bought in bundles. It has no cash value: it can't be sold, transferred, cashed out or refunded once spent. Rate changes get 14 days' notice and never reduce dust you already have."
+            : "Stardust has no cash value. It can't be bought, sold, transferred or refunded. Rate changes get 14 days' notice and never reduce dust you already have."}
         </p>
       </div>
     </div>

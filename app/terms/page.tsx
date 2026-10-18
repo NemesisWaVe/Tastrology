@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Contact, LEGAL, LegalPage, Sec } from "@/components/site/Legal";
 import { BRAND } from "@/lib/brand";
+import { dustSaleOn } from "@/lib/products";
 
 export const metadata: Metadata = { title: `Terms · ${BRAND.name}` };
 
@@ -51,7 +52,7 @@ export default function Page() {
       <Sec n={5} title="What a card is, and what it isn't">
         <ul>
           <li>A card is generated from the loves you type, taste data from Qloo, and an AI model. Rarity and stats are part of the game, not a measure of value.</li>
-          <li>Cards have no cash value. They can&apos;t be bought, sold, traded for money or redeemed. Stardust (if switched on) is a game point with no cash value either.</li>
+          <li>Cards have no cash value. They can&apos;t be bought, sold, traded for money or redeemed. {dustSaleOn() ? "Stardust is a game point with no cash value either. You can earn it or buy it in bundles; bought Stardust is final once credited, except where the law gives you a refund right, and it can never be sold, transferred or cashed out." : "Stardust (if switched on) is a game point with no cash value either."}</li>
           <li>Burning a card deletes it for good. Its share link then shows it as burned.</li>
           <li>The shop is a concept page. Prices shown there are illustrations of a possible future version; you can&apos;t order anything.</li>
         </ul>

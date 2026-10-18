@@ -28,6 +28,23 @@ export function paymentsProvider(): PaymentsProvider {
   return process.env.PAYMENTS_PROVIDER === "razorpay" ? "razorpay" : "none";
 }
 
+/**
+ * Stardust bundles, sold for money once payments are live and DUST_SALE=1. Off by default: until both are on the
+ * shop shows no bundles and every page keeps saying Stardust can't be bought. Bigger bundles carry a small bonus.
+ */
+export interface DustBundle {
+  id: "dust-s" | "dust-m" | "dust-l";
+  name: string;
+  dust: number;
+  pricePaise: number;
+}
+export const DUST_BUNDLES: DustBundle[] = [
+  { id: "dust-s", name: "Pinch", dust: 100, pricePaise: 4900 },
+  { id: "dust-m", name: "Pouch", dust: 220, pricePaise: 9900 },
+  { id: "dust-l", name: "Nebula", dust: 480, pricePaise: 19900 },
+];
+export const dustSaleOn = () => paymentsProvider() !== "none" && process.env.DUST_SALE === "1";
+
 /** Prints stay off (no claim, no address capture) until fulfilment is funded. */
 export const printsEnabled = () => process.env.PRINTS_ENABLED === "1";
 

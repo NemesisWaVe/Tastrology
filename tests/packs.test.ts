@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ddbPutIfAbsent } from "@/lib/ddb";
+import { ddbGet, ddbPutIfAbsent } from "@/lib/ddb";
 import { addToPool, drawPack, openPack, PACK_DUST, PACK_ODDS, PACK_SIZE, tierFor } from "@/lib/packs";
 import { FakeDynamo, useFakeDynamo } from "./fakeDynamo";
 
@@ -17,6 +17,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
+const dustOf = async (u: string) => Number((await ddbGet(`USER#${u}`, "WALLET"))?.dust);
 const wallet = (u: string, dust: number) => ddbPutIfAbsent({ PK: `USER#${u}`, SK: "WALLET", credits: 0, v: 0, dust });
 
 describe("battle packs", () => {
@@ -56,5 +57,30 @@ describe("pack tiers", () => {
     expect(PACKS.star.dust).toBeLessThan(PACKS.flare.dust);
     expect(PACKS.flare.dust).toBeLessThan(PACKS.supernova.dust);
     expect(tierFor(0.99, PACKS.supernova.odds)).toBe("secret");
+  });
+});
+
+describe("stardust bundles", () => {
+  it("stay off until payments are live and DUST_SALE=1", async () => {
+    const { dustSaleOn } = await import("@/lib/products");
+    vi.stubEnv("PAYMENTS_PROVIDER", "");
+    vi.stubEnv("DUST_SALE", "1");
+    expect(dustSaleOn()).toBe(false);
+    vi.stubEnv("PAYMENTS_PROVIDER", "razorpay");
+    vi.stubEnv("DUST_SALE", "");
+    expect(dustSaleOn()).toBe(false);
+    vi.stubEnv("DUST_SALE", "1");
+    expect(dustSaleOn()).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
+  it("credits a paid order once, however often the webhook retries", async () => {
+    const { creditPurchasedDust } = await import("@/lib/stardust");
+    await wallet("buyer", 5);
+    expect(await creditPurchasedDust("buyer", "order_ABC123", 100)).toBe("credited");
+    expect(await creditPurchasedDust("buyer", "order_ABC123", 100)).toBe("dup");
+    expect(await creditPurchasedDust("buyer", "bad id!", 100)).toBe("error");
+    expect(await creditPurchasedDust("buyer", "order_XYZ999", -5)).toBe("error");
+    expect(await dustOf("buyer")).toBe(105);
   });
 });

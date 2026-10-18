@@ -2,6 +2,7 @@ import type { Rarity } from "./card";
 import { REGRET_DUST, regretOn } from "./burn";
 import { DIVIDEND_MAX, HOLO_DIVIDEND, SECRET_DIVIDEND } from "./dividend";
 import { PACK_DUST, packsOn } from "./packs";
+import { dustSaleOn } from "./products";
 import { LIVING_DUST, RECAST_DUST, recastOn } from "./recast";
 import { DUST_RATES, dustOn, READING_DUST, WEEKLY_DUST_CAP } from "./stardust";
 
@@ -22,6 +23,8 @@ export interface Economy {
   weeklyCap: number;
   pack: number | null;
   reading: number | null;
+  /** Whether Stardust bundles are on sale (payments live and DUST_SALE=1). */
+  sale: boolean;
 }
 
 export const economy = (): Economy => ({
@@ -33,4 +36,5 @@ export const economy = (): Economy => ({
   weeklyCap: WEEKLY_DUST_CAP,
   pack: packsOn() ? PACK_DUST : null,
   reading: process.env.DUST_BUYS_READING === "1" ? READING_DUST : null,
+  sale: dustSaleOn(),
 });

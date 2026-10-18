@@ -1,5 +1,6 @@
 import { clerkOn, currentUserId } from "@/lib/auth";
 import { collection, isPackKind, openPack, PACK_DUST, PACK_KINDS, PACK_ODDS, PACKS, packsOn, utcDay } from "@/lib/packs";
+import { dustSaleOn } from "@/lib/products";
 import { allow } from "@/lib/ratelimit";
 import { dustStatus } from "@/lib/stardust";
 
@@ -8,16 +9,16 @@ export const dynamic = "force-dynamic";
 
 const NO_STORE = { "cache-control": "private, no-store" };
 const LIST = PACK_KINDS.map((k) => ({ kind: k, name: PACKS[k].name, cost: PACKS[k].dust, blurb: PACKS[k].blurb, odds: PACKS[k].odds }));
-const off = () => Response.json({ on: false, cost: PACK_DUST, odds: PACK_ODDS, packs: LIST }, { headers: NO_STORE });
+const off = () => Response.json({ on: false, cost: PACK_DUST, odds: PACK_ODDS, packs: LIST, sale: dustSaleOn() }, { headers: NO_STORE });
 
 /** Battle Packs: price, odds, your Stardust, today's pack and your collection. */
 export async function GET() {
   if (!clerkOn() || !packsOn()) return off();
   const userId = await currentUserId();
-  if (!userId) return Response.json({ on: true, signedIn: false, cost: PACK_DUST, odds: PACK_ODDS, packs: LIST }, { headers: NO_STORE });
+  if (!userId) return Response.json({ on: true, signedIn: false, cost: PACK_DUST, odds: PACK_ODDS, packs: LIST, sale: dustSaleOn() }, { headers: NO_STORE });
   const [ds, col] = await Promise.all([dustStatus(userId).catch(() => null), collection(userId).catch(() => [])]);
   const today = col.find((p) => p.day === utcDay(Date.now())) ?? null;
-  return Response.json({ on: true, signedIn: true, cost: PACK_DUST, odds: PACK_ODDS, packs: LIST, dust: ds?.dust ?? null, today, collection: col }, { headers: NO_STORE });
+  return Response.json({ on: true, signedIn: true, cost: PACK_DUST, odds: PACK_ODDS, packs: LIST, sale: dustSaleOn(), dust: ds?.dust ?? null, today, collection: col }, { headers: NO_STORE });
 }
 
 /** Opens today's pack: `{ kind }` picks Star, Flare or Supernova. One a day across all three, Stardust only. */
