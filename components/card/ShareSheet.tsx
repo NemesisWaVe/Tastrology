@@ -23,8 +23,8 @@ const SPRING = { type: "spring" as const, stiffness: 500, damping: 28 };
 let fontCSS: Promise<string> | null = null;
 
 type Target = "insta" | "snap" | "x";
-/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR), or paste the image into X. */
-type Note = { kind: "phone"; url: string } | { kind: "paste"; key: string } | null;
+/** A step the web can't take for the user, spelled out in the sheet: finish on the phone (QR). */
+type Note = { kind: "phone"; url: string } | null;
 
 /**
  * Share sheet: live preview of the export, then straight to a platform. X and Snapchat take the card's link (its
@@ -212,9 +212,10 @@ export function ShareSheet({
     setNote({ kind: "phone", url: `${location.origin}/c/${encodeURIComponent(cardCode(card))}?share=1` });
   };
 
-  // X: the link carries the card (app/c/[code]/opengraph-image.tsx is its preview). A web intent can't attach a
-  // picture, so on a laptop the PNG goes onto the clipboard first and the sheet says to paste it. On a phone the X app's
-  // own scheme opens the compose box (x.com in Safari lands on a login page); the web intent is the fallback.
+  // X: the link carries the card. Its preview (app/c/[code]/opengraph-image.tsx) is drawn as the card itself, and X
+  // makes that whole image the tap target, so no picture is attached: an attached image would hide the link card. On a
+  // phone the X app's own scheme opens the compose box (x.com in Safari lands on a login page); the web intent is the
+  // fallback.
   const postX = () => {
     sfx("tap");
     setErr(null);
@@ -230,16 +231,8 @@ export function ShareSheet({
       location.href = `twitter://post?message=${encodeURIComponent(text)}`;
       return;
     }
-    let pasted = false;
-    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      try {
-        void navigator.clipboard.write([new ClipboardItem({ "image/png": blobs.current[fmt] ?? prepare(fmt) })]).catch(() => setNote(null));
-        pasted = true;
-      } catch {}
-    }
     window.open(intent, "_blank", "noopener,noreferrer");
-    if (pasted) setNote({ kind: "paste", key: /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl" });
-    else setDone("Opened X");
+    setDone(linkable ? "Opened X · the card shows as the link's preview" : "Opened X");
   };
 
   const copy = async () => {
@@ -339,7 +332,6 @@ export function ShareSheet({
 
 function NoteCard({ note, onSave, onClose }: { note: NonNullable<Note>; onSave: () => void; onClose: () => void }) {
   const code = useMemo(() => {
-    if (note.kind !== "phone") return null;
     const m = qr(note.url);
     return { q: m.length + 8, d: qrPath(m) };
   }, [note]);
@@ -351,31 +343,16 @@ function NoteCard({ note, onSave, onClose }: { note: NonNullable<Note>; onSave: 
       className="relative flex items-center gap-4 rounded-2xl border border-accent/50 bg-accent/10 p-3 pr-9"
       data-share-note={note.kind}
     >
-      {code ? (
-        <svg viewBox={`-4 -4 ${code.q} ${code.q}`} shapeRendering="crispEdges" className="h-[104px] w-[104px] shrink-0 rounded-lg" role="img" aria-label="QR code: open this card on your phone">
-          <rect x="-4" y="-4" width={code.q} height={code.q} fill="#fff" />
-          <path d={code.d} />
-        </svg>
-      ) : (
-        <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-ink px-2 font-mono text-[15px] font-semibold text-paper">
-          {note.kind === "paste" ? `${note.key}+V` : ""}
-        </span>
-      )}
+      <svg viewBox={`-4 -4 ${code.q} ${code.q}`} shapeRendering="crispEdges" className="h-[104px] w-[104px] shrink-0 rounded-lg" role="img" aria-label="QR code: open this card on your phone">
+        <rect x="-4" y="-4" width={code.q} height={code.q} fill="#fff" />
+        <path d={code.d} />
+      </svg>
       <div className="min-w-0 text-left">
-        {note.kind === "phone" ? (
-          <>
-            <p className="font-serif text-[19px] italic leading-tight text-ink">Finish on your phone</p>
-            <p className="mt-1 text-[12.5px] leading-snug text-ink-2">Stories and snaps only post from the apps. Scan this, then tap Story or Snap there.</p>
-            <button onClick={onSave} className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline">
-              or save the PNG
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="font-serif text-[19px] italic leading-tight text-ink">Image copied</p>
-            <p className="mt-1 text-[12.5px] leading-snug text-ink-2">X can&apos;t take a picture from a link. Click into the post and press {note.key}+V to attach it.</p>
-          </>
-        )}
+        <p className="font-serif text-[19px] italic leading-tight text-ink">Finish on your phone</p>
+        <p className="mt-1 text-[12.5px] leading-snug text-ink-2">Stories and snaps only post from the apps. Scan this, then tap Story or Snap there.</p>
+        <button onClick={onSave} className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline">
+          or save the PNG
+        </button>
       </div>
       <button onClick={onClose} aria-label="Dismiss" className="absolute right-2.5 top-2.5 text-[12px] text-ink-3 hover:text-ink">
         ✕
@@ -573,8 +550,13 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?
           <div className="mt-3 opacity-80">
             <Wordmark size={9} />
           </div>
-          {/* Stories and snaps can't carry a link from the web, so the card's address rides on the image itself. */}
-          {href && <p className="mt-1.5 font-mono text-[8.5px] tracking-[0.08em] text-ink-2">{href}</p>}
+          {/* Stories and snaps can't carry a link from the web, so the card's address rides on the image as a pill
+              that reads as a button (and is where the pasted Link sticker naturally goes). */}
+          {href && (
+            <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full px-3 py-[5px] font-mono text-[9px] font-semibold tracking-[0.04em] text-black" style={{ background: "#c6ff3d", boxShadow: "0 0 18px rgba(198,255,61,0.35)" }}>
+              {href} <span aria-hidden>↗</span>
+            </p>
+          )}
         </div>
       </div>
     </div>
