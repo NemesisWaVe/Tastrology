@@ -1,6 +1,6 @@
 import { clerkOn, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
-import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, ensurePlayer, inboxCount, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, closeBout, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
 import { TWIN_CODE } from "@/lib/twins";
@@ -15,7 +15,8 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
  * GET              your code, fighter, friends, bouts and dust
  * GET ?pc=XXXXXX   the public face of a player code (invite page), no sign-in needed
  * GET ?whoami=1    just your player code (share links carry it)
- * GET ?ping=1      your change counter, for live updates
+ * GET ?ping=1      your change counter, for live updates (also your presence heartbeat)
+ * GET ?alerts=1    open challenges to you and pending requests, for the site-wide alert
  */
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
@@ -34,7 +35,11 @@ export async function GET(request: Request) {
   const uid = await currentUserId();
   if (!uid) return json({ on: true, signedIn: false });
   // Live updates: the page polls this one counter and reloads only when it moves.
-  if (q.get("ping")) return json({ n: await inboxCount(uid) });
+  if (q.get("ping")) {
+    const [n] = await Promise.all([inboxCount(uid), markSeen(uid)]);
+    return json({ n });
+  }
+  if (q.get("alerts")) return json((await alerts(uid)) ?? { bouts: [], requests: 0 });
   const me0 = await ensurePlayer(uid);
   if (!me0) return json({ error: "Couldn't reach the server." }, 503);
   if (q.get("whoami")) return json({ on: true, signedIn: true, me: me0 });

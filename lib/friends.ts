@@ -45,6 +45,8 @@ export interface Player {
 }
 export interface Friend extends Player {
   at: number;
+  /** When they last had the site open (ms), from their own heartbeat; online = within ONLINE_MS. */
+  seen?: number;
   /** Days you've fought each other (friendship level). */
   days?: number;
 }
@@ -155,8 +157,10 @@ export async function lookupPlayer(pc: string): Promise<(Player & { uid: string 
 export async function listFriends(uid: string): Promise<Friend[] | null> {
   const page = await ddbQuery(U(uid), "FRIEND#", FRIENDS_MAX);
   if (!page) return null;
+  // Presence: one small read per friend, only when the list loads (not on every ping).
+  const seen = await Promise.all(page.items.map((it) => (str(it.uid) ? ddbGet(U(str(it.uid)), "PLAYER").then((p) => Number(p?.seen) || 0) : 0)));
   return page.items
-    .map((it) => ({ ...(toPlayer(it) as Player), at: Number(it.at) || 0, days: Number(it.days) || 0 }))
+    .map((it, i) => ({ ...(toPlayer(it) as Player), at: Number(it.at) || 0, days: Number(it.days) || 0, seen: seen[i] || undefined }))
     .filter((f) => f.pc)
     .sort((x, y) => (y.days ?? 0) - (x.days ?? 0) || y.at - x.at);
 }
@@ -176,6 +180,24 @@ async function bumpFriendship(uid: string, pc: string, now = Date.now()) {
  */
 async function touch(...uids: string[]) {
   await Promise.allSettled(uids.filter(Boolean).map((u) => ddbUpdate(U(u), "INBOX", "ADD n :one", { values: { ":one": 1 } })));
+}
+
+/** Presence heartbeat: stamps PLAYER.seen at most once a minute per account per instance (one write). */
+export const ONLINE_MS = 2.5 * 60 * 1000;
+const beatAt = new Map<string, number>();
+export async function markSeen(uid: string): Promise<void> {
+  const now = Date.now();
+  if ((beatAt.get(uid) ?? 0) > now - 60_000) return;
+  beatAt.set(uid, now);
+  await ddbUpdate(U(uid), "PLAYER", "SET seen = :t", { values: { ":t": now }, condition: "attribute_exists(pc)" });
+}
+
+/** What needs you, for the site-wide alert: open challenges sent to you and friend requests. */
+export async function alerts(uid: string): Promise<{ bouts: { id: string; who: string; stake: number }[]; requests: number } | null> {
+  const [b, r] = await Promise.all([ddbQuery(U(uid), "BOUT#", 15, undefined, undefined, true), ddbQuery(U(uid), "REQ#", 50, undefined, ["pc"])]);
+  if (!b || !r) return null;
+  const open = b.items.map(toBout).filter((x) => x.role === "in" && x.status === "open");
+  return { bouts: open.map((x) => ({ id: x.id, who: x.user ? `@${x.user}` : x.name || x.pc, stake: x.stake })), requests: r.items.length };
 }
 
 export async function inboxCount(uid: string): Promise<number | null> {

@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, removeFriend, setFighter, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
 
@@ -141,6 +141,18 @@ describe("accounts", () => {
     expect(dust("ann")).toBe(10);
     expect(await chargeRename("ann", RENAME_DUST)).toBe("empty");
     expect((await ensurePlayer("ann"))!.renames).toBe(2);
+  });
+
+  it("shows friends when you were last around, and what challenges wait for you", async () => {
+    const [a, b] = await pair();
+    expect((await listFriends("bo"))![0].seen).toBeUndefined();
+    await markSeen("ann");
+    expect((await listFriends("bo"))![0].seen).toBeGreaterThan(Date.now() - 5000);
+    await openBout("ann", a, b.pc, 0);
+    const al = (await alerts("bo"))!;
+    expect(al.bouts).toHaveLength(1);
+    expect(al.bouts[0].stake).toBe(0);
+    expect((await alerts("ann"))!.bouts).toHaveLength(0);
   });
 
   it("leads a scanned card back to the player who minted it", async () => {

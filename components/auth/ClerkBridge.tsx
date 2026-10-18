@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { setBridge } from "@/lib/authBridge";
 import { forgetPlayerCode } from "@/lib/player";
 import { UsernameGate } from "./UsernameGate";
+import { LiveAlerts } from "@/components/friends/LiveAlerts";
 
 /**
  * Lives inside <ClerkProvider> (app/layout.tsx, only when accounts are on). Registers the auth bridge for plain
@@ -102,7 +103,12 @@ export function ClerkBridge() {
   }
 
   // The /sign-in and /sign-up pages carry their own form: never stack the sheet on top of it.
-  const gate = <UsernameGate signedIn={Boolean(isLoaded && isSignedIn)} />;
+  const gate = (
+    <>
+      <UsernameGate signedIn={Boolean(isLoaded && isSignedIn)} />
+      {isLoaded && isSignedIn && <LiveAlerts />}
+    </>
+  );
   if (!open || /^\/sign-(in|up)/.test(pathname)) return gate;
   return (
     <>

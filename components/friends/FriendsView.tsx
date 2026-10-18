@@ -120,9 +120,12 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
     // The username step after sign-in saved a name: show it here straight away.
     const named = () => void load();
     window.addEventListener("tastrology:username", named);
+    // Online dots don't move the change counter, so the list refreshes once a minute while you're looking.
+    const fresh = setInterval(() => !document.hidden && void load(), 60_000);
     return () => {
       off?.();
       window.removeEventListener("tastrology:username", named);
+      clearInterval(fresh);
     };
   }, [load]);
 
@@ -447,7 +450,10 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                     <span aria-hidden className="relative mt-1.5 h-3 w-3 shrink-0 rounded-full bg-white" style={{ boxShadow: `0 0 0 3px ${tint}33, 0 0 18px 2px ${tint}` }} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-serif text-xl italic">{who(f)}</p>
-                      <p className="mt-0.5 truncate text-xs text-ink-3">{f.name ? `Fights with ${f.name}` : "No card yet"}</p>
+                      <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-3">
+                        <Presence seen={f.seen} />
+                        {f.name ? `Fights with ${f.name}` : "No card yet"}
+                      </p>
                       <p className={`${mono} mt-1.5 text-ink-3`}>
                         <span style={{ color: tint }}>{lvl} friend</span> · {f.days ?? 0} day{f.days === 1 ? "" : "s"} fought · {f.pc}
                       </p>
@@ -541,5 +547,24 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
       </div>
     </div>
     </div>
+  );
+}
+
+/** Online now (heartbeat within 2.5 min), or when they were last around. */
+function Presence({ seen }: { seen?: number }) {
+  const ago = seen ? Date.now() - seen : Infinity;
+  if (ago < 150_000)
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 text-good">
+        <span className="h-1.5 w-1.5 rounded-full bg-good shadow-[0_0_8px_var(--good)]" />
+        Online ·
+      </span>
+    );
+  const t = !seen ? null : ago < 3_600_000 ? `${Math.round(ago / 60_000)}m` : ago < 86_400_000 ? `${Math.round(ago / 3_600_000)}h` : `${Math.round(ago / 86_400_000)}d`;
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-3/60" />
+      {t ? `Seen ${t} ago ·` : "Offline ·"}
+    </span>
   );
 }
