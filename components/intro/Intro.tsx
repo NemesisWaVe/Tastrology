@@ -239,7 +239,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const view = viewAt(p, w, h, par);
       // after the first drop, more fall, each one a real love; they stop once we look up
       const due = [IMPACT + 1.8, IMPACT + 2.7, IMPACT + 3.6, IMPACT + 4.7, IMPACT + 5.9];
-      if (since > 0 && autoDrops < due.length && since >= due[autoDrops] && p < 0.2) {
+      if (since > 0 && autoDrops < due.length && since >= due[autoDrops] && p < 0.01) {
         const H = view.hz * h, side = autoDrops % 2 ? 1 : -1;
         const x = w * (0.5 + side * (0.12 + 0.18 * ((autoDrops * 0.37) % 1))), y = H + (h - H) * (0.25 + 0.4 * ((autoDrops * 0.61) % 1));
         touches.unshift({ x, y, t: now, amp: 1.5, name: LOVES[loveI++ % LOVES.length] });
@@ -278,7 +278,9 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
-      drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
+      // the drop constellations are pinned to screen spots on the water: once the camera starts moving they'd float
+      // loose over the sky, so they clear as soon as the visitor scrolls
+      drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.01, 0.06, p), taps);
       const dk = reduce ? 1 : phone ? sst(0.84, 0.94, p) : sst(0.92, 0.975, p);
       const dks = dk.toFixed(3);
       // a custom property on <html> restyles the whole page: write it only when it moves
