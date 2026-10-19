@@ -229,6 +229,9 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     };
     startRef.current = start;
 
+    const bgEl = st.firstElementChild as HTMLElement | null;
+    const creditEl = st.querySelector<HTMLElement>(`.${s.credit}`);
+    let lastBg = "", lastDock = "";
     const frame = (p: number) => {
       const now = clock(), t = now - t0, since = started > 0 ? now - started : -1;
       par.x += (parT.x - par.x) * 0.04;
@@ -247,11 +250,16 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         sfx("ripple", { i: tingI++ % 10, gain: 0.5 });
       }
       const fade = started > 0 ? sst(0, 0.9, since + 0.3) : 0.35 * sst(0, 1.5, t);
-      mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
-      const bgO = String(reduce ? 1 : 1 - sst(0.84, 0.95, p));
-      glc.style.opacity = bgO;
-      (st.firstElementChild as HTMLElement | null)?.style.setProperty("opacity", bgO); // the backdrop must clear for the hero
-      st.querySelector<HTMLElement>(`.${s.credit}`)?.style.setProperty("opacity", bgO);
+      const bgO = (reduce ? 1 : 1 - sst(0.84, 0.95, p)).toFixed(3);
+      // the water is invisible once the backdrop has cleared: skip the GL pass entirely
+      if (bgO !== "0.000") mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
+      // style writes only on change: each one costs a style pass, and this runs every frame
+      if (bgO !== lastBg) {
+        lastBg = bgO;
+        glc.style.opacity = bgO;
+        bgEl?.style.setProperty("opacity", bgO); // the backdrop must clear for the hero
+        creditEl?.style.setProperty("opacity", bgO);
+      }
       const birth = birthRect(w, h);
       // the finished card holds and twinkles for a few scrolls, then glides into the hero over a long, even stretch
       const k = sst(0.82, 0.93, p);
@@ -270,7 +278,12 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
       drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
       const dk = reduce ? 1 : sst(0.92, 0.975, p);
-      root.style.setProperty("--intro-dock", dk.toFixed(3));
+      const dks = dk.toFixed(3);
+      // a custom property on <html> restyles the whole page: write it only when it moves
+      if (dks !== lastDock) {
+        lastDock = dks;
+        root.style.setProperty("--intro-dock", dks);
+      }
       if ((dk < 0.001) !== root.hasAttribute("data-intro-under")) root.toggleAttribute("data-intro-under", dk < 0.001);
     };
     const paintNow = () => {
