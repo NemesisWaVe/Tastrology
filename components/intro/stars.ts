@@ -287,8 +287,15 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
       ctx.stroke();
       ctx.restore();
     };
-    pass(7, 0.16, 26, holo);
-    pass(2.2, 0.45, 10, holo);
+    // phones: no canvas blur (it's the costliest thing in the frame); wider soft strokes stand in for the glow
+    if (f.phone) {
+      pass(9, 0.08, 0, holo);
+      pass(4, 0.18, 0, holo);
+      pass(2, 0.4, 0, holo);
+    } else {
+      pass(7, 0.16, 26, holo);
+      pass(2.2, 0.45, 10, holo);
+    }
     pass(0.9, 0.95, 0, "rgba(245,248,255,1)");
     // stars stitched along the edge: they light as the trace reaches them, and keep twinkling
     const N = 30;
@@ -333,7 +340,7 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(200,215,255,1)";
     ctx.shadowColor = "rgba(160,140,255,0.9)";
-    ctx.shadowBlur = fsPx * 0.25;
+    ctx.shadowBlur = f.phone ? 0 : fsPx * 0.25;
     ctx.fillText(word.text, R.x + word.x0 * R.w, R.y + word.base * R.h);
     ctx.restore();
     ctx.globalCompositeOperation = "lighter";

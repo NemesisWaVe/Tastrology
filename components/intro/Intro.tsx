@@ -269,7 +269,9 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       });
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
       drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
-      root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.92, 0.975, p).toFixed(3));
+      const dk = reduce ? 1 : sst(0.92, 0.975, p);
+      root.style.setProperty("--intro-dock", dk.toFixed(3));
+      if ((dk < 0.001) !== root.hasAttribute("data-intro-under")) root.toggleAttribute("data-intro-under", dk < 0.001);
     };
     const paintNow = () => {
       if (w) frame(reduce ? POSTER_P : scrollYProgress.get());
@@ -279,7 +281,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const cw = st.clientWidth, ch = st.clientHeight;
       if (!cw || !ch) return;
       phone = cw < 768;
-      const cap = Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.75);
+      const cap = Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.75);
       if (cw === w && Math.abs(ch - h) < 2 && fx.width === Math.round(cw * cap)) return;
       w = cw;
       h = ch;
@@ -340,6 +342,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       mirror?.dispose();
       vid.pause();
       root.style.removeProperty("--intro-dock");
+      root.removeAttribute("data-intro-under");
     };
 
     // Reduced motion: one still frame; scroll only crossfades it away.
@@ -378,15 +381,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     inputs.forEach((e) => window.addEventListener(e, onInput, { passive: true }));
 
     let raf = 0, visible = true, idle = false, playedImpact = false, prevP = -1;
-    let lastFrame = 0;
-    const tick = (ts: number) => {
+    const tick = () => {
       raf = 0;
-      // phones render the water at ~30fps (half the GPU work); the card handoff runs at full rate so it glides
-      if (phone && scrollYProgress.get() < 0.7 && ts - lastFrame < 31) {
-        if (visible && !document.hidden) raf = requestAnimationFrame(tick);
-        return;
-      }
-      lastFrame = ts;
       let p = scrollYProgress.get();
       // scrolling past the gate counts as "quietly"
       if (p > 0.01 && started < 0) {
@@ -435,7 +431,10 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     const hideAt = (p: number) => {
       const gone = p > 0.99;
       st.style.visibility = gone ? "hidden" : "visible";
-      if (gone) root.style.setProperty("--intro-dock", "1");
+      if (gone) {
+        root.style.setProperty("--intro-dock", "1");
+        root.removeAttribute("data-intro-under");
+      }
     };
     // native scroll events fire even when animation frames are throttled (iOS momentum, background tabs)
     const nativeP = () => {

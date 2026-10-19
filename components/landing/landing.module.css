@@ -301,3 +301,10 @@
 
 /* ---------- intro dock: the hero card fades in as the intro's star card lands on it ---------- */
 .dock { opacity: var(--intro-dock, 1); }
+/* while the intro covers it, the hero card stops painting entirely (its foil and halo animations included) */
+:global(html[data-intro-under]) .dock { visibility: hidden; }
+
+/* phones: the full-screen blended grain costs a re-composite of every frame under a finger; the sky has its own texture */
+@media (max-width: 767px), (pointer: coarse) {
+  .grain { display: none; }
+}
