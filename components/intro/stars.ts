@@ -288,11 +288,20 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
       ctx.restore();
     };
     // no canvas blur anywhere (it's the costliest thing in the frame); wide soft strokes stand in for the glow
-    pass(16, 0.04, 0, holo);
-    pass(9, 0.08, 0, holo);
-    pass(4, 0.18, 0, holo);
-    pass(2, 0.4, 0, holo);
-    pass(0.9, 0.95, 0, "rgba(245,248,255,1)");
+    // phones: iOS WebKit can drop globalAlpha on gradient strokes under "lighter", which painted the glow as a
+    // solid white band; flat colours with the alpha baked in avoid that path
+    if (f.phone) {
+      const glow = (lw: number, a: number) => pass(lw, 1, 0, `rgba(185,215,255,${a})`);
+      glow(9, 0.08);
+      glow(4, 0.18);
+      glow(2, 0.4);
+    } else {
+      pass(16, 0.04, 0, holo);
+      pass(9, 0.08, 0, holo);
+      pass(4, 0.18, 0, holo);
+      pass(2, 0.4, 0, holo);
+    }
+    pass(0.9, f.phone ? 1 : 0.95, 0, f.phone ? "rgba(245,248,255,0.95)" : "rgba(245,248,255,1)");
     // stars stitched along the edge: they light as the trace reaches them, and keep twinkling
     const N = 30;
     for (let i = 0; i < N; i++) {

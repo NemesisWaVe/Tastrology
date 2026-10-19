@@ -273,15 +273,15 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         consDim: sst(0.62, 0.76, p),
         frame: sst(0.56, 0.72, p),
         word: sst(0.6, 0.78, p),
-        shimmer: sst(0.74, 0.8, p) * (1 - sst(0.88, 0.95, p)),
-        fade: 1 - (phone ? sst(0.82, 0.9, p) : sst(0.935, 0.985, p)),
+        shimmer: phone ? sst(0.7, 0.75, p) : sst(0.74, 0.8, p) * (1 - sst(0.88, 0.95, p)),
+        fade: 1 - (phone ? sst(0.88, 0.94, p) : sst(0.935, 0.985, p)),
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
       // the drop constellations are pinned to screen spots on the water: once the camera starts moving they'd float
       // loose over the sky, so they clear as soon as the visitor scrolls
       drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.01, 0.06, p), taps);
-      const dk = reduce ? 1 : phone ? sst(0.84, 0.94, p) : sst(0.92, 0.975, p);
+      const dk = reduce ? 1 : phone ? sst(0.89, 0.96, p) : sst(0.92, 0.975, p);
       const dks = dk.toFixed(3);
       // a custom property on <html> restyles the whole page: write it only when it moves
       if (dks !== lastDock) {
