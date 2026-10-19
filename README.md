@@ -36,16 +36,21 @@
 
 ---
 
-## The idea in 30 seconds
+## The short version
 
-1. **Astrology is loved** because it hands you a sign that feels like *you*. But it reads your birthday, not who you are.
-2. **Your taste *is* who you are**: the films you rewatch, the artist on repeat, the café you keep going back to.
-3. **Qloo understands taste** across domains. People who love *Blade Runner 2049* and Berghain really do drift toward the same jackets.
-4. **So Tastrology turns your taste into your star sign.** An AI agent asks Qloo what your loves say about you, and draws the answer as a constellation of real brands on a holographic card.
-5. **Every star is proven real.** AI loves to make things up, so this one is built so it *can't*. Each reading ends with *"Grounding gate: 10/10 brands verified against Qloo, 0 invented"*. A **Without Qloo** panel shows what a plain LLM guesses for the same loves, side by side.
-6. **Then it becomes social.** Collect, share, scan, add friends and send your sky into a fight.
+People love their star signs. But a sign comes from your birthday, and you didn't choose that.
 
-That's the whole thing: **astrology, but with receipts.** Your first reading needs no sign-up.
+You did choose your taste. The films you rewatch, the artist on repeat, the café you keep going back to. That's you. And Qloo knows how taste connects: people who love *Blade Runner 2049* and Berghain really do drift toward the same jackets.
+
+So Tastrology turns your taste into a star sign. Name three loves, and an AI agent maps them through Qloo into a constellation of real brands on a card you keep.
+
+AI loves to make stuff up. This one can't. Every reading ends with:
+
+> **Grounding gate: 10/10 brands verified against Qloo, 0 invented.**
+
+There's also a panel that asks a plain LLM the same question with no Qloo, so you can see the difference for yourself.
+
+Then you share the card, scan a friend's, and fight. Your first reading doesn't even need an account.
 
 ## What you get
 
@@ -65,7 +70,7 @@ That's the whole thing: **astrology, but with receipts.** Your first reading nee
 
 This is not a chat wrapper. It's a glass-box agent: every step is a real Qloo call you can open and inspect while it streams, with a timestamp on each one.
 
-> **In plain words:** the AI works in visible steps. To learn which love brought each brand, it removes one love at a time and watches what disappears. And it keeps a guest list: if Qloo didn't name it, it doesn't get in.
+The short of it: you watch it think, it figures out which love brought which brand by taking them away one at a time, and anything Qloo didn't name gets bounced at the door.
 
 ```mermaid
 flowchart LR
@@ -143,30 +148,29 @@ flowchart TB
     API --> CK
 ```
 
-A few pieces I'm proud of, each with the plain-words version first:
+A few pieces I'm proud of:
 
-- **No AWS SDK.** *Talking to Amazon with no middleman.* DynamoDB and S3 are called over HTTPS with AWS Signature V4 written by hand (`lib/sigv4.ts`). It cuts cold starts and bundle size, and nothing is hidden.
-- **One DynamoDB table for everything.** *The currency is handled like a bank handles money: nothing is lost or double-spent, even on a double tap.* Accounts, decks, wallets, ledgers, friends, requests, fights, card owners and usernames are all access patterns on a single table. Money-like moves (stakes, packs, renames) are conditional transactions with write-once ledger rows, so a retry can never charge twice.
-- **Four planners deep.** *If one AI is down, the next takes over, and a backup with no AI at all finishes the job.* The agent tries Bedrock's gpt-oss-120b, then 20b, then Nova Pro, then a free OpenRouter model, and if all of them are down, a deterministic planner finishes the same run with the same tools. A user never sees a blank screen because a model had a bad day.
-- **Speculative execution.** *It starts the likely next step before it's asked.* While the LLM is deciding what to do next, the likely next Qloo step is already running. Its trace events are held back until the model actually asks for it, so runs stay fast without faking the model's choices.
-- **Rarity you can audit.** *Your luck is a sealed envelope, locked before you open the pack. Nobody, me included, can change it.* A card's rarity is a keyed hash of the account and the paid run, so reloading can't re-roll it. The season key's sha256 is published on `/odds` before the season and revealed after it, so anyone can check that nobody rigged the draws.
-- **Real-time without sockets.** *Fights feel instant without paying for a live server.* Every write that touches you bumps one counter. Pages poll that single number (cheaply, and faster right after something happens) and only reload when it moves. Challenges land on both screens at once, and online status comes from the same heartbeat.
+- **No AWS SDK.** DynamoDB and S3 are called over HTTPS with AWS Signature V4 written by hand (`lib/sigv4.ts`). It cuts cold starts and bundle size, and nothing is hidden.
+- **One DynamoDB table for everything.** Accounts, decks, wallets, ledgers, friends, requests, fights, card owners and usernames are all access patterns on a single table. Money-like moves (stakes, packs, renames) are conditional transactions with write-once ledger rows, so a retry can never charge twice.
+- **Four planners deep.** The agent tries Bedrock's gpt-oss-120b, then 20b, then Nova Pro, then a free OpenRouter model, and if all of them are down, a deterministic planner finishes the same run with the same tools. A user never sees a blank screen because a model had a bad day.
+- **Speculative execution.** While the LLM is deciding what to do next, the likely next Qloo step is already running. Its trace events are held back until the model actually asks for it, so runs stay fast without faking the model's choices.
+- **Rarity you can audit.** A card's rarity is a keyed hash of the account and the paid run, so reloading can't re-roll it. The season key's sha256 is published on `/odds` before the season and revealed after it, so anyone can check that nobody rigged the draws.
+- **Real-time without sockets.** Every write that touches you bumps one counter. Pages poll that single number (cheaply, and faster right after something happens) and only reload when it moves. Challenges land on both screens at once, and online status comes from the same heartbeat.
 - **Demo personas cost nothing.** The landing page's sample readings are recorded once and replayed forever, so a viral spike never touches the Qloo quota.
 
 ## The story
 
-I built this alone, in five days, from `create-next-app` to a live product, with a budget of exactly zero. On day one I set one rule: **every star must come from Qloo in that run, and the app has to prove it.** Everything here grew out of keeping that promise.
+I built this alone in five days, from `create-next-app` to a live site, with a budget of zero. Before writing any code I wrote one rule down: every star comes from Qloo, in that run, and the app has to prove it.
 
-That last part shaped everything. No paid model, so the planner had to survive free-tier rate limits: when the LLM gets throttled mid-run, a circuit breaker pauses it and the deterministic autopilot quietly finishes the reading. No paid database, so every read and write had to be counted; the friends page is three reads and live updates are one tiny counter. No paid domain, so Clerk stays on a development instance, its badge hidden, with inactive accounts pruned by hand to stay under the cap.
+That budget shaped everything. No paid model, so the planner had to survive free-tier rate limits: when the LLM gets throttled mid-run, a circuit breaker pauses it and the deterministic autopilot quietly finishes the reading. No paid database, so every read and write had to be counted; the friends page is three reads and live updates are one tiny counter. No paid domain, so Clerk stays on a development instance, its badge hidden, with inactive accounts pruned by hand to stay under the cap.
 
 Some of the best features came from things breaking in front of me.
 
-- **Day 2: the free LLM ran dry.** OpenRouter's free tier allows 50 requests a day, and one reading takes several turns. I moved the planner to Bedrock and built the four-deep chain with circuit breakers.
-- **The models leaked their thoughts.** One sign came out as *"The Daft Who…"* because the LLM had clipped "Daft Punk", and others arrived wrapped in `<reasoning>` tags. Now the reasoning is stripped and names are repaired from the real seed, so even the card's *title* is grounded.
-- **Qloo bursts silently ate seeds.** A persona minted from 2 of its 5 loves. Now there is jittered backoff, a concurrency gate, and a logged event for every dropped seed.
-- **I found a forgery hole in my own app.** Cards were stored from whatever the browser sent. Now registration is server-side, codes are hash-bound, and S3 writes are write-once, enforced by IAM.
-- **Sharing took ten rounds on real phones.** A blank Snapchat preview, a constellation that exported as a black triangle, and iPhone dropping the art. Every card now draws its own preview image.
-
+- **The free LLM ran out on day two.** OpenRouter's free tier is 50 requests a day, and one reading eats several. I moved the planner to Bedrock and chained four providers behind circuit breakers.
+- **"The Daft Who Bakes Scones."** A real output: the model chopped "Daft Punk" in half. Sign names now get repaired against the real seed, so even the title is grounded.
+- **A demo persona lost three of its five loves** to a burst of Qloo rate limits, with no error. I only noticed because the card felt boring. Now there's jittered backoff, a concurrency cap, and a log line for every dropped seed.
+- **I could forge cards in my own app.** The server saved whatever the browser sent. Now cards are registered server-side, hash-bound, and write-once in S3, enforced by IAM.
+- **Sharing took about ten rounds** of phone testing: a blank Snapchat preview, a constellation that exported as a black triangle, Safari eating the art. Every card now draws its own preview image.
 - **The first phone test.** A challenge sent from my laptop was accepted on my phone, and the laptop never showed the fight. So polling now runs hot for a minute after anything happens, then cools off, and a fight you started opens on your screen the moment it settles.
 - **The QR that led nowhere.** Scanning my own card from another phone landed on a page that said almost nothing. Now a scanned card knows its owner: you can add them, read their card, or answer with one of your own.
 - **"Why is it recommending lingerie?"** Qloo doesn't know who it's talking to. So readings now carry who they're for, taken from your private profile and never from the request. It steers the Qloo query, and a filter keeps women-only items away from anyone who didn't say they want them. The cached reading for one audience is never handed to another.
@@ -200,11 +204,15 @@ Collectible, gamified, social: that's three ways to get into trouble. So the bor
 
 ## What's next
 
-- **Sponsored Stars.** Brands can light up a star but never buy one. A sponsor shows only where Qloo already puts it in your sky, and the grounding gate enforces that. Brands get anonymous attribution from ablation ("people whose sky holds Tame Impala and Ghibli").
-- **The Taste Census.** Anonymous mint counters grow into a weekly index of how taste moves.
-- **Sky compatibility and taste twins.** Overlay two constellations; the compatibility engine already scores friend pairs.
-- **Seasons and print.** Skies that evolve, first editions, leagues, and physical cards whose QR opens a verified twin.
-- **Hardening.** Playwright and CI gates, a k6 load test, a Qloo degraded mode, and Web Push.
+**Sponsored stars that can't be bought.** A brand only shows up if Qloo already put it in your sky. A sponsor can light that star up (a frame, a limited drop) but can't buy its way in. The grounding gate enforces that. In return, ablation tells brands which loves pull people their way, as anonymous cohorts: "people whose sky has Tame Impala and Ghibli", not "women 18–24".
+
+**A weekly taste census.** The anonymous mint counters already exist. At scale, they show how culture is moving.
+
+**Taste twins.** Overlay two skies. The compatibility scoring already runs between friends; next it finds strangers.
+
+**Seasons and real cards.** Skies that re-read each season, and printed cards whose QR opens the verified original.
+
+**The boring stuff:** Playwright and CI, load tests, a fallback for when Qloo is down, and Web Push.
 
 ## Run it
 
@@ -241,6 +249,6 @@ Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Motion �
 <div align="center">
 <br />
 
-**[Mint your card](https://tastrology.vercel.app)** and find out what your taste has been saying about you.
+**[Mint your card](https://tastrology.vercel.app).** Your taste has been saying things about you. Come see what.
 
 </div>
