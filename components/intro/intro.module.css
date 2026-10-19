@@ -4,11 +4,11 @@
   position: relative;
   z-index: 30;
   pointer-events: none; /* it overlaps the hero; only the stage takes input, and only while the intro runs */
-  height: 380vh; /* desktop: more room for the story; phones keep 240vh below */
+  height: 440vh; /* desktop: more room for the story; phones keep 290vh below */
   margin-bottom: -100svh;
 }
 @media (max-width: 767px) {
-  .track { height: 240vh; }
+  .track { height: 290vh; }
 }
 .track.still { height: 200svh; }
 

@@ -80,16 +80,15 @@ function birthRect(w: number, h: number): Rect {
   return { x: (w - cw) / 2, y: h * 0.46 - ch / 2, w: cw, h: ch };
 }
 
-/** The hero card's rect, in stage coordinates at the moment the intro ends (p = 1). */
-function dockRect(stageH: number): Rect | null {
+/** The hero card's rect right now, in stage coordinates: the stars ride the real card as it scrolls in, so the crossfade lines up. */
+function dockRect(stage: HTMLElement): Rect | null {
   const host = document.getElementById("hero-card");
-  const sec = host?.closest("section");
-  if (!host || !sec) return null;
+  if (!host) return null;
   const el = host.querySelector<HTMLElement>("[data-dock] > * > :nth-child(2)") ?? host;
-  const r = el.getBoundingClientRect(), sr = sec.getBoundingClientRect();
+  const r = el.getBoundingClientRect(), sr = stage.getBoundingClientRect();
   if (!r.width) return null;
   const h = Math.abs(r.width / r.height - CARD_AR) > 0.08 ? r.width / CARD_AR : r.height;
-  return { x: r.left, y: r.top - sr.top + (window.innerHeight - stageH), w: r.width, h };
+  return { x: r.left - sr.left, y: r.top - sr.top, w: r.width, h };
 }
 const lerpRect = (a: Rect, b: Rect, k: number): Rect => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), w: lerp(a.w, b.w, k), h: lerp(a.h, b.h, k) });
 
@@ -249,26 +248,28 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       }
       const fade = started > 0 ? sst(0, 0.9, since + 0.3) : 0.35 * sst(0, 1.5, t);
       mirror?.draw({ view, t, fade, dropAmt: 1 - sst(0.05, 0.35, p) * 0.6, touches, now, impact: since >= IMPACT ? since - IMPACT : -1 });
-      const bgO = String(reduce ? 1 : 1 - sst(0.86, 0.93, p));
+      const bgO = String(reduce ? 1 : 1 - sst(0.84, 0.95, p));
       glc.style.opacity = bgO;
       (st.firstElementChild as HTMLElement | null)?.style.setProperty("opacity", bgO); // the backdrop must clear for the hero
       st.querySelector<HTMLElement>(`.${s.credit}`)?.style.setProperty("opacity", bgO);
       const birth = birthRect(w, h);
-      const k = sst(0.84, 0.93, p);
-      const dock = k > 0 ? dockRect(h) : null;
+      // the finished card holds and twinkles for a few scrolls, then glides into the hero over a long, even stretch
+      const k = sst(0.82, 0.93, p);
+      const dock = k > 0 ? dockRect(st) : null;
       drawStars(ctx, word, {
         w, h, t, view, mono, phone,
         twinkle: sst(0, 1, since + 0.5),
         cons: sst(0.36, 0.66, p),
         consDim: sst(0.62, 0.76, p),
-        frame: sst(0.6, 0.8, p),
-        word: sst(0.66, 0.88, p),
-        fade: 1 - sst(0.89, 0.93, p),
+        frame: sst(0.56, 0.72, p),
+        word: sst(0.6, 0.78, p),
+        shimmer: sst(0.74, 0.8, p) * (1 - sst(0.88, 0.95, p)),
+        fade: 1 - sst(0.935, 0.985, p),
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
       drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
-      root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.89, 0.93, p).toFixed(3));
+      root.style.setProperty("--intro-dock", reduce ? "1" : sst(0.92, 0.975, p).toFixed(3));
     };
     const paintNow = () => {
       if (w) frame(reduce ? POSTER_P : scrollYProgress.get());
@@ -293,7 +294,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     const setUi = (p: number, since: number, auto: boolean) => {
       const c = reduce
         ? [0, 0, 1 - sst(0.1, 0.4, p)]
-        : [sst(IMPACT + 0.6, IMPACT + 1.3, since) * (1 - sst(0.12, 0.2, p)), sst(0.44, 0.5, p) * (1 - sst(0.6, 0.66, p)), sst(0.78, 0.82, p) * (1 - sst(0.88, 0.91, p))];
+        : [sst(IMPACT + 0.6, IMPACT + 1.3, since) * (1 - sst(0.12, 0.2, p)), sst(0.44, 0.5, p) * (1 - sst(0.6, 0.66, p)), sst(0.72, 0.77, p) * (1 - sst(0.86, 0.9, p))];
       capRef.current.forEach((el, i) => {
         if (!el) return;
         el.style.opacity = c[i].toFixed(3);
@@ -301,7 +302,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       });
       if (hintRef.current) hintRef.current.style.opacity = userDropped || reduce || since < 0 || gateOpen.current ? "0" : String(sst(IMPACT + 0.2, IMPACT + 0.8, since) * (1 - sst(0.06, 0.12, p)));
       if (cueRef.current) cueRef.current.style.opacity = auto || reduce || since < 0 ? "0" : String(sst(2.4, 3, since) * (1 - sst(0.01, 0.04, p)));
-      const end = reduce ? 0.6 : 0.92;
+      const end = reduce ? 0.6 : 0.975;
       if (skipRef.current) {
         skipRef.current.style.opacity = String(1 - sst(end - 0.05, end, p));
         skipRef.current.style.pointerEvents = p < end ? "auto" : "none";
@@ -380,8 +381,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     let lastFrame = 0;
     const tick = (ts: number) => {
       raf = 0;
-      // phones render the intro at ~30fps: half the GPU work, still smooth for water and stars
-      if (phone && ts - lastFrame < 31) {
+      // phones render the water at ~30fps (half the GPU work); the card handoff runs at full rate so it glides
+      if (phone && scrollYProgress.get() < 0.7 && ts - lastFrame < 31) {
         if (visible && !document.hidden) raf = requestAnimationFrame(tick);
         return;
       }
@@ -410,8 +411,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         if (cross(0.3)) sfx("shimmer");
         if (cross(0.45)) sfx("ripple", { i: 0 });
         if (cross(0.55)) sfx("ripple", { i: 2 });
-        [0.7, 0.74, 0.78, 0.82].forEach((x, i) => cross(x) && sfx("ripple", { i: 3 + i }));
-        if (cross(0.86)) sfx("form");
+        [0.62, 0.66, 0.7, 0.74].forEach((x, i) => cross(x) && sfx("ripple", { i: 3 + i }));
+        if (cross(0.84)) sfx("form");
       }
       const now = clock();
       while (touches.length && now - touches[touches.length - 1].t > (touches[touches.length - 1].user ? 5.2 : 4)) touches.pop();
@@ -432,7 +433,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     // past the handoff the whole layer goes, straight from the scroll event: a fast flick (or iOS momentum)
     // can carry the page past before the frame loop paints its last, cleared frame
     const hideAt = (p: number) => {
-      const gone = p > 0.94;
+      const gone = p > 0.99;
       st.style.visibility = gone ? "hidden" : "visible";
       if (gone) root.style.setProperty("--intro-dock", "1");
     };

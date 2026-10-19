@@ -181,6 +181,7 @@ export type StarFrame = {
   frame: number;  // 0..1 card frame traced
   fade: number;   // 0..1 overall layer opacity (dock handoff)
   twinkle: number; // 0..1 living-star layer
+  shimmer?: number; // 0..1 the finished wordmark's held twinkle, before it docks
   card: Rect;
   mono: string;
   phone: boolean;
@@ -349,14 +350,20 @@ export function drawStars(ctx: CanvasRenderingContext2D, word: Word | null, f: S
       ctx.stroke();
     }
     const base = R.w / 300;
+    const sh = f.shimmer ?? 0;
     for (let i = 0; i < N; i++) {
       const L = lit(i);
       if (L <= 0) continue;
       const m = word.mag[i];
       const flare = 1 + 1.6 * Math.max(0, 1 - Math.abs(L - 0.6) * 3) * (1 - f.word * 0.5); // ignition flash
-      const tw = 0.88 + 0.12 * Math.sin(t * (2 + (i % 5)) + i);
-      const size = (6 + m * 34) * base * flare;
-      star(ctx, px(i), py(i), size, L * tw * f.fade * (0.75 + m * 0.4), [word.col[i * 3], word.col[i * 3 + 1], word.col[i * 3 + 2]], m > 0.55);
+      // held: each star scintillates on its own beat, and a slow glint sweeps the word left to right
+      const calm = 0.88 + 0.12 * Math.sin(t * (2 + (i % 5)) + i);
+      const sc = Math.pow(0.5 + 0.5 * Math.sin(t * (1.1 + (i % 7) * 0.45) + i * 2.39), 4);
+      const dx = word.pts[i * 2] - (((t * 0.32) % 1.5) - 0.25);
+      const glint = Math.exp(-(dx * dx) / 0.006) * sh;
+      const tw = calm * (1 - sh) + (0.62 + 0.38 * sc + 0.5 * glint) * sh;
+      const size = (6 + m * 34) * base * flare * (1 + sh * (0.35 * sc + 0.9 * glint));
+      star(ctx, px(i), py(i), size, Math.min(1.4, L * tw * f.fade * (0.75 + m * 0.4)), [word.col[i * 3], word.col[i * 3 + 1], word.col[i * 3 + 2]], m > 0.55 || glint > 0.5);
     }
   }
   ctx.globalAlpha = 1;
