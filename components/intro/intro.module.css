@@ -6,6 +6,7 @@
   pointer-events: none; /* it overlaps the hero; only the stage takes input, and only while the intro runs */
   height: 440vh; /* desktop: more room for the story; phones keep 290vh below */
   margin-bottom: -100svh;
+  margin-bottom: -100lvh; /* phones: cover the area the toolbar uncovers when it collapses */
 }
 @media (max-width: 767px) {
   .track { height: 290vh; }
@@ -17,6 +18,7 @@
   position: sticky;
   top: 0;
   height: 100svh;
+  height: 100lvh;
   overflow: hidden;
   touch-action: pan-y;
 }

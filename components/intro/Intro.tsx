@@ -281,7 +281,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const cw = st.clientWidth, ch = st.clientHeight;
       if (!cw || !ch) return;
       phone = cw < 768;
-      const cap = Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.75);
+      const cap = Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.5);
       if (cw === w && Math.abs(ch - h) < 2 && fx.width === Math.round(cw * cap)) return;
       w = cw;
       h = ch;
