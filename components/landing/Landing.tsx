@@ -64,8 +64,13 @@ function paceIntro(e: { deltaY: number }): boolean {
   if (!el) return true;
   const end = el.offsetTop + el.offsetHeight - window.innerHeight;
   if (window.scrollY < end - 4 || (e.deltaY < 0 && window.scrollY <= end + window.innerHeight * 0.2)) {
-    const d = e.deltaY * INTRO_PACE;
-    e.deltaY = Math.max(-INTRO_MAX_DELTA, Math.min(INTRO_MAX_DELTA, d));
+    // ease back to normal speed over the last screen, so leaving the intro never lurches mid-scroll
+    const left = (end - window.scrollY) / (window.innerHeight * 0.8);
+    const b = left > 0 ? Math.min(1, left) : 0;
+    const k = b * b * (3 - 2 * b);
+    const d = e.deltaY * (1 - (1 - INTRO_PACE) * k);
+    const cap = INTRO_MAX_DELTA + (1 - k) * 400;
+    e.deltaY = Math.max(-cap, Math.min(cap, d));
   }
   return true;
 }
