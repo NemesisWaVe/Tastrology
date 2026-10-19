@@ -141,6 +141,7 @@ export interface StyleResult {
   capsule: CapsuleSlot[];
   critique: string[];
   stats: { qlooCalls: number; ms: number; llmSteps: number };
+  grounding?: { verified: number; displayed: number; source: "qloo" | "synthetic" };
   /** Average pairwise Jaccard of the seeds' aesthetic tag sets (0-1). Feeds the rarity score. */
   overlap?: number;
   /** Seeds that barely move any brand pick; `influence` is their avg share (0-1). Never invented: absent when none. */
@@ -164,13 +165,13 @@ export type SceneData =
   /** The vibes picked next to the loves, and what each was read as (lib/vibes.ts). */
   | { kind: "vibes"; vibes: { name: string; via: string[] }[] };
 
-export type TraceEvent =
+export type TraceEvent = { at?: number } & (
   | { type: "step"; id: string; label: string; status: "run" | "done" | "warn"; detail?: string }
   | { type: "data"; data: SceneData }
   | { type: "thought"; text: string }
   | { type: "tool"; name: string; args: string; calls: QlooCallLog[]; summary: string }
   | { type: "result"; result: StyleResult }
-  | { type: "error"; message: string; reason?: "upstream" | "deadline" };
+  | { type: "error"; message: string; reason?: "upstream" | "deadline" });
 
 export interface AgentRequest {
   seeds: { id: string; name: string; kind: EntityKind }[];

@@ -3,6 +3,7 @@ export const BRAND = {
   name: "Tastrology",
   tagline: "Astrology, but with receipts.",
   question: "What's your taste sign?",
+  promise: "Your taste, read by Qloo: the brands that fit you, with a receipt for each.",
   cardSet: "SET 01",
   poweredBy: "read from Qloo's taste graph",
 };

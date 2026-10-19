@@ -23,7 +23,7 @@ export function HallOfRares() {
         Some skies are <span className="text-accent">rarer.</span>
       </h2>
       <p className="mt-4 max-w-xl text-ink-2">
-        Rarity isn&apos;t random. It comes from how unusual your loves are together. These are the ones that came out Holo or Secret.
+        Real cards, pulled by real people. These came out Holo or Secret. The foil tier and the taste behind it are different things. <Link href="/odds" className="underline underline-offset-4">How rarity works</Link>.
         {c && (c.holo > 0 || c.secret > 0) && (
           <>
             {" "}

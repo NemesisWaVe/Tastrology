@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { clearPendingRun, signInForRun } from "./authBridge";
 import { splitNdjson } from "./ndjson";
 import { turnstileToken } from "./turnstile";
+import { reportFailure } from "./telemetry";
 import type { AgentRequest, StyleResult, TraceEvent } from "./types";
 
 /** Turn transport / agent failures into something a person can act on. Never surface raw status text. */
@@ -234,6 +235,7 @@ export function useAgentRun() {
     } catch (err) {
       if (id === seq.current) {
         const e = err as Error & { status?: number; retryAfter?: number | null; reason?: string };
+        if (e.status === undefined || e.status >= 500) reportFailure("reading");
         // The last good result stays in state; only the error is recorded.
         setError(friendly(e.status ?? null, e.message, e.retryAfter ?? null, e.reason));
         setErrorReason(e.reason ?? null);

@@ -25,6 +25,7 @@ export async function claimDevice(userId: string, dev: string): Promise<ClaimRes
   if (!page) return { ok: false, reason: "error" };
   let moved = 0;
   let complete = true;
+  const guest = await ddbGet(`DEVICE#${dev}`, "READING");
   for (const it of page.items) {
     const code = String(it.code ?? "");
     if (!code) continue;
@@ -35,8 +36,8 @@ export async function claimDevice(userId: string, dev: string): Promise<ClaimRes
       card: String(it.card ?? ""),
       rarityScore: Number(it.rarityScore) || 0,
       addedAt: Number(it.addedAt) || Date.now(),
-      minted: 0,
-      source: "claim",
+      minted: guest?.code === code && it.source === "guest" ? 1 : 0,
+      source: guest?.code === code && it.source === "guest" ? "guest" : "claim",
     });
     if (out === "created") moved++;
     else if (out === "error") complete = false;

@@ -14,6 +14,7 @@ import { clearLatest, codeOf, forgetReading, latestCode, loadLatest, loadReading
 import { TWIN_CODE } from "@/lib/twins";
 import type { AgentRequest, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
+import { befriendInviter, recordScanMint } from "@/lib/telemetry";
 
 type Stage = "home" | "reveal" | "result";
 
@@ -174,6 +175,10 @@ export default function Home() {
     if (!result || stage !== "reveal") return;
     const reading: Reading = { req, result, votes: {}, pinned: [] };
     saveReading(reading, { latest: true });
+    try { localStorage.setItem("tastrology:first-card", "1"); } catch {}
+    window.dispatchEvent(new Event("tastrology:minted"));
+    if (result.mode === "live" && !result.cached) recordScanMint();
+    if (result.mode === "live") void befriendInviter();
     // The reveal locks page scroll; unlock it before both cards are measured, or the scrollbar coming back when the
     // reveal unmounts nudges the landed card sideways.
     document.body.style.overflow = "";

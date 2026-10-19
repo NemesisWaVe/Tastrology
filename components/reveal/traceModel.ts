@@ -26,10 +26,10 @@ export interface SeedNode {
 
 export type ToolEvent = Extract<TraceEvent, { type: "tool" }>;
 
-export type FeedRow =
+export type FeedRow = { at?: number } & (
   | { kind: "step"; key: string; id: string; label: string; status: "run" | "done" | "warn"; detail?: string }
   | { kind: "thought"; key: string; text: string }
-  | { kind: "tool"; key: string; e: ToolEvent };
+  | { kind: "tool"; key: string; e: ToolEvent });
 
 export interface Word {
   text: string;
@@ -158,7 +158,7 @@ export function buildScene(events: TraceEvent[], hints?: SeedHint[]): SceneModel
       headline = e.label;
       status = e.status;
       const at = rows.findIndex((r) => r.kind === "step" && r.id === e.id);
-      const row: FeedRow = { kind: "step", key: at >= 0 ? rows[at].key : `s${i}`, id: e.id, label: e.label, status: e.status, detail: e.detail };
+      const row: FeedRow = { kind: "step", at: e.at, key: at >= 0 ? rows[at].key : `s${i}`, id: e.id, label: e.label, status: e.status, detail: e.detail };
       if (at >= 0) rows[at] = row;
       else rows.push(row);
       const n = e.label.match(/Resolving (\d+) taste seeds/);
@@ -172,10 +172,10 @@ export function buildScene(events: TraceEvent[], hints?: SeedHint[]): SceneModel
       if (side) oddName = side[1];
       if (e.id === "plan") planner = true;
     } else if (e.type === "thought") {
-      rows.push({ kind: "thought", key: `t${i}`, text: e.text });
+      rows.push({ kind: "thought", at: e.at, key: `t${i}`, text: e.text });
       if (e.text.startsWith("Planner")) planner = true;
     } else if (e.type === "tool") {
-      rows.push({ kind: "tool", key: `x${i}`, e });
+      rows.push({ kind: "tool", at: e.at, key: `x${i}`, e });
       active = e;
       calls += e.calls.length;
       cached += e.calls.filter((c) => c.cached).length;

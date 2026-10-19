@@ -6,10 +6,11 @@ import { ddbConfigured, ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
 import { audienceOf } from "@/lib/friends";
 import { creditsOn, heldRegret, nextRefillAt, refundCredit, refundRegret, RUN_ID_RE, spendCredit, spendRegret } from "@/lib/ledger";
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
-import { deviceId } from "@/lib/device";
+import { deviceId, newDevice } from "@/lib/device";
+import { finishGuest, guestOn, guestReading, releaseGuest, reserveGuest } from "@/lib/guest";
 import { addToPool } from "@/lib/packs";
 import { getPersonaRun, putPersonaRun } from "@/lib/personaRuns";
-import { putReceipt } from "@/lib/receipt";
+import { getReceipt, putReceipt } from "@/lib/receipt";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache, upstash } from "@/lib/cache";
 import { buildCard, redrawCap, SEASON } from "@/lib/card";
@@ -23,6 +24,7 @@ import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
 import { numberCard } from "@/lib/cardStyle";
 import { rollFor, rollOn } from "@/lib/roll";
+import { countEvent } from "@/lib/metrics";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
 
@@ -129,8 +131,9 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
   const run = runAgent(
     req,
     (e) => {
-      f.events.push(e);
-      for (const l of f.listeners) l(e);
+      const timed = { ...e, at: Date.now() - t0 };
+      f.events.push(timed);
+      for (const l of f.listeners) l(timed);
     },
     ac.signal,
   ).then(
@@ -158,13 +161,14 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         // Real people's fresh cards stock the Battle Pack pool (personas stay out).
         if (minter) bg(addToPool(code, card.rarity));
         if (minter) bg(numberCard(code, card.rarity));
-        bg(recordMint(code, SEASON, card.rarityScore));
+        if (!isPersonaRequest(req)) bg(recordMint(code, SEASON, card.rarityScore, card.bigThree.sun.name));
       }
       // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of
       // burning a slot, and in 10 minutes the LLM may be back (Qloo calls stay cached either way).
       if (!llmConfigured() || result.planner === "llm") await results.set(key, rec);
       else await results.set(key, rec, AUTOPILOT_TTL_MS);
       await lastGood.set(fallbackKey, rec);
+      if (!isPersonaRequest(req) && result.mode === "live") bg(countEvent("minted"));
       if (isPersonaRequest(req)) bg(putPersonaRun(key, rec));
       logRun({ runId: result.runId, planner: result.planner, qlooCalls: result.stats.qlooCalls, ms: Date.now() - t0, cached: false, error: null });
       return result;
@@ -221,14 +225,38 @@ export async function POST(request: Request) {
   }
   const key = cacheKey(body);
   const fallbackKey = cacheKey(body, "*");
+  const persona = isPersonaRequest(body);
+  const userId = clerkOn() ? await currentUserId() : null;
+  const cookies: string[] = [];
+  let guest: string | undefined;
+  let guestCode: string | undefined;
+  if (clerkOn() && !userId && !persona) {
+    if (!guestOn()) return Response.json({ error: "Guest readings are unavailable. Sign in or try a demo.", reason: "signin" }, { status: 401 });
+    guest = deviceId(request.headers) ?? undefined;
+    if (!guest) {
+      const device = newDevice();
+      guest = device.id;
+      cookies.push(device.cookie);
+    }
+    const access = await guestReading(guest, key);
+    if (access.status === "used") return Response.json({ error: "Your first guest reading is ready. Sign in to keep it and read again.", reason: "signin" }, { status: 401 });
+    if (access.status === "error") return Response.json({ error: "Guest readings are busy. Try a demo or come back shortly.", reason: "ledger" }, { status: 503 });
+    guestCode = access.code;
+  }
   // Demo personas are read once and kept for good, so the landing page never spends a Qloo call on them.
-  const cached = (await results.get(key)) ?? (isPersonaRequest(body) ? await getPersonaRun(key).catch(() => null) : null) ?? undefined;
+  let cached = (await results.get(key)) ?? (persona ? await getPersonaRun(key).catch(() => null) : null) ?? undefined;
+  if (!cached && guestCode) {
+    const receipt = await getReceipt(guestCode);
+    if (receipt.status === "found" && receipt.rec.result) cached = { events: [], result: receipt.rec.result };
+    else return Response.json({ error: "Your card is saved, but its reading is temporarily unavailable. Please retry.", reason: "ledger" }, { status: 503 });
+  }
   let flight = cached ? undefined : flights.get(key);
   if (flight?.ac.signal.aborted) flight = undefined; // hit its deadline; start fresh
   /** Set when this request just passed the bot check; rides on whatever response goes back. */
   let setCookie: string | undefined;
   const reply = (body: unknown, init: ResponseInit) => {
     const r = Response.json(body, init);
+    for (const cookie of cookies) r.headers.append("set-cookie", cookie);
     if (setCookie) r.headers.append("set-cookie", setCookie);
     return r;
   };
@@ -238,9 +266,6 @@ export async function POST(request: Request) {
   if (!cached && !flight && (await leaseHeld(key))) return running();
   if (!cached && !flight) {
     // Mint gate: demo personas stay anonymous; any other fresh reading needs an account when Clerk is on.
-    const persona = isPersonaRequest(body);
-    const userId = clerkOn() ? await currentUserId() : null;
-    if (clerkOn() && !userId && !persona) return Response.json({ error: "Sign in to mint a fresh card.", reason: "signin" }, { status: 401 });
     const who = userId ? `u:${userId}` : clientId(request.headers);
     // Admins skip the per-person limits, the daily cap and credits. They still queue for a run slot like everyone else.
     const admin = await isAdmin(userId);
@@ -320,9 +345,24 @@ export async function POST(request: Request) {
       }
       minter = { ...minter, runId, paidWith, ...(paidWith === "regret" && regret ? { cap: redrawCap(regret.tier), from: regret.tier } : {}) };
     }
+    if (guest && !(await reserveGuest(guest, key))) {
+      await release();
+      await dropLease(key);
+      return reply({ error: "Your guest reading is already reserved. Retry or sign in.", reason: "signin" }, { status: 401 });
+    }
     flight = startFlight(key, fallbackKey, body, release, minter);
+    if (!persona && process.env.QLOO_MODE !== "mock") later(countEvent("started"));
     // The run outlives this response if the client drops: it finishes, caches its result and releases its slot.
     later(flight.drained);
+  }
+
+  // A fresh flight reserved above; a cached or shared reading reserves here. Either way the card is filed once it lands.
+  if (guest) {
+    if (!(await reserveGuest(guest, key))) return reply({ error: "Your guest reading is already reserved. Retry or sign in.", reason: "signin" }, { status: 401 });
+    const guestDevice = guest;
+    later((cached ? Promise.resolve(cached.result) : flight!.done).then(async (result) => {
+      if (!(await finishGuest(guestDevice, key, result))) throw new Error("Guest save unavailable");
+    }).catch(() => releaseGuest(guestDevice, key)));
   }
 
   const enc = new TextEncoder();
@@ -401,6 +441,7 @@ export async function POST(request: Request) {
     },
   });
   const headers = new Headers({ "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" });
+  for (const cookie of cookies) headers.append("set-cookie", cookie);
   if (setCookie) headers.append("set-cookie", setCookie);
   return new Response(stream, { headers });
 }

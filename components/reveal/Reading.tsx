@@ -589,6 +589,7 @@ function Words({ m }: { m: SceneModel }) {
  */
 function UnderTheHood({ m, running, reduce }: { m: SceneModel; running: boolean; reduce: boolean }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(window.matchMedia("(min-width: 1280px)").matches); }, []);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -623,7 +624,7 @@ function UnderTheHood({ m, running, reduce }: { m: SceneModel; running: boolean;
           <>
             <motion.div
               key="scrim"
-              className="absolute inset-0 z-30 bg-black/40 lg:bg-transparent"
+              className="absolute inset-0 z-30 bg-black/40 lg:pointer-events-none lg:bg-transparent"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -697,6 +698,7 @@ function Feed({ m, running, className = "" }: { m: SceneModel; running: boolean;
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.35, ease: EASE }}
             >
+              {r.at !== undefined && <span className="ml-1 font-mono text-[10px] tabular-nums text-ink-3">+{(r.at / 1000).toFixed(1)}s</span>}
               <Row r={r} />
             </motion.li>
           ))}

@@ -7,6 +7,8 @@ import { blocked } from "@/lib/guard";
 import { cleanBio, tagline } from "@/lib/tagline";
 import { TWIN_CODE } from "@/lib/twins";
 import type { Audience } from "@/lib/types";
+import { countEvent } from "@/lib/metrics";
+import { after } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -150,11 +152,13 @@ export async function POST(request: Request) {
       if (!found) return json({ error: "No player with that code or username." }, 400);
       pc = found.pc;
       const r = await addFriend(uid, me, pc);
+      if (r === "added") after(countEvent("friend_added"));
       const msg = { self: "That's your own code.", unknown: "No player with that code.", full: "Your friends list is full.", error: "Couldn't reach the server." } as const;
       return r in msg ? json({ error: msg[r as keyof typeof msg] }, r === "error" ? 503 : 400) : json({ ok: true, status: r });
     }
     case "accept-friend": {
       const r = await acceptFriend(uid, me, pc);
+      if (!(r in { unknown: 1, full: 1, error: 1 })) after(countEvent("friend_added"));
       const msg = { unknown: "That request is gone.", full: "Your friends list is full.", error: "Couldn't reach the server." } as const;
       return r in msg ? json({ error: msg[r as keyof typeof msg] }, r === "error" ? 503 : 400) : json({ ok: true, status: r });
     }

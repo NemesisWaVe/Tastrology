@@ -20,7 +20,7 @@ class Store {
   }
 }
 const store = new Store();
-(globalThis as { localStorage?: Store }).localStorage = store;
+(globalThis as unknown as { localStorage?: Store }).localStorage = store;
 
 const kinds: QEntity["kind"][] = ["artist", "movie", "book", "tv_show", "place"];
 const brand = (i: number): BrandMatch => ({

@@ -1,4 +1,5 @@
 "use client";
+import { track } from "@/lib/telemetry";
 
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -182,6 +183,7 @@ export function ShareSheet({
         try {
           // Instagram and Snapchat take the picture as the post itself and drop it on some phones when text rides along.
           await navigator.share({ files: [file] });
+          track("shared");
         } catch (e) {
           const name = (e as Error).name;
           // The render outlived the tap: the PNG is ready now, so the next tap goes straight through.
@@ -223,6 +225,7 @@ export function ShareSheet({
   // X takes the link alone: its preview is the full card and opens the card page when tapped (an attached image would
   // replace that preview). On a phone the X app's own scheme opens the compose box (x.com in Safari lands on a login).
   const postX = () => {
+    track("shared");
     sfx("tap");
     setErr(null);
     setNote(null);
@@ -241,6 +244,7 @@ export function ShareSheet({
     setNote(null);
     try {
       await navigator.clipboard.writeText(`${caption} ${link("copy")}`);
+      track("shared");
       setDone("Link copied");
     } catch {
       setErr("Couldn't copy the link");

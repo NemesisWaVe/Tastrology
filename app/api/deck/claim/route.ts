@@ -1,7 +1,7 @@
 import { clerkOn, currentUserId } from "@/lib/auth";
 import { claimDevice } from "@/lib/claim";
 import { ddbConfigured } from "@/lib/ddb";
-import { DEVICE_COOKIE, deviceId } from "@/lib/device";
+import { deviceId } from "@/lib/device";
 import { allow, clientId } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
@@ -27,9 +27,5 @@ export async function POST(request: Request) {
     );
   }
   const res = Response.json({ enabled: true, moved: r.moved }, { headers: NO_STORE });
-  if (r.complete) {
-    const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-    res.headers.append("set-cookie", `${DEVICE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`);
-  }
   return res;
 }

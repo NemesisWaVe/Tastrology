@@ -1,13 +1,12 @@
 "use client";
 
 import { CursorArrow } from "@/components/CursorArrow";
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "motion/react";
+import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
 import { EASE, Magnetic, MaskedWords } from "./primitives";
 import s from "./landing.module.css";
 
-const ROTATING = ["watchlist", "playlist", "bookshelf", "comfort show", "save file", "city break", "podcast queue"];
 
 export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPick: () => void; onCustom: () => void }) {
   const ref = useRef<HTMLElement>(null);
@@ -26,13 +25,6 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
   const textY = useTransform(scrollYProgress, [0, 1], [0, still ? 0 : -120]);
   const textO = useTransform(scrollYProgress, [0, 0.8], [1, reduce ? 1 : 0.15]);
   const cardY = useTransform(scrollYProgress, [0, 1], [0, still ? 0 : 90]);
-
-  const [wi, setWi] = useState(0);
-  useEffect(() => {
-    if (reduce) return;
-    const t = setInterval(() => setWi((i) => (i + 1) % ROTATING.length), 2200);
-    return () => clearInterval(t);
-  }, [reduce]);
 
   const [struck, setStruck] = useState(false);
   useEffect(() => {
@@ -69,22 +61,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             transition={{ duration: 0.9, ease: EASE, delay: 0.75 }}
             className="mt-7 text-[clamp(1.2rem,4.4vw,1.65rem)] leading-tight tracking-tight text-ink-2 max-[480px]:mt-4 max-[480px]:text-[1.05rem]"
           >
-            Your{" "}
-            <span className="relative inline-grid h-[1.2em] overflow-hidden align-bottom">
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  key={ROTATING[wi]}
-                  initial={{ y: "100%", opacity: 0 }}
-                  animate={{ y: "0%", opacity: 1 }}
-                  exit={{ y: "-100%", opacity: 0 }}
-                  transition={{ duration: 0.6, ease: EASE }}
-                  className="col-start-1 row-start-1 whitespace-nowrap font-serif text-[1.12em] italic text-ink"
-                >
-                  {ROTATING[wi]}
-                </motion.span>
-              </AnimatePresence>
-            </span>{" "}
-            says more than your birth chart.
+            {BRAND.promise}
           </motion.p>
 
           <motion.p
@@ -93,8 +70,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             transition={{ duration: 0.9, ease: EASE, delay: 0.88 }}
             className="mt-5 max-w-[34rem] text-[15px] leading-relaxed text-ink-3 max-[480px]:hidden sm:text-base"
           >
-            Name 3 to 8 things you love: an album, a film, a book, a city. An agent looks them up in Qloo&apos;s taste graph and hands back a{" "}
-            <span className="text-ink">holo card</span> with your Sun, Moon and Rising, how rare your mix is, and the brands that fit. Each brand says which of your picks sent it.
+            Shopping by vibe shouldn&apos;t mean guessing. Bring your favourite music, films and books; find brands through the things you already love. Your first reading needs no account. Your taste sign comes wrapped in a collectible card.
           </motion.p>
 
           <motion.div

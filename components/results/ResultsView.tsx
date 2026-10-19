@@ -10,6 +10,7 @@ import { FlipCard } from "@/components/card/FlipCard";
 import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
 import { Sparkle } from "@/components/card/Sigils";
 import { BigThree } from "./BigThree";
+import { TasteCensus } from "./TasteCensus";
 import { BrandCard } from "./Brands";
 import { CapsuleAndBridges, Changes, Critique, Matrix } from "./Sections";
 import { SectionHead, Thumb, useWidth, type Vote } from "./ui";
@@ -103,6 +104,7 @@ export function ResultsView({
 
           {/* reading column */}
           <div className="min-w-0">
+            {result.mode === "live" && <TasteCensus score={card.rarityScore} />}
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-2">Your taste sign</span>
               <span

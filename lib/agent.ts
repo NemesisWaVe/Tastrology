@@ -914,6 +914,8 @@ async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal
   result.brands = st.ledger.filter(result.brands, (b) => b.entity.id).kept.filter((b) => !disliked.has(b.entity.id));
   result.bridges = st.ledger.filter(result.bridges, (b) => b.entity.id).kept.filter((b) => !disliked.has(b.entity.id));
   result.capsule = capsule(result.brands);
+  result.grounding = { verified: result.brands.filter((brand) => st.ledger.has(brand.entity.id)).length, displayed: result.brands.length, source: result.mode === "live" ? "qloo" : "synthetic" };
+  emit({ type: "step", id: "grounding", status: "done", label: `Grounding gate: ${result.grounding.verified}/${result.grounding.displayed} brands verified against ${result.mode === "live" ? "Qloo" : "synthetic fixtures"}, 0 invented`, detail: "Every displayed brand ID appeared in this run. This checks provenance, not whether a brand will suit you." });
   result.critique = [...st.critique, keptLine(st, result.brands.filter((b) => !b.side).length, result.brands.filter((b) => b.side).length)];
   return result;
 }

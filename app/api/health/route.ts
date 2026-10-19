@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
-import { storeMode } from "@/lib/cache";
+import { storeMode, upstash } from "@/lib/cache";
+import { funnelCounts } from "@/lib/metrics";
 import { ddbConfigured } from "@/lib/ddb";
 import { configProblems, deepCheck } from "@/lib/health";
 import { turnstileOn } from "@/lib/human";
@@ -32,6 +33,8 @@ export async function GET(request: Request) {
   if (wantDeep && !authed) return Response.json({ error: "unauthorized" }, { status: 401, headers: { "cache-control": "no-store" } });
 
   const problems = configProblems();
+  const detail = q.get("detail") === "1" && authed;
+  const [funnel, errors] = detail ? await Promise.all([funnelCounts(), upstash([["LRANGE", "tm:errors", 0, 99]])]) : [];
   const [today, deep] = await Promise.all([
     q.get("detail") === "1" && authed ? Promise.all(COUNTERS.map(async (c) => [c, await readDaily(c)] as const)).then(Object.fromEntries) : undefined,
     wantDeep ? deepCheck() : undefined,
@@ -47,6 +50,7 @@ export async function GET(request: Request) {
     turnstile: turnstileOn(),
     ...(problems.length ? { problems } : {}),
     ...(today ? { today } : {}),
+    ...(detail ? { funnel, errors: errors?.[0] ?? [], measurement: "Event counts, not unique people. Shared means link copied, compose opened or native handoff; scanned means a public invite/card fight visit; scan_minted is client-reported. Client events respect DNT/GPC. No visitor identifiers in these counters." } : {}),
     ...(deep ?? {}),
   };
   return Response.json(body, { status: ok ? 200 : 503, headers: { "cache-control": "no-store" } });

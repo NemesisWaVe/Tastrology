@@ -19,6 +19,7 @@ import { TWIN_CODE } from "@/lib/twins";
 import type { BrandMatch, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 import { ResultsView, type Vote } from "./ResultsView";
+import { QlooComparison } from "./QlooComparison";
 
 /**
  * Your own reading of a card: hero, receipts, matches, capsule and the re-plan loop. The same view right after the
@@ -215,6 +216,7 @@ export function OwnedReading({
           onPull={onPull}
           after={after}
         />
+        <QlooComparison key={result.runId} result={result} />
       </main>
 
       {replanning && (

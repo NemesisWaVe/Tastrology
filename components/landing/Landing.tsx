@@ -1,6 +1,7 @@
 "use client";
 
 import { HallOfRares } from "./HallOfRares";
+import { AfterFirstCard } from "@/components/site/AfterFirstCard";
 import { Mark } from "@/components/site/Mark";
 import { ReactLenis, useLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
@@ -193,9 +194,11 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         </a>
         <div className="flex items-center gap-3 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
+          <AfterFirstCard>
           <a href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">Shop</a>
           <a href="/deck" className="whitespace-nowrap py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink"><span className="hidden sm:inline">My </span>Deck</a>
           <a href="/friends" className="whitespace-nowrap py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">Friends</a>
+          </AfterFirstCard>
           <SoundToggle />
           <AuthNav />
           <button

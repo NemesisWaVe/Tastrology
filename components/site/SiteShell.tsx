@@ -4,6 +4,7 @@ import { AuthNav } from "@/components/auth/AuthNav";
 import { BRAND } from "@/lib/brand";
 import { LegalLinks } from "./LegalLinks";
 import { SoundToggle } from "./SoundToggle";
+import { AfterFirstCard } from "./AfterFirstCard";
 
 /** Nav + footer for the quiet pages (shop, account, legal, sign-in). Same look as /deck. */
 export function SiteShell({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export function SiteNav() {
         <span className="hidden sm:inline">{BRAND.name}</span>
       </Link>
       <span className="flex items-center gap-3 sm:gap-4">
+        <AfterFirstCard>
         <Link href="/shop" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Shop
         </Link>
@@ -41,6 +43,7 @@ export function SiteNav() {
         <Link href="/friends" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Friends
         </Link>
+        </AfterFirstCard>
         <SoundToggle />
         <AuthNav />
         <Link href="/?new=1" className="hidden rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">

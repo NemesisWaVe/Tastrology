@@ -4,6 +4,7 @@ import { Bricolage_Grotesque, Instrument_Serif, Inter, JetBrains_Mono } from "ne
 import { ClerkBridge } from "@/components/auth/ClerkBridge";
 import { SoundOrb } from "@/components/site/SoundOrb";
 import { BRAND } from "@/lib/brand";
+import { Telemetry } from "@/components/site/Telemetry";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({ variable: "--nf-display", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <html lang="en">
         <body className={fonts}>
           {children}
+          <Telemetry />
           <SoundOrb onlyWhenLocked />
         </body>
       </html>
@@ -37,6 +39,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <html lang="en">
         <body className={fonts}>
           {children}
+          <Telemetry />
           <SoundOrb onlyWhenLocked />
           <ClerkBridge />
         </body>
