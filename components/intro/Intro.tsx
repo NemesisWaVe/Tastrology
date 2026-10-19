@@ -262,7 +262,9 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       }
       const birth = birthRect(w, h);
       // the finished card holds and twinkles for a few scrolls, then glides into the hero over a long, even stretch
-      const k = sst(0.82, 0.93, p);
+      // phones: no glide. The hero card moves with native scroll, which iOS runs ahead of the frame loop, so a
+      // canvas card chasing it lags and ghosts. Instead the card dissolves in place as the real one fades in.
+      const k = phone ? 0 : sst(0.82, 0.93, p);
       const dock = k > 0 ? dockRect(st) : null;
       drawStars(ctx, word, {
         w, h, t, view, mono, phone,
@@ -272,12 +274,12 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         frame: sst(0.56, 0.72, p),
         word: sst(0.6, 0.78, p),
         shimmer: sst(0.74, 0.8, p) * (1 - sst(0.88, 0.95, p)),
-        fade: 1 - sst(0.935, 0.985, p),
+        fade: 1 - (phone ? sst(0.82, 0.9, p) : sst(0.935, 0.985, p)),
         card: dock ? lerpRect(birth, dock, k) : birth,
       });
       while (taps.length && now - taps[0].t > 5.2) taps.shift();
       drawDrops(ctx, touches, now, view.hz * h, mono, phone, 1 - sst(0.15, 0.3, p), taps);
-      const dk = reduce ? 1 : sst(0.92, 0.975, p);
+      const dk = reduce ? 1 : phone ? sst(0.84, 0.94, p) : sst(0.92, 0.975, p);
       const dks = dk.toFixed(3);
       // a custom property on <html> restyles the whole page: write it only when it moves
       if (dks !== lastDock) {
@@ -324,7 +326,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       }
       st.style.pointerEvents = p < end ? "auto" : "none";
       if (reduce) st.style.opacity = String(1 - sst(0.35, 0.95, p));
-      const on = p < end;
+      // hysteresis: flicking back and forth across the end must not re-render the page (nav, sound orb) every crossing
+      const on = activeOn === false ? p < end - 0.06 : p < end;
       if (on !== activeOn) activeRef.current?.((activeOn = on));
       if (p > 0.95) store.set();
     };
