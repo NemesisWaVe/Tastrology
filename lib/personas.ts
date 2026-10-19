@@ -7,6 +7,8 @@ export interface Persona {
   emoji: string;
   seeds: { name: string; kind: EntityKind }[];
   budget?: 1 | 2 | 3;
+  /** The tier this demo card shows, so the home page has one of each: Rare, Holo Rare, Secret Rare. */
+  showcase: "rare" | "holo" | "secret";
 }
 
 /** Seeds are resolved through Qloo search at run time, so the same personas work in live and mock mode. */
@@ -15,6 +17,7 @@ export const PERSONAS: Persona[] = [
     key: "soft",
     name: "The Soft Melancholic",
     emoji: "🌙",
+    showcase: "rare",
     blurb: "Sad-girl indie, slow cinema, Murakami on the train",
     seeds: [
       { name: "Phoebe Bridgers", kind: "artist" },
@@ -28,6 +31,7 @@ export const PERSONAS: Persona[] = [
     key: "neon",
     name: "The Neon Contradiction",
     emoji: "⚡",
+    showcase: "secret",
     blurb: "Cyberpunk nights… and a soft spot for baking shows",
     seeds: [
       { name: "Blade Runner 2049", kind: "movie" },
@@ -41,6 +45,7 @@ export const PERSONAS: Persona[] = [
     key: "mumbai",
     name: "The Golden Storyteller",
     emoji: "🪔",
+    showcase: "holo",
     blurb: "Prateek Kuhad, The Lunchbox, Made in Heaven, Ghibli",
     seeds: [
       { name: "Prateek Kuhad", kind: "artist" },
@@ -57,6 +62,13 @@ export function personaRequest(p: Persona): AgentRequest {
 }
 
 /** True when a request is one of the demo personas (their seeds carry names, not Qloo ids). Demo cards stay out of decks. */
+/** The persona a request matches, by its seed names. */
+export function personaFor(req: AgentRequest | null | undefined): Persona | undefined {
+  if (!req || req.seeds.some((s) => s.id)) return undefined;
+  const names = req.seeds.map((s) => s.name.toLowerCase()).sort().join("|");
+  return PERSONAS.find((p) => p.seeds.map((s) => s.name.toLowerCase()).sort().join("|") === names);
+}
+
 export function isPersonaRequest(req: AgentRequest | null | undefined): boolean {
   if (!req || req.seeds.some((s) => s.id)) return false;
   const names = req.seeds.map((s) => s.name.toLowerCase()).sort().join("|");

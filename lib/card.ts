@@ -162,7 +162,7 @@ export function buildCard(r: StyleResult): CardData {
   const rarityScore = pts.obscurity + pts.pairing + pts.spread + pts.tension;
   const scored: Rarity = rarityScore >= RARITY_CUTS.secret ? "secret" : rarityScore >= RARITY_CUTS.holo ? "holo" : rarityScore >= RARITY_CUTS.rare ? "rare" : "common";
   // Rolled cards take the roll; older cards and personas keep the tier their taste score earned.
-  const natural: Rarity = r.roll?.tier ?? scored;
+  const natural: Rarity = r.roll?.tier ?? r.showcase ?? scored;
   // A second draw (paid by a regret) can't outrank the card it replaced.
   const TIER: Rarity[] = ["common", "rare", "holo", "secret"];
   const cap = r.redraw?.cap;

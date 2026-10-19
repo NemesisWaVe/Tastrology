@@ -143,7 +143,7 @@ export function ResultsView({
                   </>
                 ) : (
                   <>
-                    {card.rarityLabel} · {card.rarityScore}/100
+                    {card.rarityLabel} · {result.showcase ? "demo card · taste marks " : ""}{card.rarityScore}/100
                   </>
                 )}
               </p>

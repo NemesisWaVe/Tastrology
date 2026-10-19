@@ -15,7 +15,7 @@ import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache, upstash } from "@/lib/cache";
 import { buildCard, redrawCap, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
-import { isPersonaRequest, PERSONAS } from "@/lib/personas";
+import { isPersonaRequest, personaFor, PERSONAS } from "@/lib/personas";
 import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
 import { acquireSlot, allow, bumpDaily, clientId, clientIp } from "@/lib/ratelimit";
 import { registerFighter, toSheet } from "@/lib/fighters";
@@ -142,6 +142,8 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       // Register the card's twin server-side, before the result is returned or cached. (Stage C: also write the fighter sheet here.)
       // Rarity is a roll for real mints (lib/roll.ts): keyed to the account and the paid run, kept in the cached result so
       // a replay of the same picks is the same card. Personas and runs without an account keep the taste-scored tier.
+      const showcase = personaFor(req)?.showcase;
+      if (showcase) result.showcase = showcase;
       if (minter && rollOn() && result.mode !== "mock") result.roll = rollFor(minter.userId, minter.runId ?? result.runId, SEASON);
       if (minter?.cap) {
         result.redraw = { cap: minter.cap };
@@ -245,6 +247,19 @@ export async function POST(request: Request) {
   }
   // Demo personas are read once and kept for good, so the landing page never spends a Qloo call on them.
   let cached = (await results.get(key)) ?? (persona ? await getPersonaRun(key).catch(() => null) : null) ?? undefined;
+  // Runs stored before personas had a fixed tier: give them theirs, and register the card it now makes (write-once).
+  const showcase = persona ? personaFor(body)?.showcase : undefined;
+  if (cached && showcase && cached.result.showcase !== showcase) {
+    cached = { ...cached, result: { ...cached.result, showcase } };
+    if (cached.result.mode !== "mock") {
+      const r = cached.result;
+      later((async () => {
+        const code = await registerTwin(buildCard(r));
+        await registerFighter(code, toSheet(r));
+        await putReceipt(code, r);
+      })());
+    }
+  }
   if (!cached && guestCode) {
     const receipt = await getReceipt(guestCode);
     if (receipt.status === "found" && receipt.rec.result) cached = { events: [], result: receipt.rec.result };

@@ -121,6 +121,8 @@ export interface StyleResult {
   redraw?: { cap: "common" | "rare" | "holo" | "secret" };
   /** The mint's rarity roll (lib/roll.ts). Absent on older cards and demo personas: they keep the taste-scored tier. */
   roll?: { tier: "common" | "rare" | "holo" | "secret"; u: number; season: string };
+  /** Demo personas only: the fixed tier each one shows, so the home page displays Rare, Holo Rare and Secret Rare. */
+  showcase?: "common" | "rare" | "holo" | "secret";
   mode: "live" | "mock";
   planner: "llm" | "autopilot";
   cached?: boolean;
