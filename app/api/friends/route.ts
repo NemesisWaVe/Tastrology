@@ -14,7 +14,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "cache-control": "private, no-store" };
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers: NO_STORE });
+const json = (body: unknown, status = 200) => {
+  if (status >= 500) console.warn(JSON.stringify({ evt: "friends_5xx", status, body, at: new Error().stack?.split(/\n/)[2]?.trim() }));
+  return Response.json(body, { status, headers: NO_STORE });
+};
 
 /**
  * GET              your code, fighter, friends, bouts and dust

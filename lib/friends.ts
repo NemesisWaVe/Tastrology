@@ -131,10 +131,10 @@ export async function ensurePlayer(uid: string): Promise<Player | null> {
   for (let i = 0; i < 5; i++) {
     const pc = newCode();
     const claim = await ddbPutIfAbsent({ PK: `PLAYER#${pc}`, SK: "META", uid, at: Date.now() });
-    if (claim === "error") return null;
+    if (claim === "error") return (console.warn(JSON.stringify({ evt: "player_fail", step: "claim" })), null);
     if (claim === "exists") continue;
     const put = await ddbPutIfAbsent({ PK: U(uid), SK: "PLAYER", pc, ...face, at: Date.now() });
-    if (put === "error") return null;
+    if (put === "error") return (console.warn(JSON.stringify({ evt: "player_fail", step: "put" })), null);
     if (put === "created") return { pc, ...face };
     // Lost a race with a parallel first visit: theirs stands, this code stays an orphan nobody can reach.
     const raced = toPlayer(await ddbGet(U(uid), "PLAYER"));
@@ -146,10 +146,13 @@ export async function ensurePlayer(uid: string): Promise<Player | null> {
       values: { ":pc": pc, ":n": face.name, ":c": face.card, ":r": face.rarity, ":a": Date.now() },
       condition: "attribute_not_exists(pc)",
     });
-    if (healed === "error") return null;
+    if (healed === "error") return (console.warn(JSON.stringify({ evt: "player_fail", step: "heal" })), null);
     console.warn(JSON.stringify({ evt: "player_heal", result: healed }));
-    return toPlayer(await ddbGet(U(uid), "PLAYER"));
+    const after = await ddbGet(U(uid), "PLAYER");
+    if (!toPlayer(after)) console.warn(JSON.stringify({ evt: "player_fail", step: "reread", keys: after ? Object.keys(after) : null }));
+    return toPlayer(after);
   }
+  console.warn(JSON.stringify({ evt: "player_fail", step: "codes" }));
   return null;
 }
 
