@@ -56,7 +56,9 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
   // phones: a still sky behind the pack and no live blur, so the tear and the pull get the whole GPU
   const [phone, setPhone] = useState(false);
   useEffect(() => setPhone(window.matchMedia("(pointer: coarse)").matches), []);
-  const cardW = Math.round(Math.max(220, Math.min(340, w - 64, (h - 270) * (63 / 88))));
+  // Sized by height first: the badge above and "See your receipts" below must fit on the shortest phones (an SE in
+  // Safari shows ~375x550). The old 220px floor pushed the button off those screens; 176 still reads.
+  const cardW = Math.round(Math.max(176, Math.min(340, w - 64, (h - (h < 640 ? 250 : 270)) * (63 / 88))));
   const packW = Math.round(Math.min(cardW + 18, ((h - 230) / 1.5) | 0));
   const packH = Math.round(packW * 1.5);
   const tearY = Math.round(packH * 0.15);
@@ -446,7 +448,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
 
       <motion.div animate={shake} className="relative z-10 flex flex-1 flex-col">
         {/* header copy */}
-        <div className="relative z-10 h-[92px] px-6 pt-6 text-center sm:pt-8">
+        <div className="relative z-10 h-[80px] px-6 pt-4 text-center min-[400px]:h-[92px] min-[400px]:pt-6 sm:pt-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={stage === "revealed" ? "rev" : stage === "sealed" ? "sealed" : "card"}
@@ -707,7 +709,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
         </div>
 
         {/* footer */}
-        <div className="relative z-10 flex min-h-[112px] flex-col items-center justify-end gap-3 px-6 pb-6">
+        <div className="relative z-10 flex min-h-[112px] flex-col items-center justify-end gap-3 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] min-[400px]:pb-6">
           <AnimatePresence mode="wait">
             {stage === "sealed" && (
               <motion.div key="h1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-2">
