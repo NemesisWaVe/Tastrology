@@ -59,7 +59,7 @@ function useCardWidth() {
     const f = () =>
       setW(
         Math.floor(
-          Math.min(210, (Math.min(window.innerWidth, 600) - 32 - 18) / 2),
+          Math.min(210, (Math.min(window.innerWidth, 600) - 32 - (window.innerWidth < 640 ? 28 : 18)) / 2),
         ),
       );
     f();
@@ -399,7 +399,7 @@ function Sequence({
           style={{ top: -bleed, height: `calc(100% + ${bleed * 2}px)` }}
         />
         <div
-          className="flex items-start justify-between gap-[18px]"
+          className="flex items-start justify-between gap-7 sm:gap-[18px]"
           style={{ perspective: 900 }}
         >
           {(["a", "b"] as const).map((side) => (
@@ -422,7 +422,7 @@ function Sequence({
                 </motion.div>
               </motion.div>
               <div className="flex w-full flex-col items-center gap-1 text-center">
-                <p className="line-clamp-2 font-display text-[14px] font-semibold leading-tight text-ink">
+                <p className="line-clamp-2 px-1 font-display text-[13px] font-semibold leading-snug text-ink sm:text-[14px]">
                   {out.names[side]}
                 </p>
                 <div
@@ -455,14 +455,14 @@ function Sequence({
       </section>
 
       {/* Scoreboard */}
-      <ol className="mt-5 grid grid-cols-4 gap-1.5" aria-label="Rounds">
+      <ol className="mt-7 grid grid-cols-4 gap-2 sm:mt-5 sm:gap-1.5" aria-label="Rounds">
         {out.rounds.map((r, i) => {
           const done = i < decided.length;
           const now = i === roundIdx;
           return (
             <li
               key={r.stat}
-              className={`rounded-xl border px-2 py-1.5 text-center transition-colors duration-500 ${now ? "border-ink-3 bg-paper-2" : "border-line"}`}
+              className={`rounded-xl border px-1 py-2 text-center sm:px-2 sm:py-1.5 transition-colors duration-500 ${now ? "border-ink-3 bg-paper-2" : "border-line"}`}
               style={
                 done && r.winner !== "tie"
                   ? {
@@ -472,7 +472,7 @@ function Sequence({
                   : undefined
               }
             >
-              <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3 sm:text-[9.5px] sm:tracking-[0.14em]">
                 {r.stat}
               </p>
               <p
@@ -744,7 +744,7 @@ function Slam({
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
         Final · {out.score.a}–{out.score.b}
       </p>
-      <p className={`mt-1 max-w-md font-display font-bold leading-tight tracking-tight text-ink ${compact ? "text-[24px]" : "text-[28px]"}`}>
+      <p className={`mt-1 max-w-md font-display font-bold leading-tight tracking-tight text-ink ${compact ? "text-[22px] sm:text-[24px]" : "text-[22px] sm:text-[28px]"}`}>
         {out.winner === "tie" ? (
           <>
             Dead even. <span className="font-serif font-normal italic text-ink-2">The two skies merge.</span>
@@ -762,7 +762,7 @@ function Slam({
         Compatibility
       </p>
       <p
-        className={`font-display font-extrabold leading-none tracking-tighter text-accent tabular-nums ${compact ? "text-[72px]" : "text-[104px]"}`}
+        className={`font-display font-extrabold leading-none tracking-tighter text-accent tabular-nums ${compact ? "text-[64px] sm:text-[72px]" : "text-[72px] sm:text-[104px]"}`}
         style={{ textShadow: "0 0 40px rgb(198 255 61 / 0.35)" }}
       >
         {v}

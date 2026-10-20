@@ -29,8 +29,10 @@ export async function GET(request: Request) {
   const out = battle(fromSheet(fa), fromSheet(fb));
   // Sheets carry no images, so the cards come back from their twins (art, style, rarity number) when they can.
   const [twa, twb] = await Promise.all([getTwin(a).catch(() => null), getTwin(b).catch(() => null)]);
-  if (twa?.art?.length) out.cards.a = { ...out.cards.a, art: twa.art, evolvesFrom: twa.evolvesFrom, living: twa.living, rarityNo: twa.rarityNo };
-  if (twb?.art?.length) out.cards.b = { ...out.cards.b, art: twb.art, evolvesFrom: twb.evolvesFrom, living: twb.living, rarityNo: twb.rarityNo };
+  // the minted tier too: a sheet can't recompute a roll, so without this every rolled card fights as its scored tier
+  if (twa) out.cards.a = { ...out.cards.a, rarity: twa.rarity, rarityLabel: twa.rarityLabel, rarityNo: twa.rarityNo, living: twa.living, ...(twa.art?.length ? { art: twa.art, evolvesFrom: twa.evolvesFrom } : {}) };
+  // the minted tier too: a sheet can't recompute a roll, so without this every rolled card fights as its scored tier
+  if (twb) out.cards.b = { ...out.cards.b, rarity: twb.rarity, rarityLabel: twb.rarityLabel, rarityNo: twb.rarityNo, living: twb.living, ...(twb.art?.length ? { art: twb.art, evolvesFrom: twb.evolvesFrom } : {}) };
   const [x, y] = [a, b].sort();
   // Sides matter in the result, so a swapped order gets its own key.
   const key = `battles/v1/${x}_${y}_${ENGINE_V}${a === x ? "" : "_r"}.json`;
