@@ -77,15 +77,22 @@ type DdbResult = { ok: true; json: Record<string, unknown> } | { ok: false; type
 async function call(action: string, payload: Record<string, unknown>, table = true, timeoutMs = 2500): Promise<DdbResult | null> {
   const c = ddbConfig();
   if (!c) return null;
-  try {
-    const { url, headers, body } = ddbRequest(c, action, table ? { TableName: c.table, ...payload } : payload);
-    const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (res.ok) return { ok: true, json };
-    return { ok: false, type: String(json.__type ?? res.status).split("#").pop()!, json };
-  } catch {
-    return null;
+  // one retry: a cold function's first signed call can time out on connection setup
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { url, headers, body } = ddbRequest(c, action, table ? { TableName: c.table, ...payload } : payload);
+      const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (res.ok) return { ok: true, json };
+      const type = String(json.__type ?? res.status).split("#").pop()!;
+      if (type !== "ConditionalCheckFailedException" && type !== "TransactionCanceledException") console.warn(JSON.stringify({ evt: "ddb_fail", action, type, status: res.status, msg: String(json.message ?? json.Message ?? "").slice(0, 200) }));
+      if (res.status >= 500 || type.includes("Throttl")) continue;
+      return { ok: false, type, json };
+    } catch (err) {
+      console.warn(JSON.stringify({ evt: "ddb_fail", action, attempt, err: String(err).slice(0, 200) }));
+    }
   }
+  return null;
 }
 
 /** Write-once put: an existing item with the same key is never overwritten. */
