@@ -18,8 +18,6 @@ export default function ClerkNav() {
         <UserButton appearance={{ elements: { avatarBox: "h-7 w-7" } }}>
           <UserButton.MenuItems>
             <UserButton.Link label="Account" labelIcon={<Dot />} href="/account" />
-            <UserButton.Link label="My deck" labelIcon={<Dot />} href="/deck" />
-            <UserButton.Link label="Friends" labelIcon={<Dot />} href="/friends" />
           </UserButton.MenuItems>
         </UserButton>
       </SignedIn>

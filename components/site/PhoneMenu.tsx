@@ -2,14 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useHasPlace } from "./AfterFirstCard";
+import { authOn, whenAuthReady, type Bridge } from "@/lib/authBridge";
 
 /**
- * Phones: the nav links live behind one button, so the bar fits a 320px screen with the avatar and sound toggle
- * still in reach. Desktop shows the links inline instead (sm and up), so this renders nothing there.
+ * Phones: the nav links and the account live behind this one button, so the bar fits a 320px screen and there is a
+ * single place to tap. Desktop shows the links and avatar inline instead (sm and up), so this renders nothing there.
  */
 export function PhoneMenu({ newHref = "/?new=1", onNew }: { newHref?: string; onNew?: () => void }) {
   const has = useHasPlace();
   const [open, setOpen] = useState(false);
+  // account sits in this same menu on phones (the avatar is desktop only), so there is one thing to tap
+  const [auth, setAuth] = useState<{ b: Bridge; signedIn: boolean } | null>(null);
+  useEffect(() => {
+    if (!authOn) return;
+    let off: (() => void) | undefined, dead = false;
+    void whenAuthReady(15000).then((b) => {
+      if (!b || dead) return;
+      setAuth({ b, signedIn: b.signedIn() });
+      off = b.onChange((signedIn) => setAuth({ b, signedIn }));
+    });
+    return () => {
+      dead = true;
+      off?.();
+    };
+  }, []);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -53,6 +69,29 @@ export function PhoneMenu({ newHref = "/?new=1", onNew }: { newHref?: string; on
               <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">{l.hint}</span>
             </a>
           ))}
+          {auth &&
+            (auth.signedIn ? (
+              <div className="mt-1 flex items-center justify-between border-t border-line px-4 pb-1 pt-3">
+                <a href="/account" className="font-display text-[15px] font-medium text-ink-2" onClick={() => setOpen(false)}>
+                  Account
+                </a>
+                <button
+                  type="button"
+                  className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3"
+                  onClick={() => {
+                    setOpen(false);
+                    void auth.b.signOut();
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <button type="button" className={`${item} w-full`} onClick={() => { setOpen(false); auth.b.openSignIn(); }}>
+                <span className="font-display text-[17px] font-semibold text-ink">Sign in</span>
+                <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">keep your deck</span>
+              </button>
+            ))}
           <a
             href={newHref}
             onClick={(e) => {

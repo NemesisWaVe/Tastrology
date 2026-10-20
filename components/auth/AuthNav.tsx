@@ -22,5 +22,6 @@ export function AuthNav() {
     };
   }, []);
   if (!authOn) return null;
-  return ready ? <ClerkNav /> : <span className="inline-block h-7 w-7" aria-hidden />;
+  // phones: account lives in the one menu (PhoneMenu), so the bar has a single place to tap
+  return <span className="hidden items-center sm:inline-flex">{ready ? <ClerkNav /> : <span className="inline-block h-7 w-7" aria-hidden />}</span>;
 }
