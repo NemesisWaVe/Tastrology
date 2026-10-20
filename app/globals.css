@@ -292,3 +292,79 @@ html,
 body {
   overflow-x: clip;
 }
+
+/* ---- "Your loves": the centre of the stage. A slow holo ring travels the card's edge and a soft spotlight sits
+   behind it while it's on screen, so a skimming eye lands here. It settles to a steady accent ring once the
+   picks are in, so it never nags someone who is already busy. ---- */
+@property --loves-ang {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.lovesStage {
+  position: relative;
+  isolation: isolate;
+}
+.lovesStage::before,
+.lovesStage::after {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 29.5px;
+  pointer-events: none;
+  background: conic-gradient(from var(--loves-ang), #ff7773, #ffed5f, #c6ff3d, #83fff7, #d875ff, #ff7773);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  z-index: -1;
+}
+/* the ring: only the 1.5px edge shows */
+.lovesStage::before {
+  padding: 1.5px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+/* the glow under it */
+.lovesStage::after {
+  inset: 8px;
+  filter: blur(34px);
+}
+.lovesStage[data-live="1"]::before {
+  opacity: 0.95;
+  animation: lovesSpin 6s linear infinite;
+}
+.lovesStage[data-live="1"]::after {
+  opacity: 0.28;
+  animation: lovesSpin 6s linear infinite;
+}
+.lovesStage[data-ready="1"]::before {
+  opacity: 1;
+  background: var(--accent);
+  animation: none;
+}
+.lovesStage[data-ready="1"]::after {
+  opacity: 0.22;
+  background: var(--accent);
+  animation: none;
+}
+@keyframes lovesSpin {
+  to {
+    --loves-ang: 360deg;
+  }
+}
+/* phones: the glow is a static tint (a blurred spinning layer costs a full repaint every frame) */
+@media (max-width: 767px), (pointer: coarse) {
+  .lovesStage::after {
+    filter: none;
+    inset: -10px;
+    border-radius: 36px;
+    background: radial-gradient(closest-side, rgb(198 255 61 / 0.18), transparent);
+    animation: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lovesStage::before,
+  .lovesStage::after {
+    animation: none !important;
+  }
+}

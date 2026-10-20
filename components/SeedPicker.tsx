@@ -62,6 +62,9 @@ const TRY_KIND: Record<string, EntityKind | "vibe"> = {
 };
 const MAX = 8;
 const VIBES_MAX = 2;
+const PLURAL: Record<string, string> = { artist: "artists", movie: "films", tv_show: "shows", book: "books", place: "places", podcast: "podcasts", videogame: "games" };
+/** Cycled in the empty search box, one of each kind, so it reads "type something like this". */
+const ALL_HINTS = ["Frank Ocean", "Spirited Away", "Fleabag", "Kyoto", "Hades", "Normal People", "matcha"];
 const VIBE_HINTS = ["ramen", "shoegaze", "hiking", "thrifting", "brutalism", "matcha", "k-pop"];
 
 const ease = [0.16, 1, 0.3, 1] as const;
@@ -103,8 +106,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   // The Vibes field cycles examples until you type (fixed on reduced motion).
   const [hint, setHint] = useState(0);
   useEffect(() => {
-    if (kind !== "vibe" || q || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setInterval(() => setHint((h) => (h + 1) % VIBE_HINTS.length), 2200);
+    if ((kind !== "vibe" && kind !== "all") || q || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setHint((h) => h + 1), 2200);
     return () => clearInterval(t);
   }, [kind, q]);
 
@@ -271,10 +274,11 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         <div
           className={`group relative flex items-center rounded-2xl border border-line bg-black/30 transition focus-within:border-accent/70 focus-within:shadow-[0_0_0_4px_rgba(198,255,61,0.08)] ${kind === "vibe" ? "vibeField" : ""}`}
         >
-          {kind === "vibe" && !q && !full && (
-            <span aria-hidden className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-[16px] text-ink-3">
-              <span key={hint} className="inline-block animate-[fadeIn_0.2s_ease-out]">
-                {VIBE_HINTS[hint]}…
+          {(kind === "vibe" || kind === "all") && !q && !full && (
+            <span aria-hidden className="pointer-events-none absolute left-11 right-14 top-1/2 -translate-y-1/2 truncate text-[16px] text-ink-3">
+              {kind === "all" && <span className="text-ink-3/70">Search anything you love · </span>}
+              <span key={hint} className="inline-block animate-[fadeIn_0.2s_ease-out] text-ink-2">
+                {kind === "vibe" ? VIBE_HINTS[hint % VIBE_HINTS.length] : ALL_HINTS[hint % ALL_HINTS.length]}…
               </span>
             </span>
           )}
@@ -313,7 +317,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
               }
               if (e.key === "Escape") setOpen(false);
             }}
-            placeholder={full ? "That's plenty: 8 max" : kind === "vibe" ? "" : "Search anything you love…"}
+            placeholder={full ? "That's plenty: 8 max" : kind === "vibe" || kind === "all" ? "" : `Search ${PLURAL[kind] ?? "anything"} you love…`}
             disabled={full}
             className="w-full min-w-0 bg-transparent px-3 py-4 text-[16px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-50"
             aria-label={kind === "vibe" ? "Search vibes, like ramen, shoegaze or hiking" : "Search Qloo for something you love"}

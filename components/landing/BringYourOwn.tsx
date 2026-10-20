@@ -2,7 +2,7 @@
 
 import type { EntityKind } from "@/lib/types";
 import { CursorArrow } from "@/components/CursorArrow";
-import { motion } from "motion/react";
+import { AnimatePresence, motion, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { SeedPicker, type Seed } from "@/components/SeedPicker";
 import { loadDraft, saveDraft } from "@/lib/authBridge";
@@ -46,6 +46,9 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   const vibes = seeds.filter((s) => s.kind === "vibe");
   const need = Math.max(0, 3 - seeds.length, 1 - named.length);
   const ready = need === 0;
+  // the card lights up while it's on screen: this is the one place a skimmer should land
+  const stage = useRef<HTMLDivElement>(null);
+  const seen = useInView(stage, { amount: 0.35 });
 
   const go = () => {
     if (!ready) return;
@@ -82,8 +85,37 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
           </ol>
         </div>
 
-        <Reveal className="min-w-0" delay={0.1}>
-          <div className="relative rounded-[28px] border border-line bg-[linear-gradient(160deg,rgba(255,255,255,0.045),rgba(255,255,255,0.01))] p-4 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] sm:p-7">
+        <Reveal className="relative min-w-0" delay={0.1}>
+          {/* spotlight behind the card */}
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-10 -inset-y-16 -z-10 rounded-full bg-[radial-gradient(closest-side,rgba(198,255,61,0.10),rgba(131,255,247,0.05)_55%,transparent)]"
+            animate={{ opacity: seen ? 1 : 0, scale: seen ? 1 : 0.9 }}
+            transition={{ duration: 1.2, ease: EASE }}
+          />
+          <div
+            ref={stage}
+            className="lovesStage relative rounded-[28px]"
+            data-live={seen && !ready ? "1" : undefined}
+            data-ready={ready ? "1" : undefined}
+          >
+          {/* where to begin, and how far along you are */}
+          <div className="absolute -top-3.5 left-5 z-10 sm:left-7">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={ready ? "ready" : seeds.length ? "going" : "start"}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3, ease: EASE }}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] ${ready ? "bg-accent text-paper" : "bg-ink text-paper"}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-paper" : "bg-accent pulse-dot"}`} />
+                {ready ? "Ready · mint it" : seeds.length ? `${seeds.length} of 3 · keep going` : "Start here · 3 taps"}
+              </motion.span>
+            </AnimatePresence>
+          </div>
+          <div className="relative rounded-[28px] border border-line bg-[linear-gradient(160deg,rgba(24,24,32,0.97),rgba(10,10,14,0.97))] p-4 pt-7 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] sm:p-7">
             <div className="mb-5 flex items-center justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Your loves</p>
               <SlotMeter n={seeds.length} />
@@ -169,6 +201,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
               </span>
             </Magnetic>
             <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">No sign-up · minted in about 20 seconds</p>
+          </div>
           </div>
         </Reveal>
       </div>
