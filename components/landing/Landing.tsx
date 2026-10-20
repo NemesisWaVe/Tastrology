@@ -149,7 +149,11 @@ function LandingBody({ onStart, touch = false }: { onStart: (req: AgentRequest) 
       <main>
         <Hero
           onPick={() => go("pick")}
-          onCustom={() => go("byo")}
+          onCustom={() => {
+            go("byo");
+            // once the scroll lands, the cursor waits in the search box (desktop; phones keep the keyboard down)
+            setTimeout(() => window.dispatchEvent(new Event("tastrology:focus-picker")), 1450);
+          }}
           specimen={
             <Specimen
               card={card}

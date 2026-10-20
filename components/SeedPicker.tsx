@@ -51,6 +51,15 @@ const TRY: Record<string, string[]> = {
   podcast: ["99% Invisible", "Radiolab", "Song Exploder", "This American Life", "Huberman Lab"],
   videogame: ["Hades", "Disco Elysium", "Outer Wilds", "Elden Ring", "Stardew Valley", "Hollow Knight"],
 };
+/** The type of each mixed "all" suggestion, so a one-tap add finds the game Hades, not a band called Hades. */
+const TRY_KIND: Record<string, EntityKind | "vibe"> = {
+  "Frank Ocean": "artist",
+  Aftersun: "movie",
+  Hades: "videogame",
+  Fleabag: "tv_show",
+  ramen: "vibe",
+  "The Secret History": "book",
+};
 const MAX = 8;
 const VIBES_MAX = 2;
 const VIBE_HINTS = ["ramen", "shoegaze", "hiking", "thrifting", "brutalism", "matcha", "k-pop"];
@@ -86,6 +95,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   // A search the content guard stopped (lib/guard.ts): where to go instead, or a help line.
   const [off, setOff] = useState<{ care: boolean; suggest: string[] } | null>(null);
   const req = useRef(0);
+  // a suggestion being looked up after a tap (it adds itself: one tap, not search-then-pick)
+  const [adding, setAdding] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const full = seeds.length >= MAX;
@@ -140,6 +151,15 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     return () => clearTimeout(t);
   }, [note]);
 
+  // "Use my own favorites" lands here: on a desktop, put the cursor in the box so typing just works.
+  useEffect(() => {
+    const f = () => {
+      if (matchMedia("(pointer: fine)").matches) input.current?.focus({ preventScroll: true });
+    };
+    window.addEventListener("tastrology:focus-picker", f);
+    return () => window.removeEventListener("tastrology:focus-picker", f);
+  }, []);
+
   const isTaken = (h: Seed) => seeds.some((x) => x.id === h.id || dupKey(x) === dupKey(h));
 
   const add = (h: Seed) => {
@@ -162,6 +182,35 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   };
 
   const showList = open && hits.length > 0;
+  const noMatch = open && !loading && !off && q.trim().length >= 2 && hits.length === 0;
+
+  /** One tap on a suggestion: look it up and add Qloo's best match straight away. */
+  const quickAdd = async (t: string) => {
+    if (full || adding) return;
+    setAdding(t);
+    try {
+      const k = kind !== "all" ? kind : TRY_KIND[t];
+      const vibeWord = k === "vibe";
+      const res = await fetch(`/api/search?q=${encodeURIComponent(t)}${vibeWord ? "&vibes=only" : k ? `&types=${k}` : ""}`);
+      const data = (await res.json()) as { results?: Seed[]; vibes?: { id: string; name: string; label: string }[] };
+      const v = (data.vibes ?? []).find((x) => norm(x.name) === norm(t)) ?? (vibeWord ? data.vibes?.[0] : undefined);
+      const pick: Seed | undefined = v ? { id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` } : dedupe(data.results ?? [])[0];
+      if (pick) add(pick);
+      else {
+        setQ(t);
+        setOpen(true);
+        input.current?.focus();
+      }
+    } catch {
+      setQ(t);
+      setOpen(true);
+    } finally {
+      setAdding(null);
+    }
+  };
+  // Suggestions stay until the card is ready to mint, minus what's already in, so there is always a next tap.
+  const picked = new Set(seeds.map((x) => norm(x.name)));
+  const ideas = (TRY[kind] ?? TRY.all).filter((t) => !picked.has(norm(t)));
 
   return (
     <div>
@@ -322,8 +371,8 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         </AnimatePresence>
       </div>
 
-      <p className="mt-2 min-h-[16px] px-1 text-[12px] text-warn" role="status" aria-live="polite">
-        {note}
+      <p className={`mt-2 min-h-[16px] px-1 text-[12px] ${note ? "text-warn" : "text-ink-3"}`} role="status" aria-live="polite">
+        {note ?? (noMatch ? (kind === "vibe" ? "No vibe by that name. Try a single word, like ramen or hiking." : "Nothing on Qloo by that name yet. Try the full title, or a vibe instead.") : null)}
       </p>
       {off && q.trim().length >= 2 && (
         <div className="mb-2 rounded-2xl border border-line bg-black/30 px-4 py-3 text-[13px] text-ink-2" role="status">
@@ -360,7 +409,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
         </div>
       )}
 
-      <div className="mt-2 flex min-h-[44px] flex-wrap content-start gap-2">
+      <div className="mt-1 flex flex-wrap content-start gap-2">
         <AnimatePresence initial={false} mode="popLayout">
           {seeds.map((sd) => (
             <motion.span
@@ -386,25 +435,25 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
             </motion.span>
           ))}
         </AnimatePresence>
-        {seeds.length === 0 && (
-          <span className="flex flex-wrap items-center gap-1.5 py-1 text-[13px] text-ink-3">
-            <span className="mr-1">Try</span>
-            {(TRY[kind] ?? TRY.all).map((t) => (
-              <button
-                key={t}
-                onClick={() => {
-                  setQ(t);
-                  setOpen(true);
-                  input.current?.focus();
-                }}
-                className="rounded-full border border-dashed border-line px-2.5 py-1 text-ink-2 transition hover:border-ink-3 hover:text-ink"
-              >
-                {t}
-              </button>
-            ))}
-          </span>
-        )}
       </div>
+      {!full && seeds.length < 3 && ideas.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[13px] text-ink-3">
+          <span className="mr-1">{seeds.length ? "Or tap one" : "Tap to add"}</span>
+          {ideas.slice(0, 6).map((t) => (
+            <button
+              key={t}
+              type="button"
+              disabled={Boolean(adding)}
+              onClick={() => void quickAdd(t)}
+              className={`rounded-full border border-dashed px-2.5 py-1 transition active:scale-95 ${adding === t ? "border-accent text-accent" : "border-line text-ink-2 hover:border-ink-3 hover:text-ink"} disabled:cursor-wait`}
+            >
+              <span className="mr-1 text-ink-3">+</span>
+              {t}
+              {adding === t && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent pulse-dot align-middle" />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

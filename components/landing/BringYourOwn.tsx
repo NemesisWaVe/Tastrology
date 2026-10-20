@@ -26,6 +26,8 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [budget, setBudget] = useState<1 | 2 | 3 | undefined>();
   const [goal, setGoal] = useState("");
+  // Budget and occasion are refinements, not the first ask: folded away until wanted (or restored from a draft).
+  const [tune, setTune] = useState(false);
   // Typed picks survive a sign-up, a reload or a closed tab: restored once, then saved on every change.
   const restored = useRef(false);
   useEffect(() => {
@@ -33,6 +35,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
     if (d?.seeds?.length) setSeeds(d.seeds);
     if (d?.budget) setBudget(d.budget);
     if (d?.goal) setGoal(d.goal);
+    if (d?.budget || d?.goal) setTune(true);
     restored.current = true;
   }, []);
   useEffect(() => {
@@ -88,7 +91,21 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
 
             <SeedPicker seeds={seeds} onChange={setSeeds} />
 
-            <div className="mt-7 grid gap-5 border-t border-line pt-6 sm:grid-cols-[auto_1fr]">
+            <button
+              type="button"
+              onClick={() => setTune((t) => !t)}
+              aria-expanded={tune}
+              className="mt-6 flex w-full items-center justify-between border-t border-line pt-5 text-left font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3 transition hover:text-ink-2"
+            >
+              <span>
+                Fine-tune <span className="normal-case tracking-normal text-ink-3/70">· budget, occasion (optional)</span>
+              </span>
+              <span className={`text-[14px] transition-transform ${tune ? "rotate-45" : ""}`} aria-hidden>
+                +
+              </span>
+            </button>
+            {tune && (
+            <div className="mt-5 grid gap-5 sm:grid-cols-[auto_1fr]">
               <div>
                 <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Budget</p>
                 <div className="inline-flex rounded-full border border-line bg-black/30 p-1" role="radiogroup" aria-label="Budget">
@@ -123,17 +140,27 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
                 />
               </label>
             </div>
+            )}
 
             <Magnetic
               onClick={go}
               disabled={!ready}
               strength={0.15}
-              className={`group mt-7 flex h-16 w-full items-center justify-center rounded-full text-[16px] font-semibold transition-colors ${
-                ready ? "bg-accent text-paper shadow-[0_18px_50px_-14px_rgba(198,255,61,0.6)]" : "cursor-not-allowed bg-white/[0.04] text-ink-3"
+              className={`group relative mt-7 flex h-16 w-full items-center justify-center overflow-hidden rounded-full text-[16px] font-semibold transition-colors ${
+                ready ? "bg-accent text-paper shadow-[0_18px_50px_-14px_rgba(198,255,61,0.6)]" : "border border-line bg-white/[0.03] text-ink-2"
               }`}
             >
-              <span className="flex items-center gap-3">
-                {ready ? "Mint my taste sign" : named.length < 2 && seeds.length >= 3 ? "Add a named love too" : `Add ${need} more love${need === 1 ? "" : "s"}`}
+              {/* not a dead grey button: it fills as loves go in, so it reads as progress toward the card */}
+              {!ready && (
+                <motion.span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 bg-accent/15"
+                  animate={{ width: `${(Math.min(seeds.length, 3) / 3) * 100}%` }}
+                  transition={{ duration: 0.5, ease: EASE }}
+                />
+              )}
+              <span className="relative flex items-center gap-3">
+                {ready ? "Mint my taste sign" : named.length < 1 && seeds.length >= 3 ? "Add one thing by name" : seeds.length === 0 ? "Pick 3 things you love" : `${need} more to mint`}
                 {ready ? (
                   <CursorArrow className="h-9 w-9 bg-paper text-accent" />
                 ) : (

@@ -146,10 +146,16 @@ html[data-gate] [data-orb] { opacity: 0; pointer-events: none; }
 }
 
 /* The Vibes filter chip (components/SeedPicker.tsx): rainbow edge that drifts, a glint now and then, waves for a glyph. */
+/* Unpressed it reads like its neighbours (a plain line border): a full holo ring looked already selected.
+   The holo ring comes in on hover, and fills the chip once pressed. */
 .vibeChip {
   position: relative;
   overflow: hidden;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.vibeChip:hover {
+  border-color: transparent;
   background:
     linear-gradient(#0c0c11, #0c0c11) padding-box,
     var(--holo) border-box;
