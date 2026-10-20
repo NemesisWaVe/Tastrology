@@ -455,28 +455,35 @@ function Sequence({
       </section>
 
       {/* Scoreboard */}
-      <ol className="mt-8 grid grid-cols-2 gap-2.5 min-[480px]:grid-cols-4 sm:mt-5 sm:gap-1.5" aria-label="Rounds">
+      <ol className="mt-7 grid grid-cols-4 gap-1.5 sm:mt-5" aria-label="Rounds">
         {out.rounds.map((r, i) => {
           const done = i < decided.length;
           const now = i === roundIdx;
           return (
             <li
               key={r.stat}
-              className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-center min-[480px]:block min-[480px]:rounded-xl min-[480px]:px-1 min-[480px]:py-2 sm:px-2 sm:py-1.5 transition-colors duration-500 ${now ? "border-ink-3 bg-paper-2" : "border-line"}`}
+              className={`flex items-center justify-center gap-1.5 rounded-full border px-1 py-1.5 text-center sm:block sm:rounded-xl sm:px-2 sm:py-1.5 transition-colors duration-500 ${now ? "border-ink-3 bg-paper-2" : "border-line"}`}
               style={
                 done && r.winner !== "tie"
                   ? {
                       borderColor: COL[r.winner],
                       background: `color-mix(in srgb, ${COL[r.winner]} 10%, transparent)`,
                     }
-                  : undefined
+                  : done
+                    ? { borderColor: "var(--ink-3)", background: "var(--paper-2)" }
+                    : undefined
               }
             >
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3 min-[480px]:text-[9px] min-[480px]:tracking-[0.08em] sm:text-[9.5px] sm:tracking-[0.14em]">
+              {/* phones: the pill's colour is the result (winner's colour, grey for a tie); the word shows from sm up */}
+              <p
+                className="truncate font-mono text-[9.5px] uppercase tracking-[0.08em] sm:text-[9.5px] sm:tracking-[0.14em] sm:!text-ink-3"
+                style={{ color: done ? (r.winner === "tie" ? "var(--ink)" : COL[r.winner]) : "var(--ink-3)" }}
+              >
                 {r.stat}
+                <span className="sr-only">: {done ? (r.winner === "tie" ? "tie" : r.winner === "a" ? "P1" : "P2") : "pending"}</span>
               </p>
               <p
-                className="font-display text-[13px] font-bold"
+                className="hidden font-display text-[13px] font-bold sm:block"
                 style={{
                   color: done
                     ? r.winner === "tie"
@@ -500,7 +507,7 @@ function Sequence({
 
       {/* Stage: the current round, then the slam */}
       {phase < PH_REVEAL && (
-        <div className="relative mt-4 min-h-[250px]">
+        <div className="relative mt-6 min-h-[250px] sm:mt-4">
           <AnimatePresence mode="wait">
             {roundIdx >= 0 && (
               <RoundStage
@@ -524,7 +531,7 @@ function Sequence({
           </AnimatePresence>
           <button
             onClick={onSkip}
-            className="absolute -bottom-2 right-0 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline"
+            className="mx-auto mt-6 block py-2 font-mono text-[11px] sm:absolute sm:-bottom-2 sm:right-0 sm:mt-0 sm:py-0 uppercase tracking-[0.16em] text-ink-3 underline-offset-4 hover:text-ink hover:underline"
           >
             Skip to the result
           </button>
@@ -662,8 +669,8 @@ function RoundBody({
       ? "Draw"
       : `${r.winner === "a" ? out.names.a : out.names.b} takes it`;
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3">
+    <div className="flex flex-col gap-4 sm:gap-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
         <p
           className={`font-display font-bold tracking-tight text-ink ${big ? "text-[26px]" : "text-[18px]"}`}
         >
@@ -672,7 +679,7 @@ function RoundBody({
           </span>
           {r.stat}
         </p>
-        <p className="text-right text-[11.5px] text-ink-3">{r.measures}</p>
+        <p className="text-[12px] text-ink-3 sm:text-right sm:text-[11.5px]">{r.measures}</p>
       </div>
       <div className="flex flex-col gap-1.5">
         {(["a", "b"] as const).map((s) => (
