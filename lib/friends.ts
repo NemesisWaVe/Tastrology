@@ -119,13 +119,16 @@ const toPlayer = (it: Flat | null): Player | null =>
 
 /** Your player profile, made on first use. Picks your rarest card as your fighter until you choose one. */
 export async function ensurePlayer(uid: string): Promise<Player | null> {
-  const have = toPlayer(await ddbGet(U(uid), "PLAYER"));
-  if (have?.card) return have;
-  const cards = (await ownCards(uid)) ?? [];
+  const [row, owned] = await Promise.all([ddbGet(U(uid), "PLAYER"), ownCards(uid)]);
+  const have = toPlayer(row);
+  const cards = owned ?? [];
+  // The fighter must still be in the deck: a burned or retired card leaves a stale face (and a bout that can't
+  // find its sheet). When the deck couldn't be read, trust what's stored rather than wiping it.
+  if (have?.card && (owned === null || cards.some((c) => c.code === have.card))) return have;
   const best = [...cards].sort((x, y) => y.score - x.score)[0];
   const face = best ? { name: best.name, card: best.code, rarity: best.rarity } : { name: "", card: "", rarity: "common" };
   if (have) {
-    if (best) await ddbUpdate(U(uid), "PLAYER", "SET #n = :n, card = :c, rarity = :r", { names: { "#n": "name" }, values: { ":n": face.name, ":c": face.card, ":r": face.rarity } });
+    if (best || have.card) await ddbUpdate(U(uid), "PLAYER", "SET #n = :n, card = :c, rarity = :r", { names: { "#n": "name" }, values: { ":n": face.name, ":c": face.card, ":r": face.rarity }, condition: "attribute_exists(pc)" });
     return { ...have, ...face };
   }
   for (let i = 0; i < 5; i++) {
@@ -547,7 +550,12 @@ async function draw(uid: string): Promise<string | null> {
 /** Each side's chosen fighter, for friendly bouts. */
 async function fighterOf(uid: string): Promise<string | null> {
   const card = str((await ddbGet(U(uid), "PLAYER"))?.card);
-  return card || draw(uid);
+  if (!card) return draw(uid);
+  // the chosen fighter may have been burned since it was picked: fall back to a live card from the deck
+  const [gone, f] = await Promise.all([burnedAt(card), getFighterStatus(card)]);
+  if (!gone && f.sheet) return card;
+  const p = await ensurePlayer(uid);
+  return p?.card && p.card !== card ? p.card : draw(uid);
 }
 
 /**
@@ -563,7 +571,7 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
   const [a, b] = await Promise.all([pick(challenger), pick(uid)]);
   if (!a || !b) return { ok: false, why: "no-cards" };
   const [fa, fb] = await Promise.all([getFighterStatus(a), getFighterStatus(b)]);
-  if (!fa.sheet || !fb.sheet) return { ok: false, why: "error" };
+  if (!fa.sheet || !fb.sheet) return { ok: false, why: fa.status === "error" || fb.status === "error" ? "error" : "no-cards" };
   const result = battle(fromSheet(fa.sheet), fromSheet(fb.sheet));
   const w = result.winner;
   const now = Date.now();
