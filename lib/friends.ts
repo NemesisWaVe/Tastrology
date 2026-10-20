@@ -135,8 +135,20 @@ export async function ensurePlayer(uid: string): Promise<Player | null> {
     if (claim === "exists") continue;
     const put = await ddbPutIfAbsent({ PK: U(uid), SK: "PLAYER", pc, ...face, at: Date.now() });
     if (put === "error") return null;
+    if (put === "created") return { pc, ...face };
     // Lost a race with a parallel first visit: theirs stands, this code stays an orphan nobody can reach.
-    return put === "created" ? { pc, ...face } : toPlayer(await ddbGet(U(uid), "PLAYER"));
+    const raced = toPlayer(await ddbGet(U(uid), "PLAYER"));
+    if (raced) return raced;
+    // A row with no code: a partial write (a rename or profile field) landed before the player was ever created,
+    // and every visit since has failed. Give it this code, keeping whatever fields it already has.
+    const healed = await ddbUpdate(U(uid), "PLAYER", "SET pc = :pc, #n = if_not_exists(#n, :n), card = if_not_exists(card, :c), rarity = if_not_exists(rarity, :r), #a = if_not_exists(#a, :a)", {
+      names: { "#n": "name", "#a": "at" },
+      values: { ":pc": pc, ":n": face.name, ":c": face.card, ":r": face.rarity, ":a": Date.now() },
+      condition: "attribute_not_exists(pc)",
+    });
+    if (healed === "error") return null;
+    console.warn(JSON.stringify({ evt: "player_heal", result: healed }));
+    return toPlayer(await ddbGet(U(uid), "PLAYER"));
   }
   return null;
 }
