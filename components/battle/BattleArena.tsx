@@ -455,14 +455,14 @@ function Sequence({
       </section>
 
       {/* Scoreboard */}
-      <ol className="mt-7 grid grid-cols-4 gap-2 sm:mt-5 sm:gap-1.5" aria-label="Rounds">
+      <ol className="mt-8 grid grid-cols-2 gap-2.5 min-[480px]:grid-cols-4 sm:mt-5 sm:gap-1.5" aria-label="Rounds">
         {out.rounds.map((r, i) => {
           const done = i < decided.length;
           const now = i === roundIdx;
           return (
             <li
               key={r.stat}
-              className={`rounded-xl border px-1 py-2 text-center sm:px-2 sm:py-1.5 transition-colors duration-500 ${now ? "border-ink-3 bg-paper-2" : "border-line"}`}
+              className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-center min-[480px]:block min-[480px]:rounded-xl min-[480px]:px-1 min-[480px]:py-2 sm:px-2 sm:py-1.5 transition-colors duration-500 ${now ? "border-ink-3 bg-paper-2" : "border-line"}`}
               style={
                 done && r.winner !== "tie"
                   ? {
@@ -472,7 +472,7 @@ function Sequence({
                   : undefined
               }
             >
-              <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3 sm:text-[9.5px] sm:tracking-[0.14em]">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3 min-[480px]:text-[9px] min-[480px]:tracking-[0.08em] sm:text-[9.5px] sm:tracking-[0.14em]">
                 {r.stat}
               </p>
               <p
@@ -738,7 +738,7 @@ function Slam({
       initial={reduce ? false : { scale: 2.4, opacity: 0, rotate: -4 }}
       animate={{ scale: 1, opacity: 1, rotate: 0 }}
       transition={{ type: "spring", stiffness: 520, damping: 17 }}
-      className={`flex flex-col items-center text-center ${compact ? "pt-6" : "pt-6"}`}
+      className={`flex flex-col items-center text-center pt-10 sm:pt-6`}
       aria-live="polite"
     >
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">

@@ -8,6 +8,7 @@ import { ShareSheet } from "@/components/card/ShareSheet";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import { Mark } from "@/components/site/Mark";
+import { PhoneMenu } from "@/components/site/PhoneMenu";
 import { SoundToggle } from "@/components/site/SoundToggle";
 import { TracePanel } from "@/components/TracePanel";
 import { clearDraft } from "@/lib/authBridge";
@@ -173,17 +174,22 @@ export function OwnedReading({
           {BRAND.name}
         </button>
         <span className="flex items-center gap-2 sm:gap-4">
+          {/* phones: links move into the menu, so the bar fits a 320px screen */}
           <Link href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
             Shop
           </Link>
-          <Link href="/deck" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink whitespace-nowrap py-2">
-            <span className="hidden sm:inline">My </span>Deck
+          <Link href="/deck" className="hidden whitespace-nowrap py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
+            My Deck
+          </Link>
+          <Link href="/friends" className="hidden whitespace-nowrap py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
+            Friends
           </Link>
           <SoundToggle />
           <AuthNav />
-          <button onClick={onNew} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-1.5 text-[13px] sm:text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:px-4">
+          <button onClick={onNew} className="hidden shrink-0 whitespace-nowrap rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">
             New sign
           </button>
+          <PhoneMenu onNew={onNew} />
         </span>
       </nav>
 

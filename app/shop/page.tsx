@@ -92,8 +92,8 @@ function ProductCard({ p, paid, soon, i }: { p: Product; paid: boolean; soon: bo
       style={{ animationDelay: `${-i * 1.7}s` }}
     >
       <div>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 items-center gap-4">
             <span className={`${c.art} ${ART[p.id]}`} aria-hidden />
             <h2 className="font-display text-2xl font-semibold tracking-[-0.03em]">{p.name}</h2>
           </div>

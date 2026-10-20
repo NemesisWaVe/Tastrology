@@ -5,6 +5,7 @@ import { BRAND } from "@/lib/brand";
 import { LegalLinks } from "./LegalLinks";
 import { SoundToggle } from "./SoundToggle";
 import { AfterFirstCard } from "./AfterFirstCard";
+import { PhoneMenu } from "./PhoneMenu";
 
 /** Nav + footer for the quiet pages (shop, account, legal, sign-in). Same look as /deck. */
 export function SiteShell({ children }: { children: React.ReactNode }) {
@@ -29,10 +30,11 @@ export function SiteNav() {
     <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-line/60 bg-paper/70 px-4 py-3 backdrop-blur-md sm:px-6">
       <Link href="/" aria-label={BRAND.name} className="flex shrink-0 items-center gap-2 font-display text-lg font-bold tracking-tight">
         <Mark size={34} />
-        {/* Phones: the mark alone, so the links and avatar fit on one line. */}
-        <span className="hidden sm:inline">{BRAND.name}</span>
+        <span>{BRAND.name}</span>
       </Link>
-      <span className="flex items-center gap-3 sm:gap-4">
+      <span className="flex items-center gap-2.5 sm:gap-4">
+        {/* phones: links move into the menu, so the bar fits a 320px screen */}
+        <span className="hidden items-center gap-4 sm:flex">
         <AfterFirstCard>
         <Link href="/shop" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Shop
@@ -44,11 +46,13 @@ export function SiteNav() {
           Friends
         </Link>
         </AfterFirstCard>
+        </span>
         <SoundToggle />
         <AuthNav />
         <Link href="/?new=1" className="hidden rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">
           New sign
         </Link>
+        <PhoneMenu />
       </span>
     </nav>
   );
