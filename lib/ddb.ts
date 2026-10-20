@@ -203,6 +203,9 @@ export async function ddbTransact(ops: TxOp[], token?: string): Promise<{ ok: tr
   if (!r) return null;
   if (r.ok) return { ok: true };
   if (r.type !== "TransactionCanceledException") return null;
-  const reasons = ((r.json.CancellationReasons ?? []) as { Code?: string }[]).map((x) => x.Code ?? "None");
+  const why = (r.json.CancellationReasons ?? []) as { Code?: string; Message?: string }[];
+  const reasons = why.map((x) => x.Code ?? "None");
+  // a cancel that isn't just a failed condition is a bug in the transaction itself: say which op and why
+  if (reasons.some((x) => x !== "None" && x !== "ConditionalCheckFailed")) console.warn(JSON.stringify({ evt: "ddb_tx_cancel", ops: ops.map((o) => ("put" in o ? `put ${o.put.SK}` : "update" in o ? `update ${o.update.SK}` : "delete" in o ? `delete ${o.delete.SK}` : `check ${o.check.SK}`)), why }));
   return { ok: false, reasons };
 }
