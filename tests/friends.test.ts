@@ -117,6 +117,18 @@ describe("friends", () => {
     expect((await setUsername("bo", b, "ann_k")).ok).toBe(true);
   });
 
+  it("shows a friend's first card even when they minted it after you met", async () => {
+    own("ann", 0);
+    const a = (await ensurePlayer("ann"))!;
+    const b = (await ensurePlayer("bo"))!; // no cards yet
+    expect(b.card).toBe("");
+    await addFriend("ann", a, b.pc);
+    await acceptFriend("bo", b, a.pc);
+    expect((await listFriends("ann"))![0].card).toBe("");
+    own("bo", 1); // minted later, without ever opening Friends
+    expect((await listFriends("ann"))![0]).toMatchObject({ card: cards[1], name: names[1] });
+  });
+
   it("refreshes your fighter on friends' lists", async () => {
     const [a] = await pair();
     own("ann", 1);
@@ -268,6 +280,18 @@ describe("stardust bouts", () => {
     await acceptBout("bo", b, (await listBouts("bo"))![0].id);
     expect((await listFriends("ann"))![0].days).toBe(1);
     expect((await listFriends("bo"))![0].days).toBe(1);
+  });
+
+  it("keeps one friendly challenge waiting per pair, from either side", async () => {
+    const [a, b] = await pair();
+    expect(await openBout("ann", a, b.pc, 0)).toBe("open");
+    expect(await openBout("ann", a, b.pc, 0)).toBe("already");
+    expect(await openBout("bo", b, a.pc, 0)).toBe("theirs");
+    expect((await listBouts("bo"))!.filter((x) => x.status === "open")).toHaveLength(1);
+    // once it's settled (or declined), a new one can go out
+    const open = (await listBouts("bo"))!.find((x) => x.status === "open")!;
+    await closeBout("bo", open.id);
+    expect(await openBout("bo", b, a.pc, 0)).toBe("open");
   });
 
   it("lets challenges lapse after three days", async () => {

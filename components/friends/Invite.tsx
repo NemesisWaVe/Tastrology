@@ -81,6 +81,28 @@ export function Invite({ pc }: { pc: string }) {
       />
     );
 
+  // Your own link, opened on your own device (checking how it looks, or a tap on your own share): nothing to send.
+  let mine = false;
+  try {
+    mine = localStorage.getItem("tastrology:pc") === p.pc;
+  } catch {}
+  if (mine)
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center text-center">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">Your invite</p>
+        <h1 className="mt-2 font-serif text-5xl italic leading-[0.95]">This is what friends see.</h1>
+        {card && (
+          <div className="mt-8">
+            <HoloCard card={card} width={260} />
+          </div>
+        )}
+        <p className="mt-6 text-sm text-ink-2">Send this link to someone. When they open it, they get one button: add you.</p>
+        <Link href="/friends" className="mt-6 rounded-full bg-accent px-7 py-3.5 font-semibold text-paper">
+          Back to your friends
+        </Link>
+      </div>
+    );
+
   return (
     <div className="mx-auto flex max-w-md flex-col items-center text-center">
       <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">Friend invite</p>

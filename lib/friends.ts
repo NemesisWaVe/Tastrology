@@ -503,8 +503,11 @@ const toBout = (it: Flat): Bout => ({
   ...(it.a ? { a: str(it.a), b: str(it.b), outcome: str(it.outcome) as Bout["outcome"] } : {}),
 });
 
+/** How many recent bouts a list shows (and how far back the one-friendly-at-a-time check looks). */
+const BOUTS_SEEN = 50;
+
 export async function listBouts(uid: string): Promise<Bout[] | null> {
-  const page = await ddbQuery(U(uid), "BOUT#", 30, undefined, undefined, true);
+  const page = await ddbQuery(U(uid), "BOUT#", BOUTS_SEEN, undefined, undefined, true);
   return page ? page.items.map(toBout) : null;
 }
 
@@ -512,12 +515,19 @@ export async function listBouts(uid: string): Promise<Bout[] | null> {
  * Opens a bout: a challenge on both lists that the friend has to accept before anything is fought.
  * Stardust bouts also take the stake from you now (escrow) and count toward the daily cap.
  */
-export async function openBout(uid: string, me: Player, pc: string, stake: number): Promise<"open" | "friends-only" | "stake" | "empty" | "daily" | "error"> {
+export async function openBout(uid: string, me: Player, pc: string, stake: number): Promise<"open" | "friends-only" | "stake" | "empty" | "daily" | "already" | "theirs" | "error"> {
   if (stake !== 0 && !(STAKES as readonly number[]).includes(stake)) return "stake";
   const f = await ddbGet(U(uid), `FRIEND#${pc}`);
   const other = str(f?.uid);
   if (!other) return "friends-only";
   const now = Date.now();
+  // One friendly challenge waits per pair (Stardust bouts have their own daily cap): repeat taps would otherwise
+  // stack copies on their list and push older challenges out of the recent window.
+  if (!stake) {
+    const recent = await ddbQuery(U(uid), "BOUT#", BOUTS_SEEN, undefined, ["pc", "role", "status", "stake", "at"], true);
+    const waiting = recent?.items.find((it) => str(it.pc) === pc && !(Number(it.stake) || 0) && it.status === "open" && !lapsed(it, now));
+    if (waiting) return waiting.role === "in" ? "theirs" : "already";
+  }
   const SK = `BOUT#${now.toString(36)}#${randomBytes(6).toString("base64url")}`;
   const day = new Date(now).toISOString().slice(0, 10);
   const base = { stake, status: "open", at: now };

@@ -180,7 +180,7 @@ export async function POST(request: Request) {
       const stake = Number(b.stake) || 0;
       if (stake && !dustOn()) return json({ error: "Stardust is off." }, 404);
       const r = await openBout(uid, me, pc, stake);
-      const msg = { "friends-only": "You can only challenge friends.", stake: "Pick a stake.", empty: "Not enough Stardust.", daily: "That's today's five bouts. More tomorrow.", error: "Couldn't reach the server." } as const;
+      const msg = { "friends-only": "You can only challenge friends.", stake: "Pick a stake.", empty: "Not enough Stardust.", daily: "That's today's five bouts. More tomorrow.", already: "You've already challenged them. It's on once they accept.", theirs: "They've already challenged you. Accept it above.", error: "Couldn't reach the server." } as const;
       return r === "open" ? json({ ok: true }) : json({ error: msg[r] }, r === "error" ? 503 : 400);
     }
     case "accept":

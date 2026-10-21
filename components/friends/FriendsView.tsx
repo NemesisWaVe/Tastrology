@@ -514,9 +514,13 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                         </div>
                         <div className="flex w-full shrink-0 items-center gap-1.5 pl-[52px] sm:w-auto sm:pl-0">
                           {me.card && f.card ? (
-                            <button type="button" disabled={busy !== null} onClick={() => void challenge(f.pc, 0)} className={lime}>
-                              Fight
-                            </button>
+                            fighting.has(f.pc) ? (
+                              <span className={`${mono} rounded-full border border-accent/30 px-3 py-1.5 text-accent/80`}>Waiting</span>
+                            ) : (
+                              <button type="button" disabled={busy !== null} onClick={() => void challenge(f.pc, 0)} className={lime}>
+                                Fight
+                              </button>
+                            )
                           ) : null}
                           {d.dustOn && me.card && f.card && (
                             <button type="button" onClick={() => setBetFor(betFor === f.pc ? null : f.pc)} aria-pressed={betFor === f.pc} className={pill}>
