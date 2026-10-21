@@ -202,7 +202,7 @@ function CardFace({ card }: { card: CardData }) {
   return (
     <div className={s.face}>
       <div className={s.faceFoil} aria-hidden />
-      <Rosette className={s.rosette} />
+      <Rosette className={s.rosette} style={printLook(card)?.crest} />
 
       <header className={s.top}>
         <span className={s.brand}>
@@ -292,6 +292,8 @@ function CardFace({ card }: { card: CardData }) {
         <span className={s.collector}>
           <span>
             {BRAND.cardSet} · No. <b className={s.dots}>{card.serial}</b>
+            {/* a print's own check characters, the same ones its link and caption carry, so copies of one reading never read alike */}
+            {card.print && <b className={s.dots}>-{cardCode(card).split("-")[1]}</b>}
             {card.secondDraw && <> · 2nd draw</>}
             {!!card.recasts?.length && <> · recast ×{card.recasts.length}</>}
           </span>
@@ -356,12 +358,14 @@ function ArtCollage({ card }: { card: CardData }) {
       </div>
     );
   }
-  const imgs = card.art.slice(0, 5);
+  const look = printLook(card);
+  const base = card.art.slice(0, 5);
+  const imgs = look ? base.map((_, i) => base[(i + look.shift) % base.length]) : base;
   return (
     <div className={s.collage} data-n={imgs.length}>
       {imgs.map((src, i) => (
         // eslint-disable-next-line @next/next/no-img-element
-        <img key={src} src={src} alt="" crossOrigin="anonymous" style={{ ["--i" as string]: i }} />
+        <img key={src} src={src} alt="" crossOrigin="anonymous" style={{ ["--i" as string]: i, objectPosition: look?.focus[i] }} />
       ))}
     </div>
   );
@@ -404,9 +408,9 @@ const ROSETTE = (() => {
   return out;
 })();
 
-function Rosette({ className, paths = ROSETTE }: { className?: string; paths?: string[] }) {
+function Rosette({ className, paths = ROSETTE, style }: { className?: string; paths?: string[]; style?: React.CSSProperties }) {
   return (
-    <svg className={className} viewBox="-50 -50 100 100" aria-hidden>
+    <svg className={className} style={style} viewBox="-50 -50 100 100" aria-hidden>
       {paths.map((d, i) => (
         <path key={i} d={d} />
       ))}
@@ -423,6 +427,23 @@ const fnv = (str: string) => {
   for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
   return h >>> 0;
 };
+
+/**
+ * How one print of a reading looks: the same art, crest and words, laid out its own way. Seeded by the print id, so a
+ * print always looks the same and two prints of one reading never do. Cards from before prints keep their old face.
+ */
+function printLook(card: CardData) {
+  if (!card.print) return null;
+  const h = fnv(`look|${card.print}`);
+  const n = Math.max(1, Math.min(5, card.art.length));
+  return {
+    shift: h % n,
+    // each image framed on its own part of the picture (object-position), within the middle so faces stay in shot
+    focus: Array.from({ length: 5 }, (_, i) => `${25 + ((h >>> (i * 3 + 4)) % 6) * 10}% ${30 + ((h >>> (i * 3 + 7)) % 5) * 10}%`),
+    // `rotate` composes with the Holo/Secret crest spin, which animates `transform`
+    crest: { rotate: `${(h >>> 20) % 360}deg` } as React.CSSProperties,
+  };
+}
 
 /** Seeded generative linework, unique to the card: a guilloche rosette and a "taste fingerprint" tick ring. */
 function backArt(seed: number, stars: { cx: number; cy: number; weight: number }[]) {
@@ -477,7 +498,7 @@ export function CardBack({ card, className = "", crack = false, printSafe = fals
   const glow = RARITY_GLOW[card.rarity];
   const code = cardCode(card);
   const url = twinUrl(card);
-  const seedKey = stars.map((p) => `${p.name}:${p.weight.toFixed(2)}`).join("|") + card.serial;
+  const seedKey = stars.map((p) => `${p.name}:${p.weight.toFixed(2)}`).join("|") + card.serial + (card.print ? `|${card.print}` : "");
   const art = useMemo(() => backArt(fnv(seedKey), pts), [seedKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const code2d = useMemo(() => {
     const m = qr(url);

@@ -6,13 +6,14 @@ import { buildCard } from "@/lib/card";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { useAgentRun } from "@/lib/useAgentRun";
 
-/** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1 &tiers=1: the same card in every rarity &vibes=Ramen,Cryptocurrency) */
+/** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1 &tiers=1: the same card in every rarity &prints=1: three prints of one reading &vibes=Ramen,Cryptocurrency) */
 export default function CardLab() {
   const { result, running, error, run, setResult } = useAgentRun();
   const [widths, setWidths] = useState<number[]>([360]);
   const [still, setStill] = useState(false);
   const [sim, setSim] = useState(false);
   const [tiers, setTiers] = useState(false);
+  const [prints, setPrints] = useState(false);
   const [vibes, setVibes] = useState<string[]>([]);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -22,6 +23,7 @@ export default function CardLab() {
     setStill(q.get("still") === "1");
     setSim(q.get("sim") === "1");
     setTiers(q.get("tiers") === "1");
+    setPrints(q.get("prints") === "1");
     setVibes((q.get("vibes") ?? "").split(",").filter(Boolean));
     const p = PERSONAS.find((x) => x.key === key) ?? PERSONAS[1];
     // Lab-only: reuse the result /lab/results cached for this persona (?fresh=1 to re-run).
@@ -52,7 +54,9 @@ export default function CardLab() {
       {error && <p className="text-bad">{error}</p>}
       {card && (
         <div className="flex flex-wrap items-start justify-center gap-8">
-          {tiers
+          {prints
+            ? ["Q1YE0A", "WDT5B1", "M3F1C2"].map((print) => <HoloCard key={print} card={{ ...card, print }} width={widths[0]} still={still} />)
+            : tiers
             ? (["common", "rare", "holo", "secret"] as const).map((r) => (
                 <HoloCard key={r} card={{ ...card, rarity: r, rarityLabel: { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[r] }} width={widths[0]} still={still} />
               ))

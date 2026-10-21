@@ -117,6 +117,20 @@ export default function DeckPage() {
   }, [toast]);
 
   const reduce = Boolean(useReducedMotion());
+  // Prints of one reading (same loves): which copy each card is, oldest first. Only set when there's more than one.
+  const prints = useMemo(() => {
+    const runs = new Map<string, DeckEntry[]>();
+    for (const e of cards ?? []) {
+      const k = `${e.card.serial}|${e.card.archetype}`;
+      runs.set(k, [...(runs.get(k) ?? []), e]);
+    }
+    const at = new Map<string, { n: number; of: number }>();
+    for (const run of runs.values()) {
+      if (run.length < 2) continue;
+      [...run].sort((a, b) => a.addedAt - b.addedAt).forEach((e, i) => at.set(e.code, { n: i + 1, of: run.length }));
+    }
+    return at;
+  }, [cards]);
   const sky = useMemo(() => (cards?.[0] ? skyState(cards[0].card.evolvesFrom, cards[0].card.archetype, [], [], cards[0].card.vibes) : null), [cards]);
 
   // ---- Burning (docs/design/burn.md). Only for signed-in accounts, only on your own mints.
@@ -253,6 +267,7 @@ export default function DeckPage() {
           <ul className="mt-12 grid grid-cols-1 justify-items-center gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
             {cards.map((entry, i) => {
               const { code, card } = entry;
+              const run = prints.get(code);
               const burnable = Boolean(burn?.on && !local && entry.minted);
               return (
                 <li key={code} className="rise flex flex-col items-center" style={{ animationDelay: `${Math.min(i, 9) * 60}ms` }}>
@@ -302,6 +317,7 @@ export default function DeckPage() {
                   <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
                     No. {card.serial} · {card.rarityLabel} · {code}
                   </p>
+                  {run && <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">Print {run.n} of {run.of} of this reading</p>}
                   {burnable && armed !== code && (
                     <div className="mt-3 flex items-center gap-5">
                       {entry.regret && (
