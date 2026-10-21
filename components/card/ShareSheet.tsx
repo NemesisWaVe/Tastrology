@@ -140,7 +140,8 @@ export function ShareSheet({
     if (mine && linkable) void playerCode().then(setPc);
   }, [mine, linkable]);
 
-  const caption = `${mine ? "I pulled" : "Spotted"} a ${card.rarityLabel}: ${card.archetype}. ${linkable ? "Can yours beat it?" : BRAND.question}`;
+  // Your own card asks a question a friend can only answer by minting theirs: the compare on /vs/<code>.
+  const caption = mine && linkable ? `I'm ${card.archetype}. Are we taste twins?` : `Spotted a ${card.rarityLabel}: ${card.archetype}. ${linkable ? "Are you two taste twins?" : BRAND.question}`;
   /** The card page, tagged with where the visit came from. */
   const link = (src: string) => (typeof window === "undefined" ? "" : linkable ? `${location.origin}/c/${encodeURIComponent(code)}?via=${src}${pc ? `&f=${pc}` : ""}` : location.origin);
   /** The fight page: stories and snaps send viewers straight to it (mint yours, battle this one). */
@@ -229,7 +230,7 @@ export function ShareSheet({
     sfx("tap");
     setErr(null);
     setNote(null);
-    const text = `${caption} ${link("x")}`;
+    const text = `${caption} ${fight("x")}`;
     if (PHONE.test(navigator.userAgent)) {
       setDone("Opening X");
       location.href = `twitter://post?message=${encodeURIComponent(text)}`;
@@ -243,7 +244,7 @@ export function ShareSheet({
     sfx("tap");
     setNote(null);
     try {
-      await navigator.clipboard.writeText(`${caption} ${link("copy")}`);
+      await navigator.clipboard.writeText(`${caption} ${fight("copy")}`);
       track("shared");
       setDone("Link copied");
     } catch {
@@ -251,7 +252,7 @@ export function ShareSheet({
     }
   };
 
-  const title = mine ? "Share your card" : "Share this card";
+  const title = mine ? "Are we taste twins?" : "Share this card";
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 backdrop-blur-md sm:items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
       <div
@@ -261,7 +262,7 @@ export function ShareSheet({
         <div className="flex w-full max-w-[400px] items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="font-serif text-[22px] italic leading-none text-ink">{title}</p>
-            <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">{linkable ? "every share links back to a fight" : "story, snap, or x"}</p>
+            <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">{linkable ? "they mint theirs, you both get a score" : "story, snap, or x"}</p>
           </div>
           <CloseButton onClick={onClose} label="Close" />
         </div>
@@ -486,7 +487,7 @@ const Story = forwardRef<HTMLDivElement, { card: CardData; mine?: boolean; href?
       <p className="absolute inset-x-0 top-[92px] px-6 text-center font-serif text-[32px] leading-[1.05]" style={{ fontFamily: "var(--nf-serif), Georgia, serif" }}>
         {mine ? "I pulled" : "Spotted"} a <span style={{ color: a }}>{card.rarityLabel}</span>.
         <br />
-        <span className="italic text-ink-2">{href ? "Can yours beat it?" : BRAND.question}</span>
+        <span className="italic text-ink-2">{href ? (mine ? "Are we taste twins?" : "Can yours beat it?") : BRAND.question}</span>
       </p>
 
       <div className="absolute left-1/2 top-[184px]" style={{ transform: "translateX(-50%) rotate(-6deg)", filter: "drop-shadow(0 30px 40px rgba(0,0,0,0.65))" }}>

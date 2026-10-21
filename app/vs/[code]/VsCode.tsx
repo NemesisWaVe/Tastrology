@@ -119,7 +119,7 @@ export function VsCode({ code }: { code: string }) {
       )}
       {st.kind === "card" && (
         <>
-          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{own ? "Your card" : owner?.user ? `@${owner.user} wants a fight` : `${st.card.archetype} wants a fight`}</p>
+          <p className="relative font-mono text-[11px] uppercase tracking-[0.22em] text-accent">{own ? "Your card" : owner?.user ? `@${owner.user} asks: are we taste twins?` : `${st.card.archetype} asks: are we taste twins?`}</p>
           <div className="relative">
             <Galaxies reduce={reduce} sides={[{ card: st.card, side: "a", anchor: cardRef, colour: "#c6ff3d" }]} solo className="absolute left-1/2 top-1/2 h-[820px] w-[min(100vw,900px)] -translate-x-1/2 -translate-y-1/2" />
             <div ref={cardRef} className="relative">
@@ -165,8 +165,8 @@ export function VsCode({ code }: { code: string }) {
                 </div>
               ) : (
                 <>
-                  <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours to answer</Link>
-                  <p className="relative text-[13px] text-ink-3">Takes a minute. Four rounds, no mercy.</p>
+                  <Link href={`/?vs=${code}`} className="relative rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours and find out</Link>
+                  <p className="relative text-[13px] text-ink-3">Takes a minute. A compatibility score with receipts, then four rounds.</p>
                 </>
               )}
               <div className="relative flex flex-wrap items-center justify-center gap-2">

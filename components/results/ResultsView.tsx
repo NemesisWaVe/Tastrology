@@ -210,7 +210,8 @@ export function ResultsView({
               >
                 {!fight && <span aria-hidden className="absolute inset-0 -translate-x-full bg-[linear-gradient(100deg,transparent,rgba(255,255,255,0.6),transparent)] transition duration-700 group-hover:translate-x-full" />}
                 <Sparkle className="h-3.5 w-3.5" />
-                Share your card
+                {/* the share is a question, not a brag: a friend answers it by minting theirs (the /vs link) */}
+                Are we taste twins?
               </button>
               <BattleLink />
             </div>

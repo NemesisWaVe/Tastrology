@@ -212,9 +212,9 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
             {card.moves.length > 0 && <p className="mt-4 text-sm text-ink-2">Signature brands: {card.moves.map((m) => m.name).join(" · ")}</p>}
             {/* Owner: sharing is the main move. Visitor: answering it is (mint yours, fight this one). */}
             {mine ? (
-              <Primary onClick={() => setShare(true)} title="Share your card" sub="instagram, snapchat, or x" />
+              <Primary onClick={() => setShare(true)} title="Are we taste twins?" sub="send it: they mint theirs, you both get a score" />
             ) : source === "server" ? (
-              <Primary href={`/vs/${encodeURIComponent(code)}`} title="Fight this card" sub="mint yours, then battle it" />
+              <Primary href={`/vs/${encodeURIComponent(code)}`} title="Are you taste twins?" sub="mint yours, get a compatibility score, then fight" />
             ) : null}
             {!mine && <FriendChip className="mt-4" />}
             {reading && (
