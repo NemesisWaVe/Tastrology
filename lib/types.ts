@@ -158,7 +158,7 @@ export interface StyleResult {
   bridges: Bridge[];
   capsule: CapsuleSlot[];
   critique: string[];
-  stats: { qlooCalls: number; ms: number; llmSteps: number };
+  stats: { qlooCalls: number; ms: number; llmSteps: number; llmTokens?: { in: number; out: number } };
   grounding?: { verified: number; displayed: number; source: "qloo" | "synthetic" };
   /** Average pairwise Jaccard of the seeds' aesthetic tag sets (0-1). Feeds the rarity score. */
   overlap?: number;

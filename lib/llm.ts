@@ -120,6 +120,8 @@ export interface ChatOptions {
   json?: boolean;
   /** Epoch ms. No request starts after it, and in-flight requests are cut off at it. */
   deadline?: number;
+  /** Adds each answered call's token counts here (what a reading costs; /api/agent logs it). */
+  usage?: { in: number; out: number };
 }
 
 export async function chat(messages: ChatMessage[], tools?: ToolDef[], opts: ChatOptions | boolean = {}): Promise<ChatMessage> {
@@ -175,7 +177,16 @@ async function chatOnce(p: Provider, model: string, messages: ChatMessage[], too
     throw new Error(`LLM rate-limited (${p.id})`);
   }
   if (!res.ok) throw new Error(`LLM HTTP ${res.status} (${model})`);
-  const data = (await res.json()) as { choices?: { message: ChatMessage }[]; error?: { message?: string }; message?: string };
+  const data = (await res.json()) as {
+    choices?: { message: ChatMessage }[];
+    error?: { message?: string };
+    message?: string;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; inputTokens?: number; outputTokens?: number };
+  };
+  if (o.usage && data.usage) {
+    o.usage.in += data.usage.prompt_tokens ?? data.usage.inputTokens ?? 0;
+    o.usage.out += data.usage.completion_tokens ?? data.usage.outputTokens ?? 0;
+  }
   const msg = converse ? fromConverse(data as Parameters<typeof fromConverse>[0]) : data.choices?.[0]?.message;
   if (!msg) throw new Error(`LLM returned no message (${model}): ${data.error?.message ?? data.message ?? ""}`);
   if (typeof msg.content === "string") msg.content = stripReasoning(msg.content) || null;

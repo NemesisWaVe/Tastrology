@@ -89,7 +89,7 @@ const MAX_FLIGHTS = 16;
 const BUSY = { error: "busy", hint: "Try one of the demo personas" };
 const RATE_MSG = `You've started a lot of readings in the last few minutes. Wait a bit, or try a demo persona like ${PERSONAS[1]?.name ?? "the ones on the home page"}; those load instantly.`;
 
-function logRun(x: { runId: string | null; planner: string | null; qlooCalls: number | null; ms: number; cached: boolean; error: string | null }) {
+function logRun(x: { runId: string | null; planner: string | null; qlooCalls: number | null; ms: number; cached: boolean; error: string | null; llmTokens?: { in: number; out: number } }) {
   console.log(JSON.stringify({ evt: "agent_run", ...x }));
 }
 
@@ -193,7 +193,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       await lastGood.set(fallbackKey, rec);
       if (!isPersonaRequest(req) && result.mode === "live") bg(countEvent("minted"));
       if (isPersonaRequest(req)) bg(putPersonaRun(key, rec));
-      logRun({ runId: result.runId, planner: result.planner, qlooCalls: result.stats.qlooCalls, ms: Date.now() - t0, cached: false, error: null });
+      logRun({ runId: result.runId, planner: result.planner, qlooCalls: result.stats.qlooCalls, ms: Date.now() - t0, cached: false, error: null, llmTokens: result.stats.llmTokens });
       return result;
     },
     (err: Error) => {

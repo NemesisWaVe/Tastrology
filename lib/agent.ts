@@ -39,6 +39,7 @@ class RunState {
   ledger = new GroundingLedger();
   calls = 0;
   llmSteps = 0;
+  llmTokens = { in: 0, out: 0 };
   seeds: QEntity[] = [];
   filterTags: string[] = [];
   /** Qloo aesthetic tags fed back into the brand query as signal.interests.tags. */
@@ -659,7 +660,7 @@ async function llmLoop(st: RunState) {
     }
     let msg: ChatMessage;
     try {
-      msg = await chat(messages, TOOLS, { deadline });
+      msg = await chat(messages, TOOLS, { deadline, usage: st.llmTokens });
     } catch (err) {
       // Out of time mid-turn after real progress: hand over to autopilot instead of discarding the plan.
       if (st.llmSteps > 0 && Date.now() >= deadline - 250) {
@@ -939,7 +940,7 @@ async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal
     bridges: st.bridges.filter((b) => !blocked(b.entity.name)),
     capsule: capsule(st.final),
     critique: st.critique,
-    stats: { qlooCalls: st.calls, ms: Date.now() - t0, llmSteps: st.llmSteps },
+    stats: { qlooCalls: st.calls, ms: Date.now() - t0, llmSteps: st.llmSteps, llmTokens: st.llmTokens },
     overlap: st.overlap,
     inert: st.inertInfo.length ? st.inertInfo : undefined,
     feedback: req.feedback,

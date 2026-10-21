@@ -347,7 +347,8 @@ export function ResultsView({
       <footer className="flex flex-col items-center gap-3 border-t border-line pt-8 pb-4 text-center">
         <p className="font-serif text-[22px] italic text-ink-2">{BRAND.tagline}</p>
         <p className="font-mono text-[11px] leading-relaxed text-ink-3">
-          {result.stats.qlooCalls} Qloo API calls · planner: {result.planner === "llm" ? `LLM (${result.stats.llmSteps} steps)` : "autopilot"} · data:{" "}
+          {result.stats.qlooCalls} Qloo API calls · planner: {result.planner === "llm" ? `LLM (${result.stats.llmSteps} steps)` : "autopilot"}
+          {result.stats.llmTokens?.in ? ` · ${(result.stats.llmTokens.in + result.stats.llmTokens.out).toLocaleString("en-US")} LLM tokens` : ""} · data:{" "}
           {result.mode === "live" ? "live Qloo" : "demo graph (mock)"} · {(result.stats.ms / 1000).toFixed(1)}s{result.cached ? " · cached" : ""}
         </p>
       </footer>
