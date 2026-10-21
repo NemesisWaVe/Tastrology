@@ -48,6 +48,8 @@ export interface Player {
   /** Account photo (from Clerk) and how many cards the deck holds, both shown to friends. */
   img?: string;
   cards?: number;
+  /** Agreed to the Terms and Privacy Policy on our own setup sheet (Clerk's own consent step hangs some Android sign-ups). */
+  terms?: boolean;
   name: string;
   card: string;
   rarity: string;
@@ -113,6 +115,7 @@ const toPlayer = (it: Flat | null): Player | null =>
         ...(str(it.tag) ? { tag: str(it.tag) } : {}),
         ...(str(it.img) ? { img: str(it.img) } : {}),
         ...(it.cards !== undefined ? { cards: Number(it.cards) || 0 } : {}),
+        ...(Number(it.termsAt) ? { terms: true } : {}),
         name: str(it.name),
         card: str(it.card),
         rarity: str(it.rarity) || "common",
@@ -256,9 +259,14 @@ async function touch(...uids: string[]) {
 export const GENDERS: readonly Audience[] = ["woman", "man", "nonbinary", ""];
 
 /** Saves the profile fields given (gender, bio and its tagline); the rest stay as they are. */
-export async function setProfile(uid: string, p: { gender?: Audience; bio?: string; tag?: string }): Promise<boolean> {
+export async function setProfile(uid: string, p: { gender?: Audience; bio?: string; tag?: string; terms?: number }): Promise<boolean> {
   const sets: string[] = [];
-  const values: Record<string, string> = {};
+  const values: Record<string, string | number> = {};
+  // Agreeing to the Terms and Privacy Policy, stamped once (the first time stands).
+  if (p.terms) {
+    sets.push("termsAt = if_not_exists(termsAt, :ta)");
+    values[":ta"] = p.terms;
+  }
   if (p.gender !== undefined && GENDERS.includes(p.gender)) {
     sets.push("gender = :g");
     values[":g"] = p.gender;

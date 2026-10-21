@@ -82,7 +82,7 @@ async function syncName(uid: string, me: Player): Promise<Player> {
   return me;
 }
 
-type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string; user?: string; gender?: string; bio?: string };
+type Body = { op?: string; pc?: string; card?: string; stake?: number; id?: string; user?: string; gender?: string; bio?: string; terms?: boolean };
 
 export async function POST(request: Request) {
   if (!clerkOn() || !ddbConfigured()) return json({ error: "Friends aren't on." }, 404);
@@ -135,7 +135,8 @@ export async function POST(request: Request) {
     }
     case "profile": {
       // Gender only steers your own readings and is never shown to anyone; the bio becomes a short line friends see.
-      const p: { gender?: Audience; bio?: string; tag?: string } = {};
+      const p: { gender?: Audience; bio?: string; tag?: string; terms?: number } = {};
+      if (b.terms === true) p.terms = Date.now();
       if (b.gender !== undefined) {
         if (!GENDERS.includes(String(b.gender) as Audience)) return json({ error: "Pick one of the options." }, 400);
         p.gender = String(b.gender) as Audience;
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
         }
       }
       if (!(await setProfile(uid, p))) return json({ error: "Couldn't reach the server." }, 503);
-      return json({ ok: true, me: { ...me, ...p } });
+      return json({ ok: true, me: { ...me, ...p, terms: Boolean(me.terms || p.terms) } });
     }
     case "add": {
       if (!me.user) return json({ error: "Pick your username first." }, 400);

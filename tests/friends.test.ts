@@ -222,6 +222,17 @@ describe("accounts", () => {
     expect([...db.items.keys()].filter((k) => k.startsWith("USER#ann|") || k.startsWith("OWNER#ann|"))).toEqual([]);
   });
 
+  it("records agreeing to the terms once, and keeps it off friends' lists", async () => {
+    const [a, b] = await pair();
+    expect(a.terms).toBeUndefined();
+    expect(await setProfile("ann", { terms: 1000 })).toBe(true);
+    expect(await setProfile("ann", { terms: 2000 })).toBe(true);
+    expect(db.items.get("USER#ann|PLAYER")?.termsAt).toEqual(N(1000));
+    expect((await ensurePlayer("ann"))!.terms).toBe(true);
+    expect((await listFriends("bo"))![0]).not.toHaveProperty("terms");
+    void b;
+  });
+
   it("keeps gender private and shows friends the bio line", async () => {
     const [a] = await pair();
     expect(await setProfile("ann", { gender: "woman", bio: "My life my rules", tag: "My rules" })).toBe(true);
