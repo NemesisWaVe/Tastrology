@@ -7,6 +7,7 @@ import { dustOn, dustStatus, rates } from "@/lib/stardust";
 import { economy } from "@/lib/economy";
 import { payDividend } from "@/lib/dividend";
 import { allow } from "@/lib/ratelimit";
+import { economyOpen } from "@/lib/economyGate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,12 +28,15 @@ export async function GET(request: Request) {
   if (!device && on && deviceIdsOn()) ({ id: device, cookie } = newDevice());
   const dOn = dustOn();
   const div = dOn ? await payDividend(userId).catch(() => null) : null;
-  const [w, ds] = await Promise.all([on ? wallet(userId, device) : null, dOn ? dustStatus(userId).catch(() => null) : null]);
+  const [w, ds, admin] = await Promise.all([on ? wallet(userId, device) : null, dOn ? dustStatus(userId).catch(() => null) : null, isAdmin(userId)]);
+  const open = await economyOpen(userId, ds?.dust, admin).catch(() => true);
   const res = Response.json(
     {
       accounts: true,
       signedIn: true,
-      admin: await isAdmin(userId),
+      admin,
+      // Shop and Stardust show after the 2nd card or first fight (lib/economyGate.ts).
+      economyOpen: open,
       creditsOn: on,
       credits: w?.credits ?? null,
       freeLeft: w?.freeLeft ?? null,

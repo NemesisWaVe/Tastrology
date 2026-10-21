@@ -12,6 +12,8 @@ export interface Me {
   refillAt?: number | null;
   refillDays?: number;
   deckMax?: number;
+  /** Shop and Stardust show after the 2nd card or first fight (lib/economyGate.ts). */
+  economyOpen?: boolean;
   stardust?: { dust: number | null; weekLeft: number | null; economy?: Economy } | null;
 }
 

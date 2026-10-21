@@ -2,7 +2,7 @@
 
 import { HallOfRares } from "./HallOfRares";
 import { PhoneMenu } from "@/components/site/PhoneMenu";
-import { AfterFirstCard } from "@/components/site/AfterFirstCard";
+import { AfterEconomy, AfterFirstCard } from "@/components/site/AfterFirstCard";
 import { Mark } from "@/components/site/Mark";
 import { ReactLenis, useLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
@@ -199,8 +199,10 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         <div className="flex items-center gap-3 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
           <span className="hidden items-center gap-5 sm:flex">
-          <AfterFirstCard>
+          <AfterEconomy>
           <a href="/shop" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">Shop</a>
+          </AfterEconomy>
+          <AfterFirstCard>
           <a href="/deck" className="whitespace-nowrap py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">My Deck</a>
           <a href="/friends" className="whitespace-nowrap py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">Friends</a>
           </AfterFirstCard>

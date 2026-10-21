@@ -4,7 +4,7 @@ import { AuthNav } from "@/components/auth/AuthNav";
 import { BRAND } from "@/lib/brand";
 import { LegalLinks } from "./LegalLinks";
 import { SoundToggle } from "./SoundToggle";
-import { AfterFirstCard } from "./AfterFirstCard";
+import { AfterEconomy, AfterFirstCard } from "./AfterFirstCard";
 import { PhoneMenu } from "./PhoneMenu";
 
 /** Nav + footer for the quiet pages (shop, account, legal, sign-in). Same look as /deck. */
@@ -35,10 +35,12 @@ export function SiteNav() {
       <span className="flex items-center gap-2.5 sm:gap-4">
         {/* phones: links move into the menu, so the bar fits a 320px screen */}
         <span className="hidden items-center gap-4 sm:flex">
-        <AfterFirstCard>
+        <AfterEconomy>
         <Link href="/shop" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Shop
         </Link>
+        </AfterEconomy>
+        <AfterFirstCard>
         <Link href="/deck" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           My deck
         </Link>

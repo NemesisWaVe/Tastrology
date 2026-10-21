@@ -204,6 +204,8 @@ export default function DeckPage() {
     }
     setToast(burnToast(res, Boolean(burn?.dustOn)));
   };
+  // Stardust shows after the 2nd card or first fight; a burn that just earned some shows it too.
+  const econ = me?.economyOpen !== false || (burn?.dust ?? 0) > 0;
 
   return (
     <div className="relative isolate min-h-screen">
@@ -229,7 +231,7 @@ export default function DeckPage() {
         {error && <p className="mt-2 font-mono text-[11px] text-warn">{error}</p>}
         {burn?.on && !local && (
           <div className="mt-6 flex flex-wrap items-center gap-4">
-            {burn.dustOn && <DustCounter ref={counterRef} value={burn.dust ?? 0} weekLeft={burn.weekLeft} reduce={reduce} />}
+            {burn.dustOn && econ && <DustCounter ref={counterRef} value={burn.dust ?? 0} weekLeft={burn.weekLeft} reduce={reduce} />}
             {burn.dustOn && dock && (
               <div className="fixed inset-x-0 top-20 z-[70] flex justify-center">
                 <DustCounter ref={dockRef} value={burn.dust ?? 0} weekLeft={null} reduce={reduce} />
@@ -377,7 +379,7 @@ export default function DeckPage() {
 
         {!!cards?.length && !local && <Timeline cards={cards} />}
         {owner === "user" && <Collection />}
-        {owner === "user" && me?.stardust?.economy && (
+        {owner === "user" && econ && me?.stardust?.economy && (
           <section className="mt-20">
             <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">Stardust</p>
             <h2 className="mb-8 mt-2 font-serif text-4xl italic leading-tight">What a card is worth</h2>

@@ -12,6 +12,7 @@ import {
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import { HoloCard } from "@/components/card/HoloCard";
 import { Sky } from "@/components/reveal/Sky";
+import { markFought } from "@/components/site/AfterFirstCard";
 import { skyState } from "@/components/reveal/traceModel";
 import {
   battle,
@@ -191,6 +192,10 @@ export function BattleStage({ out: raw, a = "a", b = "b", onReplay }: { out: Bat
   const [phase, setPhase] = useState(0);
   const [nonce, setNonce] = useState(0);
   const out = useMemo(() => biggestLast(raw), [raw]);
+  // A fight seen to the end opens the Shop and Stardust on this device.
+  useEffect(() => {
+    if (phase >= PH_REVEAL) markFought();
+  }, [phase]);
   // The cinematic clock. Reduced motion jumps straight to the reveal.
   useEffect(() => {
     if (!out) return;

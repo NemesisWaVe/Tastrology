@@ -102,6 +102,11 @@ function index(): string[] {
   return Array.isArray(i) ? i.filter((c): c is string => typeof c === "string") : [];
 }
 
+/** How many cards this device minted (and still keeps a reading for). */
+export function mintedHere(): number {
+  return index().length;
+}
+
 function setIndex(codes: string[]) {
   try {
     localStorage.setItem(INDEX, JSON.stringify(codes));

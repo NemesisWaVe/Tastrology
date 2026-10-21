@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useHasPlace } from "./AfterFirstCard";
+import { useEconomyOpen, useHasPlace } from "./AfterFirstCard";
 import { authOn, whenAuthReady, type Bridge } from "@/lib/authBridge";
 
 /**
@@ -10,6 +10,7 @@ import { authOn, whenAuthReady, type Bridge } from "@/lib/authBridge";
  */
 export function PhoneMenu({ newHref = "/?new=1", onNew }: { newHref?: string; onNew?: () => void }) {
   const has = useHasPlace();
+  const econ = useEconomyOpen();
   const [open, setOpen] = useState(false);
   // account sits in this same menu on phones (the avatar is desktop only), so there is one thing to tap
   const [auth, setAuth] = useState<{ b: Bridge; signedIn: boolean } | null>(null);
@@ -41,7 +42,8 @@ export function PhoneMenu({ newHref = "/?new=1", onNew }: { newHref?: string; on
   }, [open]);
 
   const links = [
-    ...(has ? [{ href: "/deck", label: "My deck", hint: "your cards" }, { href: "/friends", label: "Friends", hint: "fight a friend" }, { href: "/shop", label: "Shop", hint: "packs & stardust" }] : []),
+    ...(has ? [{ href: "/deck", label: "My deck", hint: "your cards" }, { href: "/friends", label: "Friends", hint: "fight a friend" }] : []),
+    ...(has && econ ? [{ href: "/shop", label: "Shop", hint: "packs & stardust" }] : []),
   ];
   const item = "flex items-baseline justify-between rounded-2xl px-4 py-3.5 transition active:bg-paper-2";
 

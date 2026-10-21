@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
+import { AfterEconomy } from "@/components/site/AfterFirstCard";
 import { buildCard, type CardData } from "@/lib/card";
 import { ROLL_ODDS } from "@/lib/odds";
 import { PERSONAS, personaRequest } from "@/lib/personas";
@@ -94,6 +95,7 @@ export function CardGallery() {
         </ul>
       </section>
 
+      <AfterEconomy>
       <section className="mt-16 grid grid-cols-1 gap-6 rounded-[28px] border border-line bg-white/[0.02] p-6 sm:grid-cols-[1fr_auto] sm:items-center sm:p-8">
         <div>
           <h2 className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">Add-ons</h2>
@@ -107,6 +109,7 @@ export function CardGallery() {
           Open the shop
         </Link>
       </section>
+      </AfterEconomy>
 
       <div className="mt-16 flex flex-wrap items-center gap-4">
         <Link href="/#byo" className="inline-flex h-14 items-center rounded-full bg-accent px-7 text-[15px] font-semibold text-paper">

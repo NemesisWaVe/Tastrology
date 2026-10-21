@@ -7,6 +7,7 @@ import { AuthNav } from "@/components/auth/AuthNav";
 import { ShareSheet } from "@/components/card/ShareSheet";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
+import { AfterEconomy } from "@/components/site/AfterFirstCard";
 import { Mark } from "@/components/site/Mark";
 import { PhoneMenu } from "@/components/site/PhoneMenu";
 import { SoundToggle } from "@/components/site/SoundToggle";
@@ -176,9 +177,11 @@ export function OwnedReading({
         </button>
         <span className="flex items-center gap-2 sm:gap-4">
           {/* phones: links move into the menu, so the bar fits a 320px screen */}
-          <Link href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
-            Shop
-          </Link>
+          <AfterEconomy>
+            <Link href="/shop" className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
+              Shop
+            </Link>
+          </AfterEconomy>
           <Link href="/deck" className="hidden whitespace-nowrap py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink sm:inline">
             My Deck
           </Link>

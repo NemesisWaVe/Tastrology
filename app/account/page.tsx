@@ -18,6 +18,7 @@ interface Me {
   freeLeft?: number | null;
   refillAt?: number | null;
   burnOn?: boolean;
+  economyOpen?: boolean;
   stardust?: {
     dust: number | null;
     weekLeft: number | null;
@@ -131,12 +132,14 @@ export default function AccountPage() {
             ) : (
               <p className="mt-3 font-display text-3xl font-semibold tracking-[-0.03em]">{me ? "Unlimited, for now" : "…"}</p>
             )}
-            <Link href="/shop" className="mt-6 block font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 hover:text-ink">
-              Shop →
-            </Link>
+            {me?.economyOpen !== false && (
+              <Link href="/shop" className="mt-6 block font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 hover:text-ink">
+                Shop →
+              </Link>
+            )}
           </section>
 
-          {me?.stardust && <StardustPanel s={me.stardust} />}
+          {me?.stardust && me.economyOpen !== false && <StardustPanel s={me.stardust} />}
           {me && !me.stardust && me.burnOn && (
             <section className="rounded-3xl border border-line bg-card p-6 sm:col-span-2">
               <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Burning</p>
