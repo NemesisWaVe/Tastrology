@@ -23,6 +23,8 @@ export class FakeDynamo {
       if (m) return Boolean(item?.[m[1]]);
       m = c.match(/^(\w+) >= (:\w+)$/);
       if (m) return item?.[m[1]]?.N !== undefined && Number(item[m[1]].N) >= Number(vals[m[2]].N);
+      m = c.match(/^(\w+) < (:\w+)$/);
+      if (m) return item?.[m[1]]?.N !== undefined && Number(item[m[1]].N) < Number(vals[m[2]].N);
       m = c.match(/^(\w+) <= (:\w+)$/);
       if (m) return item?.[m[1]]?.N !== undefined && Number(item[m[1]].N) <= Number(vals[m[2]].N);
       m = c.match(/^(\w+) = (:\w+)$/);

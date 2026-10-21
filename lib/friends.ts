@@ -292,6 +292,9 @@ export async function markSeen(uid: string): Promise<void> {
 export async function alerts(uid: string): Promise<{ bouts: { id: string; who: string; stake: number; ends: number }[]; requests: number } | null> {
   const [b, r] = await Promise.all([ddbQuery(U(uid), "BOUT#", 15, undefined, undefined, true), ddbQuery(U(uid), "REQ#", 50, undefined, ["pc"])]);
   if (!b || !r) return null;
+  // The bar checks on every page, so a lapsed bet you put up comes back here too, not only on the friends page.
+  const due = b.items.filter((it) => it.role === "out" && (Number(it.stake) || 0) > 0 && lapsed(it));
+  if (due.length) await Promise.allSettled(due.map((it) => closeBout(uid, str(it.SK), "expired")));
   const open = b.items.map(toBout).filter((x) => x.role === "in" && x.status === "open");
   return { bouts: open.map((x) => ({ id: x.id, who: x.user ? `@${x.user}` : x.name || x.pc, stake: x.stake, ends: x.ends })), requests: r.items.length };
 }
@@ -506,6 +509,22 @@ const toBout = (it: Flat): Bout => ({
   ...(it.a ? { a: str(it.a), b: str(it.b), outcome: str(it.outcome) as Bout["outcome"] } : {}),
 });
 
+/**
+ * The pair's live-challenge lock (PAIR#<uid>#<uid>, sorted): claimed in the same transaction that opens a bout, so
+ * two taps landing together (two tabs, two phones) can't both open one. It frees itself once BOUT_TTL_MS passes, and
+ * a settled bout frees it straight away, but only if it's still that bout's (a late tidy-up never frees a newer one).
+ */
+const pairKey = (x: string, y: string) => `PAIR#${[x, y].sort().join("#")}`;
+const claimPair = (x: string, y: string, sk: string, now: number): TxOp => ({
+  put: { PK: pairKey(x, y), SK: "LIVE", bout: sk, at: now },
+  condition: "attribute_not_exists(PK) OR #a < :old",
+  names: { "#a": "at" },
+  values: { ":old": now - BOUT_TTL_MS },
+});
+async function freePair(x: string, y: string, sk: string) {
+  await ddbUpdate(pairKey(x, y), "LIVE", "SET #a = :z", { names: { "#a": "at" }, values: { ":z": 0, ":sk": sk }, condition: "bout = :sk" }).catch(() => {});
+}
+
 /** How many recent bouts a list shows (and how far back the one-friendly-at-a-time check looks). */
 const BOUTS_SEEN = 50;
 
@@ -539,11 +558,13 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   const rows: TxOp[] = [
     { put: { PK: U(uid), SK, role: "out", uid: other, pc, name: str(f?.name), user: str(f?.user), ...base } },
     { put: { PK: U(other), SK, role: "in", uid, pc: me.pc, name: me.name, user: me.user ?? "", ...base } },
+    claimPair(uid, other, SK, now),
   ];
+  const LOCK = rows.length - 1;
   if (!stake) {
     const r = await ddbTransact(rows);
     if (r?.ok) await touch(other);
-    return r?.ok ? "open" : "error";
+    return !r ? "error" : r.ok ? "open" : r.reasons[LOCK] === CCF ? "already" : "error";
   }
   const r = await ddbTransact([
     { update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust - :s, v = v + :one", condition: "dust >= :s", values: { ":s": stake, ":one": 1 } },
@@ -558,6 +579,7 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   }
   if (r.reasons[0] === CCF) return "empty";
   if (r.reasons[2] === CCF) return "daily";
+  if (r.reasons[3 + LOCK] === CCF) return "already";
   return "error";
 }
 
@@ -589,9 +611,10 @@ async function fighterOf(uid: string): Promise<string | null> {
  * The friend answers. Friendly: both chosen fighters meet. Stardust: the friend matches the stake, one card is drawn
  * from each deck, and the winner takes both stakes (a tie refunds).
  */
-export async function acceptBout(uid: string, me: Player, sk: string): Promise<{ ok: true; result: BattleResult; a: string; b: string; outcome: Bout["outcome"] } | { ok: false; why: "gone" | "empty" | "no-cards" | "error" }> {
+export async function acceptBout(uid: string, me: Player, sk: string): Promise<{ ok: true; result: BattleResult; a: string; b: string; outcome: Bout["outcome"] } | { ok: false; why: "gone" | "lapsed" | "empty" | "no-cards" | "error" }> {
   const mine = await ddbGet(U(uid), sk);
-  if (!mine || mine.role !== "in" || mine.status !== "open" || lapsed(mine)) return { ok: false, why: "gone" };
+  if (!mine || mine.role !== "in" || mine.status !== "open") return { ok: false, why: "gone" };
+  if (lapsed(mine)) return { ok: false, why: "lapsed" };
   const challenger = str(mine.uid);
   const stake = Number(mine.stake) || 0;
   const pick = stake ? draw : fighterOf;
@@ -623,7 +646,7 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
   const r = await ddbTransact(ops);
   if (!r) return { ok: false, why: "error" };
   if (!r.ok) return { ok: false, why: r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : r.reasons[2] === CCF ? "empty" : "error" };
-  await Promise.allSettled([recordBattle(a, b, result), bumpFriendship(uid, str(mine.pc), now), bumpFriendship(challenger, me.pc, now), touch(challenger)]);
+  await Promise.allSettled([recordBattle(a, b, result), bumpFriendship(uid, str(mine.pc), now), bumpFriendship(challenger, me.pc, now), touch(challenger), freePair(uid, challenger, sk)]);
   return { ok: true, result, a, b, outcome: side("b") };
 }
 
@@ -652,7 +675,7 @@ export async function closeBout(uid: string, sk: string, as?: "expired"): Promis
   const r = await ddbTransact([close(uid), close(other), ...refund]);
   if (!r) return "error";
   if (r.ok) {
-    await touch(other);
+    await Promise.allSettled([touch(other), freePair(uid, other, sk)]);
     return "closed";
   }
   return r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : "error";

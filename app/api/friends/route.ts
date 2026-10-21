@@ -48,15 +48,17 @@ export async function GET(request: Request) {
     const [n] = await Promise.all([inboxCount(uid), markSeen(uid)]);
     return json({ n });
   }
-  if (q.get("alerts") && !(await allow(`alerts:${uid}`, 60, 10 * 60 * 1000))) return json({ bouts: [], requests: 0 });
-  if (q.get("alerts")) return json((await alerts(uid)) ?? { bouts: [], requests: 0 });
+  // Over the limit: a 429, never an empty answer, so a waiting challenge isn't wiped from the bar.
+  if (q.get("alerts") && !(await allow(`alerts:${uid}`, 200, 10 * 60 * 1000))) return json({ error: "slow down" }, 429);
+  // `now` lets the page set its countdowns by the server's clock, not a phone's that may be minutes off.
+  if (q.get("alerts")) return json({ ...((await alerts(uid)) ?? { bouts: [], requests: 0 }), now: Date.now() });
   const me0 = await ensurePlayer(uid);
   if (!me0) return json({ error: "Couldn't reach the server." }, 503);
   if (q.get("whoami")) return json({ on: true, signedIn: true, me: me0 });
   const me = await syncName(uid, me0);
   const dOn = dustOn();
   const [[inbox], friends, requests, bouts, ds] = await Promise.all([Promise.all([inboxCount(uid), indexCards(uid, me.pc)]), listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
-  return json({ on: true, signedIn: true, inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES, rename: { fee: renameFee(me), free: FREE_RENAMES, cost: RENAME_DUST } });
+  return json({ on: true, signedIn: true, now: Date.now(), inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES, rename: { fee: renameFee(me), free: FREE_RENAMES, cost: RENAME_DUST } });
 }
 
 /**
@@ -193,7 +195,7 @@ export async function POST(request: Request) {
       }
       const r = await acceptBout(uid, me, id);
       if (r.ok) return json({ ok: true, a: r.a, b: r.b, outcome: r.outcome });
-      const msg = { gone: "That bout is already settled.", empty: "You need the stake in Stardust to accept.", "no-cards": "One of you has no card that can fight.", error: "Couldn't reach the server." } as const;
+      const msg = { gone: "That bout is already settled.", lapsed: "That challenge ran out of time. Send one back.", empty: "You need the stake in Stardust to accept.", "no-cards": "One of you has no card that can fight.", error: "Couldn't reach the server." } as const;
       return json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);
     }
   }

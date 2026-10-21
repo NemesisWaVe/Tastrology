@@ -102,7 +102,8 @@ const CLERK_WORDS = {
     start: { title: "Tastrology", titleCombined: "Tastrology", subtitle: "Sign in and the stars start reading.", subtitleCombined: "Sign in and the stars start reading." },
   },
   signUp: {
-    start: { title: "New here", subtitle: "Pick a username. It's how friends find you." },
-    continue: { title: "Almost there", subtitle: "Pick a username. It's how friends find you." },
+    // Clerk never asks for a username (that comes after, on our own sheet), so these don't promise one.
+    start: { title: "New here", subtitle: "Your cards, on every device." },
+    continue: { title: "Almost there", subtitle: "One last step, then you're in." },
   },
 };

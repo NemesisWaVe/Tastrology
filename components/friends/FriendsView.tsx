@@ -27,6 +27,8 @@ type Data = {
   /** What a username change costs now (0 while the free one is unused). */
   rename?: { fee: number; free: number; cost: number };
   inbox?: number | null;
+  /** Server clock when this was read, to set countdowns by. */
+  now?: number;
   error?: string;
 };
 
@@ -114,6 +116,8 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
       location.href = `/vs/${done.a}?vs=${done.b}`;
       return;
     }
+    // Countdowns run on this device's clock, shifted by how far it is from the server's.
+    if (j.now) j.bouts = j.bouts?.map((b) => ({ ...b, ends: b.ends + (Date.now() - j.now!) }));
     setD(j);
   }, []);
 

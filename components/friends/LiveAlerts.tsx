@@ -31,8 +31,9 @@ export function LiveAlerts() {
     const check = async () => {
       const j = (await fetch("/api/friends?alerts=1", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)) as Alerts | null;
+        .catch(() => null)) as (Alerts & { now?: number }) | null;
       if (!j || stop) return;
+      if (j.now) j.bouts = j.bouts.map((b) => ({ ...b, ends: b.ends + (Date.now() - j.now!) }));
       seen.current = new Set(j.bouts.map((b) => b.id));
       setWaiting(j.bouts);
       const open = j.bouts.length + j.requests;

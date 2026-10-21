@@ -307,12 +307,19 @@ describe("stardust bouts", () => {
     db.items.get(`USER#ann|${bout.id}`)!.at = N(Date.now() - BOUT_TTL_MS - 1);
     expect((await listBouts("bo"))![0].status).toBe("expired");
     expect((await listBouts("bo"))![0].ends).toBe(Number(row.at.N) + BOUT_TTL_MS);
-    expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "gone" });
+    expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "lapsed" });
     expect(dust("ann")).toBe(40);
     expect((await listBouts("ann"))![0].status).toBe("expired");
     expect(dust("ann")).toBe(50);
     expect(await closeBout("ann", bout.id)).toBe("gone");
     expect(await openBout("ann", a, b.pc, 0)).toBe("open"); // a lapsed one doesn't block the next
+  });
+
+  it("lets only one of two challenges sent at the same moment through", async () => {
+    const [a, b] = await pair();
+    const got = await Promise.all([openBout("ann", a, b.pc, 0), openBout("ann", a, b.pc, 0), openBout("bo", b, a.pc, 0)]);
+    expect(got.filter((x) => x === "open")).toHaveLength(1);
+    expect((await listBouts("ann"))!.filter((x) => x.status === "open")).toHaveLength(1);
   });
 
   it("caps bouts per day", async () => {
