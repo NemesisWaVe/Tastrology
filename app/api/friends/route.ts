@@ -1,4 +1,4 @@
-import { clerkImage, clerkOn, clerkUserGone, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
+import { clerkImage, clerkLegalAt, clerkOn, clerkUserGone, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
 import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, stampImage, refundRename, closeBout, GENDERS, setProfile, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow, clientId } from "@/lib/ratelimit";
@@ -73,6 +73,11 @@ async function syncName(uid: string, me: Player): Promise<Player> {
   const cu = await clerkUsername(uid);
   const img = await clerkImage(uid);
   if (img !== undefined) await stampImage(uid, me, img).catch(() => {});
+  // Agreed in Clerk's sign-up back when that step was on: carry the time over, so the setup sheet doesn't ask again.
+  if (!me.terms) {
+    const legal = await clerkLegalAt(uid);
+    if (legal && (await setProfile(uid, { terms: legal }))) me = { ...me, terms: true };
+  }
   if (cu === undefined || cu === me.user) return me;
   if (cu && !me.user) {
     const r = await setUsername(uid, me, cu);

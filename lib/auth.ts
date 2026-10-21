@@ -39,7 +39,7 @@ export async function isAdmin(userId: string | null): Promise<boolean> {
   return admin;
 }
 
-const nameCache = new Map<string, { u: string | null; img?: string; until: number }>();
+const nameCache = new Map<string, { u: string | null; img?: string; legal?: number; until: number }>();
 
 /** The Clerk username (picked at sign-up), lowercased; null if none; undefined if Clerk couldn't be read. Cached a minute. */
 export async function clerkUsername(userId: string): Promise<string | null | undefined> {
@@ -52,7 +52,9 @@ export async function clerkUsername(userId: string): Promise<string | null | und
     const u = user.username?.toLowerCase() || null;
     // Only a photo the person set (Google sign-in or an upload); Clerk's generated placeholder is left out.
     const img = user.hasImage && /^https:\/\/img\.clerk\.com\//.test(user.imageUrl) ? user.imageUrl : "";
-    nameCache.set(userId, { u, img, until: Date.now() + 60_000 });
+    // When they ticked Clerk's own terms box at sign-up (while that step was on), so they aren't asked twice.
+    const legal = Number((user as { legalAcceptedAt?: number | null }).legalAcceptedAt) || undefined;
+    nameCache.set(userId, { u, img, legal, until: Date.now() + 60_000 });
     return u;
   } catch {
     return undefined;
@@ -63,6 +65,12 @@ export async function clerkUsername(userId: string): Promise<string | null | und
 export async function clerkImage(userId: string): Promise<string | undefined> {
   if ((await clerkUsername(userId)) === undefined) return undefined;
   return nameCache.get(userId)?.img;
+}
+
+/** When the user accepted the terms in Clerk's sign-up (ms), read with the username; undefined when never or unknown. */
+export async function clerkLegalAt(userId: string): Promise<number | undefined> {
+  if ((await clerkUsername(userId)) === undefined) return undefined;
+  return nameCache.get(userId)?.legal;
 }
 
 /** Writes the username to Clerk. "taken" when another Clerk account has it; "off" when Clerk usernames aren't enabled. */
