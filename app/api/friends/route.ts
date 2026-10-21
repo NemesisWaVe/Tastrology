@@ -49,6 +49,11 @@ export async function GET(request: Request) {
     const [n] = await Promise.all([inboxCount(uid), markSeen(uid)]);
     return json({ n });
   }
+  // Live username check for the setup sheet: "ok", "bad" (form or wording) or "taken". Checks only, never claims.
+  if (q.has("name")) {
+    if (!(await allow(`name-check:${uid}`, 120, 10 * 60 * 1000))) return json({ error: "slow down" }, 429);
+    return json({ name: normUser(q.get("name") ?? ""), status: await nameFree(uid, q.get("name") ?? "") });
+  }
   // Over the limit: a 429, never an empty answer, so a waiting challenge isn't wiped from the bar.
   if (q.get("alerts") && !(await allow(`alerts:${uid}`, 200, 10 * 60 * 1000))) return json({ error: "slow down" }, 429);
   // `now` lets the page set its countdowns by the server's clock, not a phone's that may be minutes off.
