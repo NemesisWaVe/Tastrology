@@ -2,8 +2,8 @@
 
 import { PersonaGlyph } from "./PersonaGlyph";
 import { CursorArrow } from "@/components/CursorArrow";
-import { motion } from "motion/react";
-import { useState } from "react";
+import { motion, useInView } from "motion/react";
+import { useRef, useState } from "react";
 import { KIND_ICON, KIND_LABEL } from "@/components/SeedPicker";
 import { PERSONAS, personaRequest, type Persona } from "@/lib/personas";
 import type { AgentRequest } from "@/lib/types";
@@ -25,6 +25,11 @@ const DECK = [...PERSONAS]
 
 export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void }) {
   const [picked, setPicked] = useState<string | null>(null);
+  // the row, not each tile, decides when the deck rises: a tile parked off to the right in the phone swipe row is
+  // clipped by the row, so it never counted as in view, stayed shifted down and invisible, and gave the row a vertical
+  // scroll of its own
+  const row = useRef<HTMLDivElement>(null);
+  const shown = useInView(row, { once: true, margin: "200px" });
 
   const pick = (p: Persona) => {
     if (picked) return;
@@ -52,11 +57,12 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
         </div>
 
         <div
-          className={`${s.snap} -mx-4 mt-12 flex gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:gap-6`}
+          ref={row}
+          className={`${s.snap} -mx-4 mt-9 flex gap-4 overflow-x-auto overflow-y-hidden px-4 pb-6 pt-3 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:gap-6`}
           role="list"
         >
           {DECK.map(({ p, t }, i) => (
-            <PersonaCard key={p.key} p={p} tier={t} i={i} total={DECK.length} onPick={() => pick(p)} picked={picked === p.key} dim={!!picked && picked !== p.key} />
+            <PersonaCard key={p.key} p={p} tier={t} i={i} total={DECK.length} shown={shown} onPick={() => pick(p)} picked={picked === p.key} dim={!!picked && picked !== p.key} />
           ))}
         </div>
         <p className="mt-4 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 sm:hidden">← swipe the deck →</p>
@@ -65,7 +71,7 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
   );
 }
 
-function PersonaCard({ p, tier, i, total, onPick, picked, dim }: { p: Persona; tier: Tier; i: number; total: number; onPick: () => void; picked: boolean; dim: boolean }) {
+function PersonaCard({ p, tier, i, total, shown, onPick, picked, dim }: { p: Persona; tier: Tier; i: number; total: number; shown: boolean; onPick: () => void; picked: boolean; dim: boolean }) {
   const look = lookOf(p);
   const [first, ...rest] = p.name.split(" ");
   const hasArticle = first.toLowerCase() === "the";
@@ -95,8 +101,7 @@ function PersonaCard({ p, tier, i, total, onPick, picked, dim }: { p: Persona; t
       role="listitem"
       className="w-[80%] shrink-0 sm:w-auto"
       initial={{ opacity: 0, y: 50 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "200px" }}
+      animate={shown ? { opacity: 1, y: 0 } : undefined}
       transition={{ duration: 1, ease: EASE, delay: i * 0.12 }}
     >
       <motion.div className={`${s.rim} h-full`} data-tier={tier.tier} animate={{ opacity: dim ? 0.35 : 1, scale: picked ? 0.97 : 1 }} transition={{ duration: 0.35, ease: EASE }}>

@@ -64,7 +64,7 @@ export function CardGallery() {
 
       <section className="mt-14">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">The finishes · one reading, four ways</h2>
-        <ul className="-mx-4 mt-6 flex gap-6 overflow-x-auto px-4 pb-6 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+        <ul className="-mx-4 mt-6 flex gap-6 overflow-x-auto overflow-y-hidden px-4 pb-6 pt-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
           {ROLL_ODDS.map((o) => (
             <li key={o.tier} className="w-[230px] shrink-0 sm:w-auto">
               <Slot card={ladder ? { ...ladder, rarity: o.tier, rarityLabel: LABEL[o.tier], rarityNo: undefined } : null} width={230} />
@@ -80,7 +80,7 @@ export function CardGallery() {
 
       <section className="mt-16">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">The ready-made three · showcase finishes</h2>
-        <ul className="-mx-4 mt-6 flex gap-8 overflow-x-auto px-4 pb-6 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0">
+        <ul className="-mx-4 mt-6 flex gap-8 overflow-x-auto overflow-y-hidden px-4 pb-6 pt-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0">
           {SET.map((p) => (
             <li key={p.key} className="w-[270px] shrink-0 sm:w-auto">
               <Slot card={cards[p.key] ?? null} width={270} />

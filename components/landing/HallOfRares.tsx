@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { motion, useInView } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
 import type { CardData } from "@/lib/card";
 import { ROLL_ODDS } from "@/lib/odds";
@@ -47,34 +47,44 @@ export function HallOfRares() {
         )}
       </div>
 
-      <ul className={s.hallRow}>
-        {cards.map(({ code, card }, i) => (
-          <motion.li
-            key={code}
-            className={s.exhibit}
-            data-tier={card.rarity}
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.9, ease: EASE, delay: i * 0.1 }}
-          >
-            <span className={s.spot} aria-hidden />
-            <Link href={`/c/${code}`} aria-label={`${card.rarityLabel}: ${card.archetype}`} className={s.exhibitCard}>
-              <HoloCard card={card} width={230} idle={false} />
-            </Link>
-            <span className={s.floor} aria-hidden />
-            <p className={s.plaque}>
-              <span>{card.rarityLabel}</span>
-              <b>{card.archetype}</b>
-              <small>
-                No. {card.serial}
-                {card.rarityNo ? ` · ${String(card.rarityNo).padStart(3, "0")} of its tier` : ""}
-              </small>
-            </p>
-          </motion.li>
-        ))}
-      </ul>
+      <Exhibits cards={cards} />
     </section>
+  );
+}
+
+/** The row decides when the cards rise: a card off to the right is clipped by the row, so on its own it never counts
+ * as seen (it stayed shifted down and invisible, and gave the row a vertical scroll). Its own component, so the row
+ * exists by the time it is observed. */
+function Exhibits({ cards }: { cards: { code: string; card: CardData }[] }) {
+  const row = useRef<HTMLUListElement>(null);
+  const shown = useInView(row, { once: true, margin: "-60px" });
+  return (
+    <ul ref={row} className={s.hallRow}>
+      {cards.map(({ code, card }, i) => (
+        <motion.li
+          key={code}
+          className={s.exhibit}
+          data-tier={card.rarity}
+          initial={{ opacity: 0, y: 40 }}
+          animate={shown ? { opacity: 1, y: 0 } : undefined}
+          transition={{ duration: 0.9, ease: EASE, delay: i * 0.1 }}
+        >
+          <span className={s.spot} aria-hidden />
+          <Link href={`/c/${code}`} aria-label={`${card.rarityLabel}: ${card.archetype}`} className={s.exhibitCard}>
+            <HoloCard card={card} width={230} idle={false} />
+          </Link>
+          <span className={s.floor} aria-hidden />
+          <p className={s.plaque}>
+            <span>{card.rarityLabel}</span>
+            <b>{card.archetype}</b>
+            <small>
+              No. {card.serial}
+              {card.rarityNo ? ` · ${String(card.rarityNo).padStart(3, "0")} of its tier` : ""}
+            </small>
+          </p>
+        </motion.li>
+      ))}
+    </ul>
   );
 }
 

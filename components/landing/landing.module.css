@@ -696,6 +696,7 @@
   margin-top: 56px;
   padding: 36px 24px 12px;
   overflow-x: auto;
+  overflow-y: hidden; /* sideways only: the spotlights must never give the row a scroll of its own */
   justify-content: safe center; /* a short row sits centred; a long one still scrolls from its first card */
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
@@ -718,7 +719,7 @@
   left: 50%;
   top: -36px;
   width: 340px;
-  height: 120%;
+  height: calc(100% + 36px);
   transform: translateX(-50%);
   pointer-events: none;
   background: conic-gradient(from 180deg at 50% 0%, transparent 155deg, rgb(255 244 214 / 0.13) 172deg, rgb(255 244 214 / 0.18) 180deg, rgb(255 244 214 / 0.13) 188deg, transparent 205deg);
