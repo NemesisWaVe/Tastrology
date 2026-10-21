@@ -137,6 +137,8 @@ export interface StyleResult {
   edition?: string;
   /** Version of the reading engine that produced it (lib/agent READING_V). Absent on older cards. */
   engine?: string;
+  /** A Secret roll's slot in its edition's fixed supply (lib/supply.ts): no 1..of, or 0 when the supply was gone. */
+  supply?: { no: number; of: number };
   mode: "live" | "mock";
   planner: "llm" | "autopilot";
   cached?: boolean;

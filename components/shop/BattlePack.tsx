@@ -84,7 +84,7 @@ export function BattlePack() {
             {cards.map(({ code, card }, i) => (
               <li key={code} className="rise flex flex-col items-center" style={{ animationDelay: `${i * 140}ms` }}>
                 <Link href={`/vs/${code}`} aria-label={`Fight ${card.archetype}`} className="block transition hover:-translate-y-1">
-                  <HoloCard card={card} width={200} idle={false} />
+                  <HoloCard card={card} width={200} idle={false} copy />
                 </Link>
                 <Link href={`/vs/${code}`} className="mt-3 rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-accent hover:text-ink">
                   Fight {card.archetype}

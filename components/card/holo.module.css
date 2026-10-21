@@ -1724,3 +1724,33 @@
   }
 }
 
+
+/* a Battle Pack card: a collected copy of someone else's mint, stamped across the art so it never passes as theirs */
+.copyMark {
+  position: absolute;
+  z-index: 5;
+  top: 2.4cqw;
+  right: 2cqw;
+  display: grid;
+  justify-items: center;
+  padding: 0.5cqw 1.8cqw;
+  rotate: 7deg;
+  border: 0.45cqw dashed rgb(255 255 255 / 0.85);
+  border-radius: 1cqw;
+  background: rgb(8 8 12 / 0.6);
+  color: #fff;
+  font-family: var(--f-mono);
+  text-transform: uppercase;
+  line-height: 1.15;
+  pointer-events: none;
+}
+.copyMark b {
+  font-size: 2.9cqw;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+.copyMark small {
+  font-size: 1.8cqw;
+  letter-spacing: 0.16em;
+  opacity: 0.8;
+}

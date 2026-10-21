@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ddbGet, ddbPutIfAbsent } from "@/lib/ddb";
-import { addToPool, drawPack, openPack, PACK_DUST, PACK_ODDS, PACK_SIZE, tierFor } from "@/lib/packs";
+import { addToPool, drawPack, openPack, PACK_DUST, PACK_HOLDERS, PACK_ODDS, PACK_SIZE, tierFor } from "@/lib/packs";
 import { FakeDynamo, useFakeDynamo } from "./fakeDynamo";
 
 let db: FakeDynamo;
@@ -82,5 +82,42 @@ describe("stardust bundles", () => {
     expect(await creditPurchasedDust("buyer", "bad id!", 100)).toBe("error");
     expect(await creditPurchasedDust("buyer", "order_XYZ999", -5)).toBe("error");
     expect(await dustOf("buyer")).toBe(105);
+  });
+});
+
+describe("pack cards are copies, and an original has a holder limit", () => {
+  const all = [...codes(6, "CCCC"), ...codes(3, "RRRR")];
+
+  it("an original that reaches the holder limit leaves the pool", async () => {
+    for (const c of all) await ddbPutIfAbsent({ PK: `CARD#${c}`, SK: "HOLDERS", n: PACK_HOLDERS - 1 } as never);
+    await wallet("u3", PACK_DUST);
+    const r = await openPack("u3", NOW);
+    expect(r.status).toBe("opened");
+    const [code] = (r as { codes: string[] }).codes;
+    expect(Number(db.items.get(`CARD#${code}|HOLDERS`)?.n?.N)).toBe(PACK_HOLDERS);
+    expect([...db.items.keys()].some((k) => k.startsWith("POOL#") && k.endsWith(`CARD#${code}`))).toBe(false);
+  });
+
+  it("when every original is full, nothing is charged", async () => {
+    for (const c of all) await ddbPutIfAbsent({ PK: `CARD#${c}`, SK: "HOLDERS", n: PACK_HOLDERS } as never);
+    await wallet("u4", PACK_DUST);
+    expect((await openPack("u4", NOW)).status).not.toBe("opened");
+    expect(await dustOf("u4")).toBe(PACK_DUST);
+  });
+
+  it("never hands you a card you already collected", async () => {
+    await ddbPutIfAbsent({ PK: "USER#u5", SK: "PACK#2026-10-01", codes: all.filter((c) => c !== "5005-CCCC").join(",") } as never);
+    for (const day of ["2026-10-18", "2026-10-19", "2026-10-20"]) expect(await drawPack("u5", day)).toEqual(["5005-CCCC"]);
+  });
+
+  it("draws from the whole tier, not just its first cards", async () => {
+    const big = Array.from({ length: 400 }, (_, i) => `${String(i * 25).padStart(4, "0")}-BBBB`);
+    for (const c of big) await addToPool(c, "common");
+    for (const c of codes(6, "CCCC")) db.items.delete(`POOL#common|CARD#${c}`);
+    for (const c of codes(3, "RRRR")) db.items.delete(`POOL#rare|CARD#${c}`);
+    const seen = new Set<number>();
+    for (let u = 0; u < 60; u++) for (const c of (await drawPack(`x${u}`, "2026-10-18")) ?? []) seen.add(big.indexOf(c));
+    expect(Math.max(...seen)).toBeGreaterThan(300);
+    expect(Math.min(...seen)).toBeLessThan(100);
   });
 });

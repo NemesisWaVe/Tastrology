@@ -41,9 +41,11 @@ export const HoloCard = forwardRef<
     still?: boolean;
     /** Hero-first reveal: art + name + rarity land, then the details print row by row like a receipt. */
     print?: boolean;
+    /** A Battle Pack card: a collected copy of someone else's mint, stamped so it never passes for the original. */
+    copy?: boolean;
   }
 >(
-  function HoloCard({ card, className = "", idle = true, width = 340, still = false, print = false }, ref) {
+  function HoloCard({ card, className = "", idle = true, width = 340, still = false, print = false, copy = false }, ref) {
     const root = useRef<HTMLDivElement>(null);
     const state = useRef({ tx: 0, ty: 0, x: 0, y: 0, active: false, still: false, t0: 0 });
 
@@ -180,7 +182,7 @@ export const HoloCard = forwardRef<
       <div className={`${s.scene} ${className}`} style={{ width }}>
         <div ref={root} className={`${s.card} ${s[card.rarity]}`} style={style} data-rarity={card.rarity} data-living={card.living || card.rarity === "holo" || card.rarity === "secret" ? "1" : undefined} data-print={print ? "1" : undefined}>
           <DotoFont />
-          <CardFace card={card} />
+          <CardFace card={card} copy={copy} />
           <div className={s.frameShine} aria-hidden />
           {card.rarity === "secret" && (
             <>
@@ -196,7 +198,7 @@ export const HoloCard = forwardRef<
   },
 );
 
-function CardFace({ card }: { card: CardData }) {
+function CardFace({ card, copy = false }: { card: CardData; copy?: boolean }) {
   const { sun, moon, rising, moonIsContradiction } = card.bigThree;
   const len = card.archetype.length;
   return (
@@ -234,6 +236,12 @@ function CardFace({ card }: { card: CardData }) {
         <Constellation card={card} />
         <VibeStickers card={card} />
         <div className={s.artShine} aria-hidden />
+        {copy && (
+          <div className={s.copyMark} aria-label="Collected copy: someone else's card, from a Battle Pack">
+            <b>Copy</b>
+            <small>collected</small>
+          </div>
+        )}
         {card.deepCut && (
           <div className={s.stamp} aria-label={`Deep Cut: your loves average ${card.avgPop}% popularity`}>
             <b>Deep Cut</b>
@@ -300,6 +308,8 @@ function CardFace({ card }: { card: CardData }) {
           <span className={s.tierNo}>
             <i className={s.gems}>{GEMS[card.rarity]}</i>
             {card.rarityNo ? <b className={s.dots}>{String(card.rarityNo).padStart(3, "0")}</b> : null}
+            {/* a Secret from its edition's fixed supply prints how many exist: 037 / 100 */}
+            {card.supply ? <small className={s.dots}>/{card.supply.of}</small> : null}
           </span>
         </span>
       </footer>

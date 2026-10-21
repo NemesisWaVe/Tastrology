@@ -3,6 +3,8 @@ import { SEASON, buildCard, cardCode, cardNo, editionName, editionOf, setOf } fr
 import { battle } from "@/lib/battle";
 import { ODDS_V } from "@/lib/odds";
 import { claimPrint, printId, stamp, unstamped } from "@/lib/print";
+import { rollFor } from "@/lib/roll";
+import { SECRET_SUPPLY } from "@/lib/odds";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
 // DynamoDB as a map: claimPrint's write-once claims and the twins filed before claims existed.
@@ -18,10 +20,36 @@ vi.mock("@/lib/ddb", () => ({
   ddbGet: async (PK: string, SK: string) => (db.down ? null : (db.items.get(`${PK}|${SK}`) ?? null)),
 }));
 
+// Upstash as a map, running the supply script's steps (lib/supply.ts) in JS.
+const redis = vi.hoisted(() => ({ kv: new Map<string, string>(), on: false, down: false }));
+vi.mock("@/lib/cache", () => ({
+  upstashConfigured: () => redis.on,
+  upstash: async (cmds: (string | number)[][]) => {
+    if (redis.down) return null;
+    return cmds.map(([op, ...a]) => {
+      if (op === "GET") return redis.kv.get(String(a[0])) ?? null;
+      if (op === "EVAL") {
+        const [, , counter, slot, cap] = a.map(String);
+        const had = redis.kv.get(slot);
+        if (had !== undefined) return Number(had);
+        const n = Number(redis.kv.get(counter) ?? 0);
+        if (n >= Number(cap)) return redis.kv.set(slot, "0"), 0;
+        redis.kv.set(counter, String(n + 1));
+        redis.kv.set(slot, String(n + 1));
+        return n + 1;
+      }
+      throw new Error(`fake redis: ${op}`);
+    });
+  },
+}));
+
 beforeEach(() => {
   vi.stubEnv("ROLL_SECRET", "test-secret");
   db.items.clear();
   db.down = false;
+  redis.kv.clear();
+  redis.on = false;
+  redis.down = false;
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -220,5 +248,62 @@ describe("fights use the cards as minted", () => {
     const a = buildCard(reading());
     const odd = { ...a, stats: [{ label: "Vibe", value: 99, hint: "" }] };
     expect(battle(reading(), other(), { a: odd }).rounds.map((r) => r.a)).toEqual(a.stats.map((s) => s.value));
+  });
+});
+
+describe("a fixed supply of Secret Rares per edition", () => {
+  // run ids whose roll lands on Secret (and one that doesn't), found the way a player would: by minting
+  const runs = (tier: string, n: number) => {
+    const out: string[] = [];
+    for (let i = 0; out.length < n; i++) if (rollFor("u1", `r${i}`, SEASON).tier === tier) out.push(`r${i}`);
+    return out;
+  };
+  const counter = SEASON === "01" ? "tm:no:secret" : `tm:no:${SEASON}:secret`;
+
+  it("a Secret takes the next slot and prints it (037 / 100); a retry keeps the same slot", async () => {
+    redis.on = true;
+    redis.kv.set(counter, "36");
+    const [run] = runs("secret", 1);
+    const c = buildCard(await claimPrint(reading(), { userId: "u1", runId: run }));
+    expect(c.rarity).toBe("secret");
+    expect(c.supply).toEqual({ no: 37, of: SECRET_SUPPLY });
+    expect(c.rarityNo).toBe(37);
+    const again = buildCard(await claimPrint(reading(), { userId: "u1", runId: run }));
+    expect(cardCode(again)).toBe(cardCode(c));
+    expect(redis.kv.get(counter)).toBe("37");
+  });
+
+  it("past the last slot a Secret roll prints as a Holo, and says why", async () => {
+    redis.on = true;
+    redis.kv.set(counter, String(SECRET_SUPPLY));
+    const [run] = runs("secret", 1);
+    const c = buildCard(await claimPrint(reading(), { userId: "u1", runId: run }));
+    expect(c.rarity).toBe("holo");
+    expect(c.supply).toBeUndefined();
+    expect(c.rarityWhy.join(" ")).toMatch(/already pulled/);
+    expect(redis.kv.get(counter)).toBe(String(SECRET_SUPPLY));
+  });
+
+  it("only Secret rolls touch the supply", async () => {
+    redis.on = true;
+    const [run] = runs("common", 1);
+    await claimPrint(reading(), { userId: "u1", runId: run });
+    expect(redis.kv.size).toBe(0);
+  });
+
+  it("a reconnect only looks: no slot taken for a mint that never reserved one", async () => {
+    redis.on = true;
+    const [run] = runs("secret", 1);
+    expect(await claimPrint(reading(), { userId: "u1", runId: run }, true)).toBeNull();
+    expect(redis.kv.get(counter)).toBeUndefined();
+    const c = await claimPrint(reading(), { userId: "u1", runId: run });
+    expect(codeOf((await claimPrint(reading(), { userId: "u1", runId: run }, true))!)).toBe(codeOf(c));
+  });
+
+  it("if the counter can't answer, the mint fails (and is refunded) instead of printing an unchecked Secret", async () => {
+    redis.on = true;
+    redis.down = true;
+    const [run] = runs("secret", 1);
+    await expect(claimPrint(reading(), { userId: "u1", runId: run })).rejects.toThrow(/supply/);
   });
 });

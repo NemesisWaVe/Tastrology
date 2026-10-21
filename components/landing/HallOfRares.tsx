@@ -87,7 +87,7 @@ function Exhibits({ cards, door }: { cards: { code: string; card: CardData }[]; 
             <b>{card.archetype}</b>
             <small>
               No. {cardNo(card)}
-              {card.rarityNo ? ` · ${String(card.rarityNo).padStart(3, "0")} of its tier` : ""}
+              {card.rarityNo ? ` · ${String(card.rarityNo).padStart(3, "0")} ${card.supply ? `of ${card.supply.of}` : "of its tier"}` : ""}
             </small>
           </p>
         </motion.li>

@@ -4,7 +4,8 @@ import { PageSky } from "@/components/site/PageSky";
 import { SiteShell } from "@/components/site/SiteShell";
 import { BRAND } from "@/lib/brand";
 import { SEASON } from "@/lib/card";
-import { ROLL_ODDS } from "@/lib/odds";
+import { ROLL_ODDS, SECRET_SUPPLY } from "@/lib/odds";
+import { PACK_HOLDERS } from "@/lib/packRules";
 import { commitment, rollOn } from "@/lib/roll";
 import { dustSaleOn } from "@/lib/products";
 
@@ -54,8 +55,15 @@ export default function OddsPage() {
       </section>
       <div className="mt-10 max-w-xl space-y-3 text-sm text-ink-2">
         <p>
-          <b className="text-ink">One roll per card.</b> It&apos;s tied to your account and the reading you paid for, so reloading or making the same picks
-          again gives the same card. A regret redraws the reading, and a Common can come back as Rare at most.
+          <b className="text-ink">One roll per card.</b> It&apos;s tied to your account and the mint you paid for, so a reload or a retry gives the same
+          card. Minting the same picks again is a new print of that reading, with its own roll and number. A regret redraws the reading, and a Common
+          can come back as Rare at most.
+        </p>
+        <p>
+          <b className="text-ink">{SECRET_SUPPLY} Secret Rares per season, ever.</b> Each one is numbered out of {SECRET_SUPPLY} the moment it&apos;s
+          pulled. Once the last is taken, a Secret roll prints as a Holo Rare instead, so a season&apos;s Secrets stay a fixed number however many
+          people play. Battle Packs never add to it: a pack card is a collected copy of someone else&apos;s mint, and only {PACK_HOLDERS} people can
+          collect any one card.
         </p>
         <p>
           <b className="text-ink">Checkable.</b> Each season&apos;s roll key is fixed before it starts. Its fingerprint is below; the key itself is

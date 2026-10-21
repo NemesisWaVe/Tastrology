@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
 import { buildCard } from "@/lib/card";
+import { SECRET_SUPPLY } from "@/lib/odds";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { useAgentRun } from "@/lib/useAgentRun";
 
-/** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1 &tiers=1: the same card in every rarity &prints=1: three prints of one reading &vibes=Ramen,Cryptocurrency) */
+/** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1 &tiers=1: the same card in every rarity &prints=1: three prints of one reading &copy=1: as a pack copy &no=37: a Secret numbered 037/100 &vibes=Ramen,Cryptocurrency) */
 export default function CardLab() {
   const { result, running, error, run, setResult } = useAgentRun();
   const [widths, setWidths] = useState<number[]>([360]);
@@ -14,6 +15,8 @@ export default function CardLab() {
   const [sim, setSim] = useState(false);
   const [tiers, setTiers] = useState(false);
   const [prints, setPrints] = useState(false);
+  const [copy, setCopy] = useState(false);
+  const [no, setNo] = useState(0);
   const [vibes, setVibes] = useState<string[]>([]);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -24,6 +27,8 @@ export default function CardLab() {
     setSim(q.get("sim") === "1");
     setTiers(q.get("tiers") === "1");
     setPrints(q.get("prints") === "1");
+    setCopy(q.get("copy") === "1");
+    setNo(Number(q.get("no")) || 0);
     setVibes((q.get("vibes") ?? "").split(",").filter(Boolean));
     const p = PERSONAS.find((x) => x.key === key) ?? PERSONAS[1];
     // Lab-only: reuse the result /lab/results cached for this persona (?fresh=1 to re-run).
@@ -43,10 +48,11 @@ export default function CardLab() {
   const card = useMemo(() => {
     if (!result) return null;
     const vr = vibes.length ? { ...result, vibes: vibes.map((name) => ({ id: name, name, via: [] as string[] })) } : result;
+    if (no) return { ...buildCard(vr), rarity: "secret" as const, rarityLabel: "Secret Rare", rarityNo: no, supply: { no, of: SECRET_SUPPLY } };
     if (!sim) return buildCard(vr);
     const quiet = [...result.seeds].sort((a, b) => result.brands.reduce((t, x) => t + (x.explain[a.id] ?? 0), 0) - result.brands.reduce((t, x) => t + (x.explain[b.id] ?? 0), 0))[0];
     return buildCard({ ...result, seeds: result.seeds.map((s) => ({ ...s, popularity: 0.2 })), inert: [{ id: quiet.id, influence: 0.02 }] });
-  }, [result, sim, vibes]);
+  }, [result, sim, vibes, no]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
@@ -55,12 +61,12 @@ export default function CardLab() {
       {card && (
         <div className="flex flex-wrap items-start justify-center gap-8">
           {prints
-            ? ["Q1YE0A", "WDT5B1", "M3F1C2"].map((print) => <HoloCard key={print} card={{ ...card, print }} width={widths[0]} still={still} />)
+            ? ["Q1YE0A", "WDT5B1", "M3F1C2"].map((print) => <HoloCard key={print} card={{ ...card, print }} width={widths[0]} still={still} copy={copy} />)
             : tiers
             ? (["common", "rare", "holo", "secret"] as const).map((r) => (
                 <HoloCard key={r} card={{ ...card, rarity: r, rarityLabel: { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[r] }} width={widths[0]} still={still} />
               ))
-            : widths.map((w) => <HoloCard key={w} card={card} width={w} still={still} />)}
+            : widths.map((w) => <HoloCard key={w} card={card} width={w} still={still} copy={copy} />)}
         </div>
       )}
       {card && (

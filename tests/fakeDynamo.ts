@@ -87,7 +87,12 @@ export class FakeDynamo {
         const pre = vals[":sk"].S!;
         const Items = [...this.items.values()].filter((i) => i.PK.S === pk && i.SK.S!.startsWith(pre)).sort((a, b) => a.SK.S!.localeCompare(b.SK.S!));
         if (p.ScanIndexForward === false) Items.reverse();
-        return { status: 200, json: { Items } };
+        // ExclusiveStartKey and Limit, ascending only (enough for the pool's random window)
+        const start = (p.ExclusiveStartKey as Item | undefined)?.SK?.S;
+        const from = start ? Items.filter((i) => i.SK.S!.localeCompare(start) > 0) : Items;
+        const page = typeof p.Limit === "number" ? from.slice(0, p.Limit) : from;
+        const last = typeof p.Limit === "number" && from.length > p.Limit ? { LastEvaluatedKey: { PK: page.at(-1)!.PK, SK: page.at(-1)!.SK } } : {};
+        return { status: 200, json: { Items: page, ...last } };
       }
       case "DeleteItem": {
         const key = p.Key as Item;

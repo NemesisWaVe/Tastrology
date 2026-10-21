@@ -62,7 +62,7 @@ export async function census(edition = SEASON): Promise<{ holo: number; secret: 
  */
 export async function styled(code: string, card: CardData, number = false): Promise<CardData> {
   const st = await getStyle(code);
-  const rarityNo = st.rarityNo ?? (number ? await numberCard(code, card.rarity, editionOf(card), st).catch(() => null) : null) ?? undefined;
+  const rarityNo = st.rarityNo ?? card.rarityNo ?? (number ? await numberCard(code, card.rarity, editionOf(card), st).catch(() => null) : null) ?? undefined;
   return {
     ...card,
     ...(st.living ? { living: true } : {}),

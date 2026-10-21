@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CardData, Rarity } from "./card";
-import { ddbGet, ddbPutIfAbsent, ddbQuery, ddbTransact } from "./ddb";
+import { ddbDelete, ddbGet, ddbPutIfAbsent, ddbQuery, ddbTransact } from "./ddb";
+import { PACK_HOLDERS } from "./packRules";
 import { dustOn } from "./stardust";
 import { burnedAt, getTwin } from "./twins";
 
@@ -11,9 +12,16 @@ import { burnedAt, getTwin } from "./twins";
  *   POOL#<tier>      CARD#<code>     every fresh mint, by tier (the pool packs draw from)
  *   USER#<id>        PACK#<day>      codes (comma-joined), at        one pack a day, write-once
  *   USER#<id>        LEDGER#pack#<day>   -PACK_DUST
+ *   CARD#<code>      HOLDERS         n: how many collections hold a copy of this card (at most PACK_HOLDERS)
+ * A pack card is a collected copy of someone else's mint, never a new card: it adds nothing to any tier's supply, and
+ * an original can be collected by PACK_HOLDERS people at most, so one Secret never turns into a thousand.
  * Contents are fixed per account per UTC day, so there is nothing to re-roll. Stardust is never sold (legal review).
  */
 export const PACK_SIZE = 1;
+// How many collections can hold a copy of one original: full originals leave the pool.
+export { PACK_HOLDERS };
+/** How many cards of a tier one draw looks at, from a random point in the tier. */
+const WINDOW = 40;
 type Odds = { tier: Rarity; p: number }[];
 
 /**
@@ -79,14 +87,20 @@ export function tierFor(x: number, odds: Odds = PACK_ODDS): Rarity {
 /** Draws today's codes for an account: tier by the published odds, then a card from that tier (falling back to the nearest tier with cards). */
 export async function drawPack(userId: string, day: string, kind: PackKind = "star"): Promise<string[] | null> {
   const rand = stream(`${userId}|${day}`);
-  const mine = await ddbQuery(`OWNER#${userId}`, "CARD#", 50, undefined, ["code"]);
+  const [mine, held] = await Promise.all([ddbQuery(`OWNER#${userId}`, "CARD#", 50, undefined, ["code"]), ddbQuery(`USER#${userId}`, "PACK#", 400, undefined, ["codes"])]);
   if (!mine) return null;
-  const skip = new Set(mine.items.map((i) => String(i.code)));
+  // Never your own cards, and never a card you already collected.
+  const skip = new Set([...mine.items.map((i) => String(i.code)), ...(held?.items ?? []).flatMap((i) => String(i.codes ?? "").split(","))]);
   const pools = new Map<Rarity, string[]>();
+  // A window of the tier from a random point (wrapping round to the start), so every card in a tier of any size can
+  // be drawn. Codes start with a serial hashed from the loves, so they're spread evenly over 0000-9999.
   const pool = async (t: Rarity) => {
     if (!pools.has(t)) {
-      const q = await ddbQuery(`POOL#${t}`, "CARD#", 200, undefined, ["code"]);
-      pools.set(t, (q?.items ?? []).map((i) => String(i.code)).sort());
+      const from = String(Math.floor(rand() * 10000)).padStart(4, "0");
+      const at = Buffer.from(JSON.stringify({ PK: { S: `POOL#${t}` }, SK: { S: `CARD#${from}` } })).toString("base64url");
+      const a = (await ddbQuery(`POOL#${t}`, "CARD#", WINDOW, at, ["code"]))?.items ?? [];
+      const b = a.length < WINDOW ? ((await ddbQuery(`POOL#${t}`, "CARD#", WINDOW - a.length, undefined, ["code"]))?.items ?? []) : [];
+      pools.set(t, [...new Set([...a, ...b].map((i) => String(i.code)))].sort());
     }
     return pools.get(t)!;
   };
@@ -113,7 +127,7 @@ export async function drawPack(userId: string, day: string, kind: PackKind = "st
 export type PackResult = { status: "opened" | "dup"; day: string; codes: string[]; kind: PackKind } | { status: "poor" | "empty" | "error" };
 
 /** Opens today's pack. One a day of any kind; a second call the same day returns that pack and charges nothing. */
-export async function openPack(userId: string, now = Date.now(), kind: PackKind = "star"): Promise<PackResult> {
+export async function openPack(userId: string, now = Date.now(), kind: PackKind = "star", tries = 3): Promise<PackResult> {
   const day = utcDay(now);
   const cost = PACKS[kind].dust;
   const prior = await ddbGet(`USER#${userId}`, `PACK#${day}`);
@@ -123,13 +137,32 @@ export async function openPack(userId: string, now = Date.now(), kind: PackKind 
   if (!codes.length) return { status: "empty" };
   const r = await ddbTransact([
     { update: { PK: `USER#${userId}`, SK: "WALLET" }, set: "SET dust = dust - :cost, v = v + :one", condition: "dust >= :cost", values: { ":cost": cost, ":one": 1 } },
+    // One more holder of each original, only while it has room (PACK_SIZE is 1, so this is op 1 + i).
+    ...codes.map((code) => ({ update: { PK: `CARD#${code}`, SK: "HOLDERS" }, set: "ADD n :one", condition: "attribute_not_exists(n) OR n < :cap", values: { ":one": 1, ":cap": PACK_HOLDERS } })),
     { put: { PK: `USER#${userId}`, SK: `PACK#${day}`, codes: codes.join(","), kind, at: now }, condition: "attribute_not_exists(PK)" },
     { put: { PK: `USER#${userId}`, SK: `LEDGER#pack#${day}`, delta: -cost, unit: "dust", reason: `pack:${kind}`, ref: day, at: now }, condition: "attribute_not_exists(PK)" },
   ]);
   if (!r) return { status: "error" };
-  if (r.ok) return { status: "opened", day, codes, kind };
-  if (r.reasons[1] === CCF) return openPack(userId, now, kind);
+  if (r.ok) {
+    // An original that just filled up leaves the pool, so nobody draws it again.
+    await Promise.all(codes.map((code) => retireIfFull(code)));
+    return { status: "opened", day, codes, kind };
+  }
+  const full = codes.filter((_, i) => r.reasons[1 + i] === CCF);
+  if (full.length && tries > 0) {
+    await Promise.all(full.map((code) => retireIfFull(code)));
+    return openPack(userId, now, kind, tries - 1);
+  }
+  const at = 1 + codes.length;
+  if (r.reasons[at] === CCF) return openPack(userId, now, kind, tries - 1);
   return r.reasons[0] === CCF ? { status: "poor" } : { status: "error" };
+}
+
+/** Takes an original out of every tier's pool once PACK_HOLDERS collections hold it. */
+async function retireIfFull(code: string): Promise<void> {
+  const h = await ddbGet(`CARD#${code}`, "HOLDERS").catch(() => null);
+  if (Number(h?.n) < PACK_HOLDERS) return;
+  await Promise.all(TIERS.map((t) => ddbDelete(`POOL#${t}`, `CARD#${code}`).catch(() => null)));
 }
 
 /** The account's collection, newest pack first, with each card (burned or missing cards drop out). */

@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { upstashConfigured } from "./cache";
 import { SEASON, buildCard, cardCode } from "./card";
 import { ddbGet, ddbPutIfAbsent } from "./ddb";
+import { sealSecret } from "./supply";
 import { rollFor, rollOn } from "./roll";
 import type { StyleResult } from "./types";
 
@@ -34,7 +36,7 @@ export const printId = (userId: string, runId: string, salt = 0) => {
 
 /** A reading as cached and shared: no account's roll, cap or print on it (older cache entries may still carry them). */
 export function unstamped(r: StyleResult): StyleResult {
-  const { roll: _roll, redraw: _redraw, print: _print, printedAt: _at, ...base } = r;
+  const { roll: _roll, redraw: _redraw, print: _print, printedAt: _at, supply: _supply, ...base } = r;
   return base;
 }
 
@@ -61,13 +63,22 @@ const TRIES = 6;
  * same mint coming back finds its own claim, anyone else gets the next salt, i.e. another print id and code. A code
  * already held by a card filed before claims existed counts as taken. The roll is the run's and never changes.
  * If DynamoDB can't answer, the first print goes ahead, as before claims.
+ *
+ * A roll that lands on Secret first takes its slot in the edition's fixed supply (lib/supply.ts), before the code
+ * exists: the tier is part of the code, and past the last slot it prints as a Holo. `peek` (a reconnect asking which
+ * card it already filed) never takes a slot: null when this mint never reserved one, so it was never filed.
  */
-export async function claimPrint(base: StyleResult, m: PrintOwner): Promise<StyleResult> {
+export async function claimPrint(base: StyleResult, m: PrintOwner): Promise<StyleResult>;
+export async function claimPrint(base: StyleResult, m: PrintOwner, peek: true): Promise<StyleResult | null>;
+export async function claimPrint(base: StyleResult, m: PrintOwner, peek = false): Promise<StyleResult | null> {
   const me = `${m.userId}|${m.runId}`;
   const at = m.at ?? Date.now();
   let r = stamp(base, { ...m, at });
+  const sealed = r.print && r.edition && buildCard(r).rarity === "secret" ? await sealSecret(r.edition, me, peek) : null;
+  if (peek && r.print && !sealed && buildCard(r).rarity === "secret" && upstashConfigured()) return null;
   for (let salt = 0; salt < TRIES && r.print; salt++) {
     r = stamp(base, { ...m, at, salt });
+    if (sealed) r.supply = sealed;
     const code = cardCode(buildCard(r));
     const put = await ddbPutIfAbsent({ PK: `CODE#${code}`, SK: "CLAIM", owner: me, at: Date.now() });
     if (put === "error") return r;

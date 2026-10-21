@@ -1,5 +1,11 @@
 import type { Rarity } from "./card";
 
+/**
+ * Secret Rares per edition, at most (lib/supply.ts). Past the last one a Secret roll lands as a Holo Rare, so an
+ * edition's Secrets stay a fixed, printed number ("037 / 100") however big the game gets.
+ */
+export const SECRET_SUPPLY = 100;
+
 /** Version of ROLL_ODDS. Bump whenever the table changes: every roll records the version it was drawn under. */
 export const ODDS_V = "1";
 

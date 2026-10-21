@@ -138,7 +138,8 @@ async function filePrint(m: Minter, printed: StyleResult, bg: (p: Promise<unknow
   if (!fresh) return;
   // Real people's fresh cards stock the Battle Pack pool (personas stay out).
   bg(addToPool(code, card.rarity));
-  bg(numberCard(code, card.rarity, editionOf(card)));
+  // A Secret from the capped supply already carries its number (lib/supply.ts); everything else is numbered here.
+  if (!card.rarityNo) bg(numberCard(code, card.rarity, editionOf(card)));
   bg(recordMint(code, editionOf(card), card.rarityScore, card.bigThree.sun.name));
   if (m.cap) {
     // Tier jumps on second draws, for spotting rarity farming: counted, and logged without user ids.
@@ -347,7 +348,7 @@ export async function POST(request: Request) {
   if (minter && (cached || (flight && flight.owner !== `${minter.userId}|${minter.runId}`))) {
     if (!admin && !(await allow(`agent:u:${minter.userId}`, RATE_LIMIT, RATE_WINDOW_MS))) return reply({ error: RATE_MSG }, { status: 429 });
     // The same run id coming back for a print it already filed (a dropped stream): hand it back, no cap check or charge.
-    const mine = cached ? await claimPrint(cached.result, minter).catch(() => null) : null;
+    const mine = cached ? await claimPrint(cached.result, minter, true).catch(() => null) : null;
     const filed = mine ? await ddbGet(`OWNER#${minter.userId}`, `CARD#${cardCode(buildCard(mine))}`).catch(() => null) : null;
     if (!filed) {
       const ok = await admit(minter);

@@ -60,6 +60,8 @@ export interface CardData {
    */
   edition?: string;
   mintedAt?: number;
+  /** A Secret's slot in its edition's fixed supply: printed "037 / 100". Its rarityNo is the same number. */
+  supply?: { no: number; of: number };
   odds?: string;
   engine?: string;
   ignores?: string;
@@ -179,7 +181,11 @@ export function buildCard(r: StyleResult): CardData {
   // A second draw (paid by a regret) can't outrank the card it replaced.
   const TIER: Rarity[] = ["common", "rare", "holo", "secret"];
   const cap = r.redraw?.cap;
-  const rarity: Rarity = cap && TIER.indexOf(natural) > TIER.indexOf(cap) ? cap : natural;
+  const pulled: Rarity = cap && TIER.indexOf(natural) > TIER.indexOf(cap) ? cap : natural;
+  // An edition's Secrets are a fixed supply (lib/supply.ts): a Secret roll after the last slot lands as a Holo.
+  const sold = pulled === "secret" && r.supply?.no === 0;
+  const rarity: Rarity = sold ? "holo" : pulled;
+  const slot = rarity === "secret" && r.supply?.no ? r.supply : undefined;
   const rarityLabel = { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[rarity];
   const pc = (v: number) => `${Math.round(v * 100)}%`;
   const rarityWhy = [
@@ -187,6 +193,7 @@ export function buildCard(r: StyleResult): CardData {
     ...(r.overlap === undefined ? [] : [`+${pts.pairing} odd pairing: your loves share ${pc(r.overlap)} of their aesthetic tags`]),
     `+${pts.spread} spread: ${domains} ${domains === 1 ? "domain" : "domains"} across ${n} ${n === 1 ? "love" : "loves"}`,
     ...(con ? [`+${pts.tension} tension: ${seedLabel(r, con.a)} and ${seedLabel(r, con.b)} share ${pc(con.overlap)}`] : []),
+    ...(sold ? [`Rolled Secret Rare, but all ${r.supply!.of} of this edition's Secrets were already pulled, so it prints as Holo Rare`] : []),
     ...(cap ? [`Second draw: can rank up to ${{ common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[cap]}`] : []),
   ];
   // Deep Cut reads only what you named: a vibe's stand-in brand (Matcha Maiden for "matcha") isn't your pick, and
@@ -302,6 +309,7 @@ export function buildCard(r: StyleResult): CardData {
     ...(r.printedAt ? { mintedAt: r.printedAt } : {}),
     ...(r.roll?.odds ? { odds: r.roll.odds } : {}),
     ...(r.engine ? { engine: r.engine } : {}),
+    ...(slot ? { supply: slot, rarityNo: slot.no } : {}),
     ignores: weak?.name,
     evolvesFrom: r.seeds.map((s) => ({ name: displayName(s.name), kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
     ...(r.vibes?.length ? { vibes: r.vibes.map((v) => ({ name: v.name, via: v.via, ...(v.image ? { image: proxied(v.image) } : {}) })) } : {}),
