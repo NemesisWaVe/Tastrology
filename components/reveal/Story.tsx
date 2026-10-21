@@ -246,6 +246,13 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
   const seedName = (id: string) => displayName(r.seeds.find((x) => x.id === id)?.name ?? "");
   const beats: Beat[] = [];
   const n = r.seeds.length;
+  // the vibes were read too (they steer the brands), so they count here and join the fan: their picture, or the word
+  const vibes = r.vibes ?? [];
+  const fan = [
+    ...r.seeds.map((x) => ({ key: x.id, src: x.image ? proxied(x.image) : undefined, word: undefined as string | undefined })),
+    ...vibes.map((v) => ({ key: `vibe:${v.name}`, src: v.image ? proxied(v.image) : undefined, word: v.image ? undefined : v.name })),
+  ];
+  const m = fan.length;
 
   // 1. The input
   beats.push({
@@ -261,24 +268,37 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
         <motion.h2 {...rise(reduce, 0.2)} className="mt-1 font-display text-[clamp(64px,19vw,205px)] font-bold leading-[0.9] tracking-[-0.04em]">
           {n} loves
         </motion.h2>
+        {vibes.length > 0 && (
+          <motion.p
+            {...rise(reduce, 0.32)}
+            className="mt-2 bg-[linear-gradient(90deg,#ff7ab6,#ffd36e,#c6ff3d,#6ee7ff,#b18cff)] bg-clip-text font-display text-[clamp(26px,6vw,52px)] font-bold leading-none tracking-[-0.03em] text-transparent"
+          >
+            + {vibes.length} vibe{vibes.length > 1 ? "s" : ""}
+          </motion.p>
+        )}
         <div className="relative mx-auto mt-8 flex h-[150px] max-w-md items-center justify-center sm:h-[180px]">
-          {r.seeds.map((seed, k) => {
-            const off = k - (n - 1) / 2;
+          {fan.map((it, k) => {
+            const off = k - (m - 1) / 2;
             return (
               <motion.figure
-                key={seed.id}
+                key={it.key}
                 className="absolute w-[88px] sm:w-[108px]"
                 initial={reduce ? { opacity: 0 } : { opacity: 0, y: 120, rotate: 0, x: 0 }}
-                animate={{ opacity: 1, y: Math.abs(off) * 8, rotate: off * 7, x: off * (n > 4 ? 56 : 66) }}
+                animate={{ opacity: 1, y: Math.abs(off) * 8, rotate: off * 7, x: off * (m > 4 ? 56 : 66) }}
                 transition={{ duration: reduce ? 0.3 : 0.8, delay: reduce ? 0 : 0.45 + k * 0.09, ease: EASE }}
                 style={{ zIndex: 10 - Math.abs(Math.round(off)) }}
               >
                 <Duo
-                  src={seed.image ? proxied(seed.image) : undefined}
+                  src={it.src}
                   a={k % 2 ? moon.a : sun.a}
                   b={k % 2 ? moon.b : sun.b}
                   className="aspect-[3/4] rounded-xl shadow-[0_18px_40px_-12px_rgb(0_0_0/0.8)] ring-1 ring-white/15"
                 />
+                {it.word && (
+                  <span className="absolute inset-0 grid place-items-center p-2 text-center font-serif text-[20px] italic leading-none text-ink sm:text-[24px]">
+                    {it.word}
+                  </span>
+                )}
               </motion.figure>
             );
           })}
@@ -289,6 +309,13 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
               {k > 0 && <span className="text-ink-3"> · </span>}
               {displayName(x.name)}
               <span className="ml-1 font-mono text-[9.5px] uppercase text-ink-3">{KIND_LABEL[x.kind] ?? x.kind}</span>
+            </span>
+          ))}
+          {vibes.map((v) => (
+            <span key={v.name}>
+              <span className="text-ink-3"> · </span>
+              {v.name}
+              <span className="ml-1 font-mono text-[9.5px] uppercase text-ink-3">vibe</span>
             </span>
           ))}
         </motion.p>

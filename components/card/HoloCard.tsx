@@ -508,7 +508,7 @@ export function CardBack({ card, className = "", crack = false, printSafe = fals
             <span className={s.backLabel}>/ Season {SEASON}</span>
           </div>
           <p className={s.cert}>
-            <b>Certificate of taste.</b> {stars.length} loves across {card.domains} domains, read from Qloo’s taste graph. One of one.
+            <b>Certificate of taste.</b> {stars.length} loves{card.vibes?.length ? ` and ${card.vibes.length} vibe${card.vibes.length > 1 ? "s" : ""}` : ""} across {card.domains} domains, read from Qloo’s taste graph. One of one.
           </p>
 
           <div className={s.verify}>
