@@ -47,9 +47,10 @@ export function MaskedWords({
 export function Magnetic({
   children,
   className = "",
+  innerClassName = "",
   strength = 0.15,
   ...rest
-}: { children: ReactNode; className?: string; strength?: number } & Omit<
+}: { children: ReactNode; className?: string; innerClassName?: string; strength?: number } & Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
   "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart" | "style"
 >) {
@@ -92,7 +93,7 @@ export function Magnetic({
       className={className}
       {...rest}
     >
-      <motion.span className="relative z-10 inline-flex items-center gap-[inherit]" style={{ x: ix, y: iy }}>
+      <motion.span className={`relative z-10 inline-flex items-center gap-[inherit] ${innerClassName}`} style={{ x: ix, y: iy }}>
         {children}
       </motion.span>
     </motion.button>

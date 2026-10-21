@@ -330,7 +330,10 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         skipRef.current.style.pointerEvents = p < end ? "auto" : "none";
       }
       st.style.pointerEvents = p < end ? "auto" : "none";
-      if (reduce) st.style.opacity = String(1 - sst(0.35, 0.95, p));
+      if (reduce) {
+        st.style.opacity = String(1 - sst(0.35, 0.95, p));
+        st.style.visibility = p > 0.99 ? "hidden" : "visible"; // the stage is fixed: it must leave once faded
+      }
       // hysteresis: flicking back and forth across the end must not re-render the page (nav, sound orb) every crossing
       const on = activeOn === false ? p < end - 0.06 : p < end;
       if (on !== activeOn) activeRef.current?.((activeOn = on));

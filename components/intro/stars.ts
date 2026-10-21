@@ -417,27 +417,15 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
       star(ctx, A.x, A.y, 26, a, [220, 255, 180], true);
       star(ctx, B.x, B.y, 26, a, [235, 200, 255], true);
     }
-  // a visitor's drop sprouts its own little constellation: 5 stars in a jagged chain, drawn in ~0.35s
-  for (const d of taps) {
-    const age = now - d.t;
-    const a = (1 - sst(3.6, 5, age)) * fade;
-    if (a <= 0) continue;
-    let seed = Math.floor(d.t * 1000) % 2147483646 || 1;
-    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const pts: [number, number][] = [[d.x, d.y]];
-    let ang = rnd() * Math.PI * 2;
-    for (let k = 0; k < 4; k++) {
-      ang += (rnd() - 0.5) * 2.4; // sharp turns, like a real asterism
-      const len = (phone ? 34 : 48) + rnd() * (phone ? 24 : 36);
-      const [px, py] = pts[pts.length - 1];
-      pts.push([px + Math.cos(ang) * len, py + Math.sin(ang) * len * 0.55]);
-    }
-    const prog = Math.min(1, age / 0.35) * 4; // stars find each other one by one
+  // a visitor's drop sprouts its own little constellation: 5 stars in a jagged chain, drawn in ~0.35s. It lights up in
+  // the sky straight above the drop, mirrored across the waterline, and the water keeps a dim reflection of it. Each
+  // half is clipped to its side, so a chain never pokes through the horizon.
+  const chain = (pts: [number, number][], a: number, prog: number, bright: boolean) => {
     ctx.globalAlpha = a;
     ctx.strokeStyle = "rgba(225,255,170,1)";
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = bright ? 1.6 : 1.1;
     ctx.shadowColor = "rgba(198,255,61,1)";
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = bright ? 14 : 6;
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (let k = 1; k <= Math.min(4, Math.ceil(prog)); k++) {
@@ -449,8 +437,36 @@ export function drawDrops(ctx: CanvasRenderingContext2D, drops: Drop[], now: num
     pts.forEach(([x, y], k) => {
       const on = sst(k - 0.2, k + 0.1, prog);
       const tw = 0.8 + 0.2 * Math.sin(now * (3 + k) + k);
-      star(ctx, x, y, (k === 0 ? 52 : 30 + (k % 2) * 12) * tw, a * on, PAL[(k * 2) % PAL.length], true);
+      star(ctx, x, y, (k === 0 ? 52 : 30 + (k % 2) * 12) * tw * (bright ? 1 : 0.7), a * on, PAL[(k * 2) % PAL.length], true);
     });
+  };
+  const half = (sky: boolean, draw: () => void) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-1e4, sky ? -1e4 : hz, 2e4, sky ? 1e4 + hz : 2e4);
+    ctx.clip();
+    draw();
+    ctx.restore();
+  };
+  for (const d of taps) {
+    const age = now - d.t;
+    const a = (1 - sst(3.6, 5, age)) * fade;
+    if (a <= 0) continue;
+    let seed = Math.floor(d.t * 1000) % 2147483646 || 1;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sy = hz - (d.y - hz) * 0.92; // the drop's mirror point in the sky, as the water shader mirrors it
+    const pts: [number, number][] = [[d.x, sy]];
+    let ang = -Math.PI / 2 + (rnd() - 0.5) * 1.6; // the sky chain climbs away from the horizon
+    for (let k = 0; k < 4; k++) {
+      ang += (rnd() - 0.5) * 2.4; // sharp turns, like a real asterism
+      const len = (phone ? 34 : 48) + rnd() * (phone ? 24 : 36);
+      const [px, py] = pts[pts.length - 1];
+      pts.push([px + Math.cos(ang) * len, Math.min(hz - 6, Math.max(24, py + Math.sin(ang) * len * 0.55))]);
+    }
+    const prog = Math.min(1, Math.max(0, age - 0.18) / 0.35) * 4; // the ripple lands first, then the stars find each other
+    const refl = pts.map(([x, y]) => [x, hz + (hz - y) / 0.92] as [number, number]);
+    half(false, () => chain(refl, a * 0.32, prog, false));
+    half(true, () => chain(pts, a, prog, true));
   }
   ctx.font = `500 ${phone ? 10 : 11.5}px ${mono}`;
   ctx.textAlign = "center";

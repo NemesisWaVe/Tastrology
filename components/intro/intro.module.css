@@ -15,8 +15,13 @@
 
 .stage {
   pointer-events: auto;
-  position: sticky;
+  /* fixed, not sticky: iOS Safari runs sticky offsets on its own scroll thread, and while the pacer writes the scroll
+     position the stage could lag behind and slide up, leaving the lower half of the screen black. Intro.tsx hides
+     the stage once the track is behind us. */
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   height: 100svh;
   height: 100lvh;
   overflow: hidden;
