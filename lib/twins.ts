@@ -62,7 +62,11 @@ async function reviveIfBurned(code: string): Promise<void> {
 }
 
 /** Stores the card under its code (memory, S3 and DynamoDB write-once, Upstash NX) and returns the code. Never throws; waits ≤ ~3s. */
-export async function registerTwin(card: CardData): Promise<string> {
+/**
+ * `owner`: the account that minted it, kept on the server-side record only (never in the public card JSON), as the
+ * card's first owner: provenance for anything that ever moves a card between accounts.
+ */
+export async function registerTwin(card: CardData, owner?: string): Promise<string> {
   const code = cardCode(card);
   try {
     const json = JSON.stringify(card);
@@ -70,7 +74,7 @@ export async function registerTwin(card: CardData): Promise<string> {
     mem.set(code, json, TTL_MS);
     const writes = Promise.allSettled([
       s3PutIfAbsent(`twins/v1/${code}.json`, json),
-      ddbPutIfAbsent({ PK: `CARD#${code}`, SK: "META", card: json, rarityScore: card.rarityScore, createdAt: Date.now() }),
+      ddbPutIfAbsent({ PK: `CARD#${code}`, SK: "META", card: json, rarityScore: card.rarityScore, createdAt: Date.now(), ...(owner ? { firstOwner: owner } : {}) }),
       upstashConfigured() ? upstash([["SET", rkey(code), json, "PX", TTL_MS, "NX"]]) : null,
       reviveIfBurned(code),
     ]);

@@ -122,7 +122,7 @@ export interface StyleResult {
   /** Set when a regret credit paid for this reading: the card can't outrank the one it replaced (regret-burn.md). */
   redraw?: { cap: "common" | "rare" | "holo" | "secret" };
   /** The mint's rarity roll (lib/roll.ts). Absent on older cards and demo personas: they keep the taste-scored tier. */
-  roll?: { tier: "common" | "rare" | "holo" | "secret"; u: number; season: string };
+  roll?: { tier: "common" | "rare" | "holo" | "secret"; u: number; season: string; odds?: string };
   /** Demo personas only: the fixed tier each one shows, so the home page displays Rare, Holo Rare and Secret Rare. */
   showcase?: "common" | "rare" | "holo" | "secret";
   /**
@@ -131,6 +131,12 @@ export interface StyleResult {
    * own roll and code. Absent on older cards and personas.
    */
   print?: string;
+  /** When this print was minted (ms). Set with the print; absent on older cards. */
+  printedAt?: number;
+  /** The edition (season) it belongs to: the reading's when read, the print's when minted (lib/print stamp). */
+  edition?: string;
+  /** Version of the reading engine that produced it (lib/agent READING_V). Absent on older cards. */
+  engine?: string;
   mode: "live" | "mock";
   planner: "llm" | "autopilot";
   cached?: boolean;

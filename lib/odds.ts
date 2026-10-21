@@ -1,5 +1,8 @@
 import type { Rarity } from "./card";
 
+/** Version of ROLL_ODDS. Bump whenever the table changes: every roll records the version it was drawn under. */
+export const ODDS_V = "1";
+
 /** One odds table for the whole product: the mint roll and Battle Packs. Published on /odds. */
 export const ROLL_ODDS: { tier: Rarity; p: number }[] = [
   { tier: "common", p: 0.7 },

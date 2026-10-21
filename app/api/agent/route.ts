@@ -13,7 +13,7 @@ import { getPersonaRun, putPersonaRun } from "@/lib/personaRuns";
 import { getReceipt, putReceipt } from "@/lib/receipt";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache, upstash } from "@/lib/cache";
-import { buildCard, cardCode, redrawCap, SEASON } from "@/lib/card";
+import { buildCard, cardCode, editionOf, redrawCap } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
 import { isPersonaRequest, personaFor, PERSONAS } from "@/lib/personas";
 import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
@@ -130,7 +130,7 @@ async function fileOwnMint(minter: Minter, code: string, card: ReturnType<typeof
 async function filePrint(m: Minter, printed: StyleResult, bg: (p: Promise<unknown>) => void): Promise<void> {
   if (printed.mode === "mock") return;
   const card = buildCard(printed);
-  const code = await registerTwin(card);
+  const code = await registerTwin(card, m.userId);
   // The receipt behind the card, so an old card can still show its brands (docs/design/brand-return-data.md).
   bg(putReceipt(code, printed));
   await registerFighter(code, toSheet(printed));
@@ -138,8 +138,8 @@ async function filePrint(m: Minter, printed: StyleResult, bg: (p: Promise<unknow
   if (!fresh) return;
   // Real people's fresh cards stock the Battle Pack pool (personas stay out).
   bg(addToPool(code, card.rarity));
-  bg(numberCard(code, card.rarity));
-  bg(recordMint(code, SEASON, card.rarityScore, card.bigThree.sun.name));
+  bg(numberCard(code, card.rarity, editionOf(card)));
+  bg(recordMint(code, editionOf(card), card.rarityScore, card.bigThree.sun.name));
   if (m.cap) {
     // Tier jumps on second draws, for spotting rarity farming: counted, and logged without user ids.
     const natural = buildCard({ ...printed, redraw: undefined }).rarity;
@@ -183,7 +183,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
         const code = await registerTwin(card);
         bg(putReceipt(code, result));
         await registerFighter(code, toSheet(result));
-        if (!isPersonaRequest(req)) bg(recordMint(code, SEASON, card.rarityScore, card.bigThree.sun.name));
+        if (!isPersonaRequest(req)) bg(recordMint(code, editionOf(card), card.rarityScore, card.bigThree.sun.name));
       }
       // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of
       // burning a slot, and in 10 minutes the LLM may be back (Qloo calls stay cached either way).

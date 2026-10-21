@@ -20,18 +20,16 @@ export async function GET(request: Request) {
   // A burned card can't fight (docs/design/burn.md). A tombstone that can't be read fails open, like every optional store.
   const [ta, tb] = await Promise.all([burnedAt(a), burnedAt(b)]);
   if (ta || tb) return Response.json({ error: "burned", burned: ta ? a : b }, { status: 410, headers: { "cache-control": "public, max-age=60, s-maxage=60" } });
-  const [la, lb] = await Promise.all([getFighterStatus(a), getFighterStatus(b)]);
+  // Sheets carry the reading; twins are the cards as minted (stats, print, edition, art, tier), which is what fights.
+  const [la, lb, twa, twb] = await Promise.all([getFighterStatus(a), getFighterStatus(b), getTwin(a).catch(() => null), getTwin(b).catch(() => null)]);
   const fa = la.sheet;
   const fb = lb.sheet;
   if ((!fa && la.status === "error") || (!fb && lb.status === "error"))
     return Response.json({ error: "unavailable" }, { status: 503, headers: { "cache-control": "no-store", "retry-after": "5" } });
   if (!fa || !fb) return Response.json({ error: "unknown fighter" }, { status: 404, headers: { "cache-control": "public, max-age=30, s-maxage=30" } });
-  const out = battle(fromSheet(fa), fromSheet(fb));
-  // Sheets carry no images, so the cards come back from their twins (art, style, rarity number) when they can.
-  const [twa, twb] = await Promise.all([getTwin(a).catch(() => null), getTwin(b).catch(() => null)]);
-  // the minted tier too: a sheet can't recompute a roll, so without this every rolled card fights as its scored tier
+  const out = battle(fromSheet(fa), fromSheet(fb), { a: twa, b: twb });
+  // A twin too old to stand in (battle() rebuilt it) still shows its minted tier, number and art.
   if (twa) out.cards.a = { ...out.cards.a, rarity: twa.rarity, rarityLabel: twa.rarityLabel, rarityNo: twa.rarityNo, living: twa.living, ...(twa.art?.length ? { art: twa.art, evolvesFrom: twa.evolvesFrom } : {}) };
-  // the minted tier too: a sheet can't recompute a roll, so without this every rolled card fights as its scored tier
   if (twb) out.cards.b = { ...out.cards.b, rarity: twb.rarity, rarityLabel: twb.rarityLabel, rarityNo: twb.rarityNo, living: twb.living, ...(twb.art?.length ? { art: twb.art, evolvesFrom: twb.evolvesFrom } : {}) };
   const [x, y] = [a, b].sort();
   // Sides matter in the result, so a swapped order gets its own key.

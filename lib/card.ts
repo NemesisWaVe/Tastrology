@@ -53,6 +53,15 @@ export interface CardData {
   avgPop?: number;
   /** Print id (StyleResult.print): part of the code, so two prints of one reading are two cards. Absent on older cards. */
   print?: string;
+  /**
+   * Provenance, fixed at mint and never read from today's settings: the edition it was minted in (shown as its set,
+   * edition stamp and season), when, the odds table its roll was drawn under, and the reading engine. Absent on older
+   * cards, which are all edition 01, odds 1.
+   */
+  edition?: string;
+  mintedAt?: number;
+  odds?: string;
+  engine?: string;
   ignores?: string;
   evolvesFrom: { name: string; kind: string; image?: string }[];
   /** The vibes picked next to the loves (lib/vibes.ts), so the card's sky shows them too. Absent on older cards. */
@@ -289,6 +298,10 @@ export function buildCard(r: StyleResult): CardData {
     deepCut,
     avgPop: pickPop === undefined ? undefined : Math.round(pickPop * 100),
     ...(r.print ? { print: r.print } : {}),
+    ...(r.edition ? { edition: r.edition } : {}),
+    ...(r.printedAt ? { mintedAt: r.printedAt } : {}),
+    ...(r.roll?.odds ? { odds: r.roll.odds } : {}),
+    ...(r.engine ? { engine: r.engine } : {}),
     ignores: weak?.name,
     evolvesFrom: r.seeds.map((s) => ({ name: displayName(s.name), kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
     ...(r.vibes?.length ? { vibes: r.vibes.map((v) => ({ name: v.name, via: v.via, ...(v.image ? { image: proxied(v.image) } : {}) })) } : {}),
@@ -332,19 +345,32 @@ export const TWIN_HOST =
   process.env.NEXT_PUBLIC_SITE_HOST || process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL || "tastrology.app";
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32: no I, L, O, U
 
-type CodeFields = Pick<CardData, "serial" | "rarity" | "mrz" | "archetype" | "moves"> & { print?: string };
+type CodeFields = Pick<CardData, "serial" | "rarity" | "mrz" | "archetype" | "moves"> & { print?: string; edition?: string };
 
 /** Short, human-typeable verify code: the serial plus 4 check characters hashed from the card's own fields (v2). */
 export function cardCode(card: CodeFields): string {
   const moves = (card.moves ?? []).map((m) => `${m.name}:${m.value}`).join(",");
-  // A print id joins the hash only when there is one, so every card minted before prints keeps its code.
-  let h = hash(`v2|${card.serial}|${card.rarity}|${card.mrz?.[0] ?? ""}|${card.mrz?.[1] ?? ""}|${card.archetype}|${moves}${card.print ? `|p${card.print}` : ""}`);
+  // A print id joins the hash only when there is one, so every card minted before prints keeps its code. A print's
+  // edition joins too when it has one (prints from before editions don't), so an edition can't be edited onto a card.
+  const print = card.print ? `|p${card.print}${card.edition ? `|e${card.edition}` : ""}` : "";
+  let h = hash(`v2|${card.serial}|${card.rarity}|${card.mrz?.[0] ?? ""}|${card.mrz?.[1] ?? ""}|${card.archetype}|${moves}${print}`);
   let c = "";
   for (let i = 0; i < 4; i++) {
     c += B32[h & 31];
     h >>>= 5;
   }
   return `${card.serial}-${c}`;
+}
+
+/** The edition a card was minted in. Cards from before editions were recorded are all the first. */
+export const editionOf = (card: { edition?: string }) => card.edition ?? "01";
+/** "SET 01": the set line printed on a card, from its own edition. */
+export const setOf = (card: { edition?: string }) => `SET ${editionOf(card)}`;
+/** "1st", "2nd", "3rd", "11th": for the edition stamp. */
+export function editionName(card: { edition?: string }): string {
+  const n = Number(editionOf(card)) || 1;
+  const t = n % 100;
+  return `${n}${t >= 11 && t <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;
 }
 
 /**

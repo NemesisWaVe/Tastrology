@@ -18,6 +18,8 @@ export interface PrintOwner {
   runId: string;
   /** Paid by a regret: the print can't outrank this tier. */
   cap?: "common" | "rare" | "holo" | "secret";
+  /** Mint time (ms); claimPrint fixes it once so every try at a code carries the same one. */
+  at?: number;
   /** Which try at a free code this is (claimPrint): 0 for the first, so most prints never carry one. */
   salt?: number;
 }
@@ -32,7 +34,7 @@ export const printId = (userId: string, runId: string, salt = 0) => {
 
 /** A reading as cached and shared: no account's roll, cap or print on it (older cache entries may still carry them). */
 export function unstamped(r: StyleResult): StyleResult {
-  const { roll: _roll, redraw: _redraw, print: _print, ...base } = r;
+  const { roll: _roll, redraw: _redraw, print: _print, printedAt: _at, ...base } = r;
   return base;
 }
 
@@ -43,6 +45,9 @@ export function stamp(base: StyleResult, m: PrintOwner): StyleResult {
   if (rollOn()) r.roll = rollFor(m.userId, m.runId, SEASON);
   if (m.cap) r.redraw = { cap: m.cap };
   r.print = printId(m.userId, m.runId, m.salt);
+  // A print belongs to the edition it was minted in, whatever edition the cached reading was read in.
+  r.edition = SEASON;
+  r.printedAt = m.at ?? Date.now();
   return r;
 }
 
@@ -59,9 +64,10 @@ const TRIES = 6;
  */
 export async function claimPrint(base: StyleResult, m: PrintOwner): Promise<StyleResult> {
   const me = `${m.userId}|${m.runId}`;
-  let r = stamp(base, m);
+  const at = m.at ?? Date.now();
+  let r = stamp(base, { ...m, at });
   for (let salt = 0; salt < TRIES && r.print; salt++) {
-    r = stamp(base, { ...m, salt });
+    r = stamp(base, { ...m, at, salt });
     const code = cardCode(buildCard(r));
     const put = await ddbPutIfAbsent({ PK: `CODE#${code}`, SK: "CLAIM", owner: me, at: Date.now() });
     if (put === "error") return r;

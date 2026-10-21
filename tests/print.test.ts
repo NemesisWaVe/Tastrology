@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildCard, cardCode, cardNo } from "@/lib/card";
+import { SEASON, buildCard, cardCode, cardNo, editionName, editionOf, setOf } from "@/lib/card";
+import { battle } from "@/lib/battle";
+import { ODDS_V } from "@/lib/odds";
 import { claimPrint, printId, stamp, unstamped } from "@/lib/print";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
@@ -171,5 +173,52 @@ describe("a card's code is one mint's alone", () => {
     const p = buildCard(stamp(reading(), { userId: "u1", runId: "run-a" }));
     expect(cardNo(p)).toBe(cardCode(p));
     expect(cardNo(buildCard(reading()))).toBe(buildCard(reading()).serial);
+  });
+});
+
+describe("editions and provenance are fixed at mint", () => {
+  it("a print carries its edition, mint time, odds and engine, and they never change after", () => {
+    const p = stamp(reading({ engine: "1", edition: "01" }), { userId: "u1", runId: "run-a", at: 1_700_000_000_000 });
+    const c = buildCard(p);
+    expect(c.edition).toBe(SEASON);
+    expect(c.mintedAt).toBe(1_700_000_000_000);
+    expect(c.odds).toBe(ODDS_V);
+    expect(c.engine).toBe("1");
+    expect(setOf(c)).toBe(`SET ${SEASON}`);
+  });
+
+  it("a cached reading from an older edition is printed into the current one", () => {
+    expect(stamp(reading({ edition: "00" }), { userId: "u1", runId: "run-a" }).edition).toBe(SEASON);
+  });
+
+  it("the edition is part of a print's code, so it can't be edited onto a card", () => {
+    const c = buildCard(stamp(reading(), { userId: "u1", runId: "run-a" }));
+    expect(cardCode({ ...c, edition: "02" })).not.toBe(cardCode(c));
+    // a print from before editions (print, no edition) hashes without one, as it was minted
+    const { edition: _e, ...before } = c;
+    expect(cardCode(before)).not.toBe(cardCode(c));
+  });
+
+  it("older cards read as edition 01; the stamp says 1st, 2nd, 3rd, 11th, 21st", () => {
+    expect(editionOf({})).toBe("01");
+    expect(["01", "02", "03", "04", "11", "12", "13", "21", "22"].map((edition) => editionName({ edition }))).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd"]);
+  });
+});
+
+describe("fights use the cards as minted", () => {
+  const other = () => reading({ seeds: [seed("s7", "Daft Punk", 0.95), seed("s8", "Blade Runner", 0.9)], brands: [brand(4), brand(5), brand(6)] });
+
+  it("a stored card's stats are what fight, not a rebuild with today's formulas", () => {
+    const a = buildCard(stamp(reading(), { userId: "u1", runId: "run-a" }));
+    const strong = { ...a, stats: a.stats.map((s) => ({ ...s, value: 99 })) };
+    const out = battle(reading(), other(), { a: strong });
+    expect(out.rounds.map((r) => r.a)).toEqual([99, 99, 99, 99]);
+    expect(out.cards.a.print).toBe(a.print);
+  });
+
+  it("a stored card without the four round stats falls back to the rebuild", () => {
+    const a = buildCard(reading());
+    const odd = { ...a, stats: [{ label: "Vibe", value: 99, hint: "" }] };
+    expect(battle(reading(), other(), { a: odd }).rounds.map((r) => r.a)).toEqual(a.stats.map((s) => s.value));
   });
 });

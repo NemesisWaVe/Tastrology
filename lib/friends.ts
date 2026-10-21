@@ -5,7 +5,7 @@ import { ddbDelete, ddbGet, ddbGetStatus, ddbPutIfAbsent, ddbQuery, ddbTransact,
 import { fromSheet, getFighterStatus } from "./fighters";
 import { recordBattle } from "./stamps";
 import { blocked } from "./guard";
-import { burnedAt } from "./twins";
+import { burnedAt, getTwin } from "./twins";
 import type { Audience } from "./types";
 export { levelOf } from "./friendLevels";
 
@@ -628,9 +628,10 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
   const pick = stake ? draw : fighterOf;
   const [a, b] = await Promise.all([pick(challenger), pick(uid)]);
   if (!a || !b) return { ok: false, why: "no-cards" };
-  const [fa, fb] = await Promise.all([getFighterStatus(a), getFighterStatus(b)]);
+  const [fa, fb, ta, tb] = await Promise.all([getFighterStatus(a), getFighterStatus(b), getTwin(a).catch(() => null), getTwin(b).catch(() => null)]);
   if (!fa.sheet || !fb.sheet) return { ok: false, why: fa.status === "error" || fb.status === "error" ? "error" : "no-cards" };
-  const result = battle(fromSheet(fa.sheet), fromSheet(fb.sheet));
+  // The cards as minted fight (their stored stats), the same as an open fight on /vs.
+  const result = battle(fromSheet(fa.sheet), fromSheet(fb.sheet), { a: ta, b: tb });
   const w = result.winner;
   const now = Date.now();
   const side = (s: "a" | "b") => (w === "tie" ? "tied" : w === s ? "won" : "lost");

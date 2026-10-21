@@ -4,7 +4,7 @@ import { sfx as playSfx } from "@/lib/sound";
 import { motion, useInView, useReducedMotion, type Variants } from "motion/react";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
-import { TWIN_HOST, ablationLines, cardCode, cardNo, displayName, twinPath, type CardData } from "@/lib/card";
+import { TWIN_HOST, ablationLines, cardCode, cardNo, displayName, editionOf, setOf, twinPath, type CardData } from "@/lib/card";
 import type { BrandMatch, StyleResult } from "@/lib/types";
 import { figureFor } from "@/components/reveal/skyFigures";
 import { skyState } from "@/components/reveal/traceModel";
@@ -134,7 +134,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
       <L className={`text-center ${sm} tracking-[0.1em]`}>· {BRAND.poweredBy} ·</L>
       <L className={`mt-1.5 flex justify-between ${sm}`}>
         <span>order #{cardNo(card)}</span>
-        <span>{BRAND.cardSet}</span>
+        <span>{setOf(card)}</span>
         <span>{date}</span>
       </L>
       <Rule />
@@ -232,7 +232,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
         )}
       </L>
       <L className={`mt-2 text-center ${sm} tracking-[0.14em]`}>{BRAND.question}</L>
-      {!compact && <CertStamp />}
+      {!compact && <CertStamp edition={editionOf(card)} />}
     </>
   );
 
@@ -348,7 +348,7 @@ function Why({ b, seeds, seedName }: { b: BrandMatch; seeds: StyleResult["seeds"
 /* ------------------------------------------------------------------ the register */
 
 /** Round rubber stamp that thunks onto the paper once the total has printed. */
-function CertStamp() {
+function CertStamp({ edition }: { edition: string }) {
   return (
     <svg data-cert="" aria-hidden viewBox="-50 -50 100 100" className="pointer-events-none absolute bottom-[22px] left-[44%] h-[96px] w-[96px] rotate-[-12deg] text-[#5b3fd1] opacity-80 mix-blend-multiply">
       <defs>
@@ -358,7 +358,7 @@ function CertStamp() {
       <circle r="27" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <text fill="currentColor" style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 800, letterSpacing: 1 }}>
         <textPath href="#certRing" textLength="222" lengthAdjust="spacing">
-          CERTIFIED TASTE · SEASON 01 ·
+          {`CERTIFIED TASTE · SEASON ${edition} ·`}
         </textPath>
       </text>
       <path d="M0-15 3.5-3.5 15 0 3.5 3.5 0 15-3.5 3.5-15 0-3.5-3.5Z" fill="currentColor" />

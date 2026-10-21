@@ -8,7 +8,7 @@ import type { QEntity, StyleResult } from "./types";
  */
 
 /** Bump when battle() output changes; part of the stored-result key. */
-export const ENGINE_V = "2";
+export const ENGINE_V = "3";
 
 export type Side = "a" | "b";
 export type StatName = "Range" | "Edge" | "Cohesion" | "Signal";
@@ -278,9 +278,17 @@ function verdictFor(c: number): { label: string; line: string } {
   return { label: "Parallel universes", line: "Little shared language. Which is exactly why the joint sign is interesting." };
 }
 
-export function battle(a: StyleResult, b: StyleResult): BattleResult {
-  const ca = buildCard(a);
-  const cb = buildCard(b);
+/** A stored card can stand in for its rebuild only if it carries the four stats the rounds read, in order. */
+const ROUND_STATS = ["Range", "Edge", "Cohesion", "Signal"];
+const fits = (c?: CardData | null) => (c && ROUND_STATS.every((s, i) => c.stats?.[i]?.label === s && Number.isFinite(c.stats[i].value)) ? c : undefined);
+
+/**
+ * `cards`: the fighters as minted (their twins). A fight is between the cards people hold, so their stored stats, print
+ * and edition are what fight and show; a rebuild from the reading (today's formulas) is only the fallback.
+ */
+export function battle(a: StyleResult, b: StyleResult, cards?: { a?: CardData | null; b?: CardData | null }): BattleResult {
+  const ca = fits(cards?.a) ?? buildCard(a);
+  const cb = fits(cards?.b) ?? buildCard(b);
 
   const bj = jaccard(
     a.brands.map((x) => x.entity.id),

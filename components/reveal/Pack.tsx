@@ -8,7 +8,7 @@ import { FlipCard } from "@/components/card/FlipCard";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import { sfx } from "@/lib/sound";
-import { cardNo, type CardData, type CardType } from "@/lib/card";
+import { cardNo, setOf, type CardData, type CardType } from "@/lib/card";
 import { figureFor, rng } from "./skyFigures";
 import { Sky } from "./Sky";
 import { skyState } from "./traceModel";
@@ -459,7 +459,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
             >
               {stage === "sealed" && (
                 <>
-                  <p className="font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3">your taste sign · {BRAND.cardSet.toLowerCase()}</p>
+                  <p className="font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3">your taste sign · {setOf(card).toLowerCase()}</p>
                   <h2 className="mt-1.5 font-serif text-[clamp(30px,8vw,42px)] italic leading-none">Tear it open.</h2>
                 </>
               )}

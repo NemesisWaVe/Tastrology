@@ -4,7 +4,7 @@ import { resolveVibes } from "./vibes";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BRAND } from "./brand";
 import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
-import { displayName } from "./card";
+import { SEASON, displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
 import { findTags, insights, isUpstreamError, lookupEntities, qlooMode, searchEntities, withQlooLane, withQlooSignal } from "./qloo";
 import type {
@@ -879,6 +879,12 @@ export async function warmVibe(vibe: { id: string; name: string }): Promise<void
   await withQlooLane("warm", () => resolveVibes([vibe]).then(() => undefined, () => undefined));
 }
 
+/**
+ * Version of the reading engine, stamped on every reading (and so on every card). Bump when a change would make the
+ * same loves read differently (prompts, ranking, tag families), so an old card can be told apart from a new one.
+ */
+export const READING_V = "1";
+
 export function runAgent(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<StyleResult> {
   // Every Qloo call in the run inherits the signal, so an abort (or the route's deadline) also empties the queue.
   return withQlooSignal(signal, () => runAgentInner(req, emit, signal));
@@ -909,6 +915,8 @@ async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal
 
   const result: StyleResult = {
     runId: Math.random().toString(36).slice(2, 10),
+    engine: READING_V,
+    edition: SEASON,
     mode: qlooMode(),
     planner,
     createdAt: Date.now(),
