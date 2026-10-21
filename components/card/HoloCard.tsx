@@ -80,7 +80,31 @@ export const HoloCard = forwardRef<
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       state.current.t0 = performance.now();
       let raf = 0;
+      // Every frame rewrites the tilt variables, which repaints all the blended foil layers. Off screen (or in a
+      // background tab) nobody sees it, so the loop sleeps: a page with several cards paid for all of them before.
+      let seen = true;
+      const wake = () => {
+        if (!raf && seen && !document.hidden) raf = requestAnimationFrame(tick);
+      };
+      const io = new IntersectionObserver(([e]) => {
+        seen = e.isIntersecting;
+        wake();
+      });
+      io.observe(el);
+      document.addEventListener("visibilitychange", wake);
+      // The idle float is slow, so it runs at half rate and holds still while the page scrolls: scroll frames are the
+      // ones a dropped frame shows in. A hand or a tilted phone still gets every frame.
+      let scrolledAt = -1e9, odd = false;
+      const onScroll = () => void (scrolledAt = performance.now());
+      window.addEventListener("scroll", onScroll, { passive: true });
       const tick = (now: number) => {
+        raf = 0;
+        if (!seen || document.hidden) return;
+        odd = !odd;
+        if (!state.current.active && !state.current.still && (odd || now - scrolledAt < 180)) {
+          raf = requestAnimationFrame(tick);
+          return;
+        }
         const st = state.current;
         if (!st.still) {
           if (!st.active && idle && !reduce) {
@@ -105,7 +129,7 @@ export const HoloCard = forwardRef<
         }
         raf = requestAnimationFrame(tick);
       };
-      raf = requestAnimationFrame(tick);
+      wake();
 
       const move = (e: PointerEvent) => {
         const r = el.getBoundingClientRect();
@@ -125,6 +149,9 @@ export const HoloCard = forwardRef<
       window.addEventListener("deviceorientation", orient);
       return () => {
         cancelAnimationFrame(raf);
+        io.disconnect();
+        window.removeEventListener("scroll", onScroll);
+        document.removeEventListener("visibilitychange", wake);
         el.removeEventListener("pointermove", move);
         el.removeEventListener("pointerleave", leave);
         window.removeEventListener("deviceorientation", orient);

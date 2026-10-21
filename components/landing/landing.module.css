@@ -34,7 +34,9 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: holoPan 7s linear infinite;
+  /* background-clip:text repaints the whole word on every frame it moves (about 5ms a frame on the hero). The drift is
+     slow, so it steps about 10 times a second in shifts of a few pixels: it reads the same, at a sixth of the paint. */
+  animation: holoPan 14s steps(140) infinite;
   /* background-clip:text only paints inside the box: give italic descenders room */
   display: inline-block;
   padding: 0 0.12em 0.22em 0.04em;
