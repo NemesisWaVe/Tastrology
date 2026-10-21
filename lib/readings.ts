@@ -143,8 +143,28 @@ export function saveReading(r: Reading, { latest }: { latest: boolean }): string
   return code;
 }
 
+/**
+ * The full reading is the moment right after a mint. For a while after it, opening the site or the card's page lands
+ * on the reading; after that the card's page is the card, and the reading is one tap away.
+ */
+const FRESH = "tastrology:fresh";
+export const FRESH_MS = 30 * 60 * 1000;
+
+export function markFresh(code: string) {
+  try {
+    localStorage.setItem(FRESH, JSON.stringify({ code, at: Date.now() }));
+  } catch {}
+}
+
+export function isFresh(code: string | null | undefined, now = Date.now()): boolean {
+  if (!code) return false;
+  const f = read(FRESH) as { code?: unknown; at?: unknown } | null;
+  return !!f && f.code === code && typeof f.at === "number" && now - f.at >= 0 && now - f.at < FRESH_MS;
+}
+
 /** A burned card: its reading goes too, and so does the latest one when it was this card. */
 export function forgetReading(code: string) {
+  if ((read(FRESH) as { code?: unknown } | null)?.code === code) drop(FRESH);
   drop(keyOf(code));
   setIndex(index().filter((c) => c !== code));
   if (codeOf((read(LATEST) as Reading | null)?.result) === code) drop(LATEST);

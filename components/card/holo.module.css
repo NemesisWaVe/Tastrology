@@ -863,20 +863,23 @@
 /* Living sigils: the sign sigils breathe and the type sigils turn. Built into Holo and Secret, bought with Stardust
    for any other card (lib/cardStyle.ts). */
 .card[data-living] .sigil {
+  filter: drop-shadow(0 0 1.1cqw var(--c1));
   animation: sigilBreathe 3.6s ease-in-out infinite;
+  will-change: transform;
 }
 .card[data-living] .typeSigil {
   animation: sigilTurn 16s linear infinite;
 }
+/* transform and opacity only: an animated drop-shadow repainted every sigil on every frame */
 @keyframes sigilBreathe {
   0%,
   100% {
     transform: scale(1);
-    filter: drop-shadow(0 0 0.5cqw var(--c1));
+    opacity: 0.85;
   }
   50% {
     transform: scale(1.16);
-    filter: drop-shadow(0 0 1.7cqw var(--c1));
+    opacity: 1;
   }
 }
 @keyframes sigilTurn {
@@ -891,8 +894,10 @@
   opacity: 0.5;
   stroke-width: 0.24;
   animation: crest 70s linear infinite;
+  will-change: transform;
 }
 .holo .rosette {
+  stroke: #ff7773;
   animation:
     crest 70s linear infinite,
     crestHue 9s linear infinite;
@@ -907,21 +912,8 @@
   }
 }
 @keyframes crestHue {
-  0%,
-  100% {
-    stroke: #ff7773;
-  }
-  20% {
-    stroke: #ffed5f;
-  }
-  40% {
-    stroke: #a8ff5f;
-  }
-  60% {
-    stroke: #83fff7;
-  }
-  80% {
-    stroke: #d875ff;
+  to {
+    filter: hue-rotate(360deg);
   }
 }
 .secret .faceFoil::after {
@@ -1065,17 +1057,28 @@
 /* the pill: black lacquer with gold letters and a glint that runs through it */
 .secret .rarity {
   color: #fbe3a0;
-  background:
-    linear-gradient(100deg, transparent 30%, rgb(255 250 230 / 0.85) 45%, transparent 60%) 0 0 / 300% 100% no-repeat,
-    linear-gradient(180deg, #2a1e0a, #0d0905);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate; /* the glint sits over the lacquer, under the letters */
+  background: linear-gradient(180deg, #2a1e0a, #0d0905);
   box-shadow:
     inset 0 0 0 0.22cqw #f0c95e,
     0 0 3cqw -0.4cqw rgb(252 211 77 / 0.9);
+}
+/* the glint is a transform on its own layer: an animated background repainted the pill every frame */
+.secret .rarity::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 250 230 / 0.85) 45%, transparent 60%);
+  z-index: -1;
+  transform: translateX(-110%);
   animation: pillGlint 3.2s ease-in-out infinite;
+  pointer-events: none;
 }
 @keyframes pillGlint {
-  0% { background-position: 130% 0, 0 0; }
-  45%, 100% { background-position: -60% 0, 0 0; }
+  0% { transform: translateX(-110%); }
+  45%, 100% { transform: translateX(110%); }
 }
 
 /* frame shine: gold glitter instead of the rainbow */
@@ -1156,6 +1159,32 @@
 @keyframes sweep {
   0%, 8% { transform: translateX(-70%); }
   42%, 100% { transform: translateX(70%); }
+}
+
+/* Phones: a gyro rewrites the light every frame, and each layer that reads --mx/--my repaints with it. On a Secret
+   that was the glitter's mask, nine gold-foil numbers and the frame glitter on top of the shine. There, the gold
+   holds its light still (the specks still twinkle, the sweep still crosses, the art and face foil still follow
+   the tilt), so a tilted phone repaints a few layers instead of all of them. */
+@media (hover: none) and (pointer: coarse) {
+  .secret .moveVal,
+  .secret .stats b,
+  .secret .signVal {
+    background-position: 30% 0;
+  }
+  .glitter {
+    -webkit-mask-image: radial-gradient(120% 90% at 35% 25%, #000 0%, rgb(0 0 0 / 0.45) 55%, rgb(0 0 0 / 0.25) 100%);
+    mask-image: radial-gradient(120% 90% at 35% 25%, #000 0%, rgb(0 0 0 / 0.45) 55%, rgb(0 0 0 / 0.25) 100%);
+  }
+  .secret .frameShine {
+    background-position: 0 0, 0 0, calc(100% - var(--mx) * 1.6) 0;
+  }
+  .secret .faceFoil::after {
+    background-position: 0 0, 0 0, 0 0;
+  }
+  .glitter,
+  .sweep::before {
+    will-change: opacity, transform;
+  }
 }
 
 /* ---------------------------------------------------------------- still (export) mode
@@ -1687,7 +1716,7 @@
   .backSheen,
   .backCard::before,
   .secret::before,
-  .secret .rarity,
+  .secret .rarity::after,
   .glitter::before,
   .glitter::after,
   .sweep::before {

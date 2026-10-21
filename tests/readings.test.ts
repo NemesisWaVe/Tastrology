@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildCard, cardCode } from "@/lib/card";
-import { LATEST, clearLatest, forgetReading, latestCode, loadReading, saveReading, type Reading } from "@/lib/readings";
+import { FRESH_MS, LATEST, clearLatest, forgetReading, isFresh, latestCode, loadReading, markFresh, saveReading, type Reading } from "@/lib/readings";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
 // A Map-backed localStorage with a size cap, so the "store is full" path runs too.
@@ -95,5 +95,15 @@ describe("readings filed by card code", () => {
     for (const n of names) saveReading(reading(n), { latest: false });
     expect(loadReading(code(reading("Delta")))).not.toBeNull();
     expect(loadReading(code(reading("Alpha")))).toBeNull();
+  });
+
+  it("opens the full reading only for a while after the mint, and never after a burn", () => {
+    markFresh("ABCD-1234");
+    const now = Date.now();
+    expect(isFresh("ABCD-1234", now)).toBe(true);
+    expect(isFresh("WXYZ-9876", now)).toBe(false);
+    expect(isFresh("ABCD-1234", now + FRESH_MS + 1)).toBe(false);
+    forgetReading("ABCD-1234");
+    expect(isFresh("ABCD-1234", now)).toBe(false);
   });
 });

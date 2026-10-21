@@ -15,7 +15,7 @@ import { clearDraft } from "@/lib/authBridge";
 import { BRAND } from "@/lib/brand";
 import { addToDeck } from "@/lib/deck";
 import { isPersonaRequest } from "@/lib/personas";
-import { codeOf, saveReading, type Reading } from "@/lib/readings";
+import { codeOf, markFresh, saveReading, type Reading } from "@/lib/readings";
 import { TWIN_CODE } from "@/lib/twins";
 import type { BrandMatch, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
@@ -65,6 +65,7 @@ export function OwnedReading({
     const code = saveReading({ req, result, votes, pinned }, { latest });
     if (latest && !isPersonaRequest(req)) clearDraft();
     if (!code || result.mode === "mock") return;
+    if (result !== initial.result) markFresh(code); // a re-read minted a new card: that's a fresh mint too
     const path = `/c/${encodeURIComponent(code)}`;
     if (location.pathname !== path)
       try {

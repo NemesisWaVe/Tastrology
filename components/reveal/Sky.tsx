@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { displayName } from "@/lib/card";
 import { figureFor, rng, TAU, type FigureShape } from "./skyFigures";
 import { KIND_LABEL, pullShares, vibeAngles, type Folded } from "./traceModel";
@@ -231,7 +231,7 @@ function arcText(ctx: CanvasRenderingContext2D, text: string, x: number, y: numb
 export function Sky({
   f,
   anchor,
-  reduce,
+  reduce: reduceProp,
   dim = 1,
   drawn = false,
   fixed = false,
@@ -256,6 +256,11 @@ export function Sky({
   nameless?: boolean;
 }) {
   const cv = useRef<HTMLCanvasElement>(null);
+  // Phones: a full-screen page backdrop (fixed) draws still, as the landing's does. Animated, it competed with the
+  // card in front of it for every frame (a Secret Rare on /c stuttered).
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => setCoarse(window.matchMedia("(hover: none) and (pointer: coarse)").matches), []);
+  const reduce = reduceProp || (fixed && coarse);
   const travelRef = useRef(travel);
   travelRef.current = travel;
   const namelessRef = useRef(nameless);

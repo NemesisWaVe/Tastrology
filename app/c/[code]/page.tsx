@@ -16,7 +16,7 @@ import { loadDeck } from "@/lib/deck";
 import { CursorArrow } from "@/components/CursorArrow";
 import { OwnedReading } from "@/components/results/OwnedReading";
 import { buildCard, cardCode, SEASON, type CardData } from "@/lib/card";
-import { forgetReading, latestCode, loadReading, type Reading } from "@/lib/readings";
+import { forgetReading, isFresh, latestCode, loadReading, type Reading } from "@/lib/readings";
 import type { StyleResult } from "@/lib/types";
 
 /** Digital twin of a printed or shared card: /c/<code>, the URL in the card-back QR. */
@@ -35,10 +35,25 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   const [mine, setMine] = useState(false);
   /** The reading behind this card, when this device minted it: the owner gets the full reading here, not just the card. */
   const [reading, setReading] = useState<{ r: Reading & { result: StyleResult }; latest: boolean } | null>(null);
+  /** The owner asked for the whole reading (after the mint moment the page opens on the card). */
+  const [full, setFull] = useState(false);
   const router = useRouter();
   useEffect(() => {
     const r = loadReading(code);
     setReading(r?.result ? { r: r as Reading & { result: StyleResult }, latest: latestCode() === code } : null);
+    if (isFresh(code)) setFull(true);
+  }, [code]);
+  // Restored from the back/forward cache (iOS Safari keeps whole pages, e.g. Back after burning it in the deck): nothing
+  // re-runs on its own, so look again, both on this device and on the server.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      const r = loadReading(code);
+      setReading(r?.result ? { r: r as Reading & { result: StyleResult }, latest: latestCode() === code } : null);
+      setAttempt((n) => n + 1);
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
   }, [code]);
   // ?b=1 (from the deck or a share) opens the brand sheet straight away; ?share=1 (the laptop share sheet's QR) the share sheet.
   useEffect(() => {
@@ -121,7 +136,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
 
   // The owner, on the device that minted it: the card's home is the whole reading (receipts, matches, capsule, re-plan).
   // It shows straight away from this device; the server check only adds the verified mark, or takes it down if burned.
-  if (reading && !burned)
+  if (reading && !burned && full)
     return (
       <>
         <OwnedReading
@@ -200,7 +215,17 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
               <Primary href={`/vs/${encodeURIComponent(code)}`} title="Fight this card" sub="mint yours, then battle it" />
             ) : null}
             {!mine && <FriendChip className="mt-4" />}
-            {source === "server" && (
+            {reading && (
+              <Secondary
+                onClick={() => {
+                  setFull(true);
+                  window.scrollTo({ top: 0 });
+                }}
+                title="Open your full reading"
+                sub="receipts, matches and every brand"
+              />
+            )}
+            {source === "server" && !reading && (
               <Secondary onClick={() => setBrands(true)} title={mine ? "See what your taste pulled in" : "See what this taste pulled in"} sub="brands, and why each one" />
             )}
             {!mine && <Secondary onClick={() => setShare(true)} title="Share this card" sub="instagram, snapchat, or x" arrow="↗" />}

@@ -10,7 +10,7 @@ import { Landing } from "@/components/landing/Landing";
 import { OwnedReading } from "@/components/results/OwnedReading";
 import { Reveal } from "@/components/reveal/Reveal";
 import { takePendingRun } from "@/lib/authBridge";
-import { clearLatest, codeOf, forgetReading, latestCode, loadLatest, loadReading, saveReading, type Reading } from "@/lib/readings";
+import { clearLatest, codeOf, forgetReading, isFresh, latestCode, loadLatest, loadReading, markFresh, saveReading, type Reading } from "@/lib/readings";
 import { TWIN_CODE } from "@/lib/twins";
 import type { AgentRequest, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
@@ -88,7 +88,9 @@ export default function Home() {
     const here = stateOf();
     // Back onto the landing entry (Next can remount this page on Back) stays on the landing page, with the resume pill.
     const s = here === "home" || here === "reveal" ? null : readingHere();
-    if (s?.result) {
+    // A cold visit opens the reading only right after its mint; later visits get the landing page and the resume pill.
+    // Coming Back into the result entry (from /deck, /vs) still shows it.
+    if (s?.result && (here === "result" || isFresh(codeOf(s.result)))) {
       show(s, { returning: true });
       // Only on a cold load: coming Back into this entry (from /deck, /vs) it's already the result entry, and pushing
       // again would add a phantom landing page and wipe Forward.
@@ -106,6 +108,23 @@ export default function Home() {
     setSaved(loadLatest());
     setReady(true);
   }, [show]);
+
+  // Restored from the back/forward cache (iOS Safari keeps whole pages): no popstate fires and nothing re-checks, so a
+  // reading burned in the meantime would come back. Re-read storage: a reading that's gone sends the page home.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      setSaved(loadLatest());
+      setCurrent((c) => {
+        const code = c ? codeOf(c.reading.result) : null;
+        if (!c || !code || loadReading(code)) return c;
+        setStage("home");
+        return null;
+      });
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   // Browser Back/Forward: Back from reveal/result returns to the landing page; the saved sign stays available.
   useEffect(() => {
@@ -174,7 +193,8 @@ export default function Home() {
   const toResult = () => {
     if (!result || stage !== "reveal") return;
     const reading: Reading = { req, result, votes: {}, pinned: [] };
-    saveReading(reading, { latest: true });
+    const minted = saveReading(reading, { latest: true });
+    if (minted && result.mode !== "mock") markFresh(minted);
     try { localStorage.setItem("tastrology:first-card", "1"); } catch {}
     window.dispatchEvent(new Event("tastrology:minted"));
     if (result.mode === "live" && !result.cached) recordScanMint();

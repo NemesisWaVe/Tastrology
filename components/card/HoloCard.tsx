@@ -97,11 +97,22 @@ export const HoloCard = forwardRef<
       let scrolledAt = -1e9, odd = false;
       const onScroll = () => void (scrolledAt = performance.now());
       window.addEventListener("scroll", onScroll, { passive: true });
+      // Phones: a gyro keeps the card "active" every frame, and its noise changes the light even with the phone at
+      // rest. There the light runs at half rate and is rounded to whole steps, and a value is only written when it
+      // changes, so a phone held still repaints nothing.
+      const coarse = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+      const dp = coarse ? 0 : 1;
+      const last: Record<string, string> = {};
+      const put = (k: string, v: string) => {
+        if (last[k] === v) return;
+        last[k] = v;
+        el.style.setProperty(k, v);
+      };
       const tick = (now: number) => {
         raf = 0;
         if (!seen || document.hidden) return;
         odd = !odd;
-        if (!state.current.active && !state.current.still && (odd || now - scrolledAt < 180)) {
+        if ((coarse || !state.current.active) && !state.current.still && (odd || now - scrolledAt < 180)) {
           raf = requestAnimationFrame(tick);
           return;
         }
@@ -119,13 +130,13 @@ export const HoloCard = forwardRef<
           st.y += (st.ty - st.y) * 0.09;
           const mx = 50 + st.x * 50;
           const my = 50 + st.y * 50;
-          el.style.setProperty("--rx", `${(-st.y * 14).toFixed(2)}deg`);
-          el.style.setProperty("--ry", `${(st.x * 18).toFixed(2)}deg`);
-          el.style.setProperty("--mx", `${mx.toFixed(1)}%`);
-          el.style.setProperty("--my", `${my.toFixed(1)}%`);
-          el.style.setProperty("--ang", `${(st.x * 120 + st.y * 60).toFixed(1)}deg`);
-          el.style.setProperty("--hyp", Math.min(1, Math.hypot(st.x, st.y)).toFixed(3));
-          el.style.setProperty("--o", (st.active ? 1 : idle ? 0.6 : 0.3).toFixed(2));
+          put("--rx", `${(-st.y * 14).toFixed(dp + 1)}deg`);
+          put("--ry", `${(st.x * 18).toFixed(dp + 1)}deg`);
+          put("--mx", `${mx.toFixed(dp)}%`);
+          put("--my", `${my.toFixed(dp)}%`);
+          put("--ang", `${(st.x * 120 + st.y * 60).toFixed(dp)}deg`);
+          put("--hyp", Math.min(1, Math.hypot(st.x, st.y)).toFixed(dp + 2));
+          put("--o", (st.active ? 1 : idle ? 0.6 : 0.3).toFixed(2));
         }
         raf = requestAnimationFrame(tick);
       };

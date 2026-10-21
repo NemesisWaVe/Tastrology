@@ -62,11 +62,11 @@ describe("/api/card and /api/battle on a storage blip", () => {
     expect(res.status).toBe(503);
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
-  it("still returns a cacheable 404 for a real miss", async () => {
+  it("still returns a 404 for a real miss, uncached so a fresh mint shows at once", async () => {
     backends("404", "noitem");
     const res = await cardGET(req(`/api/card?code=${code()}`));
     expect(res.status).toBe(404);
-    expect(res.headers.get("cache-control")).toContain("max-age=60");
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
   it("battle: 503 when a fighter lookup errored", async () => {
     backends("500", "noitem");
