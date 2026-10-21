@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { HallOfRares } from "./HallOfRares";
 import { PhoneMenu } from "@/components/site/PhoneMenu";
 import { AfterEconomy, AfterFirstCard } from "@/components/site/AfterFirstCard";
@@ -199,7 +200,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         <div className="flex items-center gap-3 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
           <span className="hidden items-center gap-5 sm:flex">
-          <a href="/signs" className="hidden whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink md:inline">This week</a>
+          <Link href="/signs" className="hidden whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink md:inline">This week</Link>
           <AfterEconomy>
           <a href="/shop" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">Shop</a>
           </AfterEconomy>
