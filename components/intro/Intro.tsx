@@ -5,6 +5,7 @@ import { useReducedMotion, useScroll } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { sfx } from "@/lib/sound";
 import { audioAllowed, enableSound, soundOn } from "@/lib/soundEngine";
+import { createPacer } from "./pace";
 import { createMirror, SKY_AR, type Mirror, type SkyView, type Touch } from "./mirror";
 import { PERSONAS } from "@/lib/personas";
 import { buildWord, CARD_AR, drawDrops, drawStars, type Rect, type Word } from "./stars";
@@ -107,6 +108,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
   const skipRef = useRef<HTMLButtonElement>(null);
   const hintRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<((withSound: boolean) => void) | null>(null);
+  const haltRef = useRef<(() => void) | null>(null);
   const reduce = Boolean(useReducedMotion());
   const [gate, setGate] = useState<"hidden" | "open" | "closing">("hidden");
   const gateOpen = useRef(false);
@@ -127,6 +129,7 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
     store.set();
     setGate("hidden"); // never leave the gate over the hero
     startRef.current?.(false);
+    haltRef.current?.();
     const el = track.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -461,6 +464,20 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
       const r = el.getBoundingClientRect();
       return Math.min(1, Math.max(0, -r.top / Math.max(1, r.height - window.innerHeight)));
     };
+    // one beat per gesture, at a set pace: a hard flick or a spun wheel can no longer skip the story
+    const pacer = track.current
+      ? createPacer({
+          track: track.current,
+          stage: st,
+          scrollTo: (y) => {
+            const l = lenisRef.current;
+            if (l) l.scrollTo(y, { immediate: true, force: true });
+            else window.scrollTo(0, y);
+          },
+          catchAtHero: () => Boolean(lenisRef.current),
+        })
+      : null;
+    haltRef.current = () => pacer?.halt();
     const onScrollHide = () => hideAt(nativeP());
     onScrollHide();
     window.addEventListener("scroll", onScrollHide, { passive: true });
@@ -478,6 +495,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
 
     return () => {
       cancelAnimationFrame(raf);
+      pacer?.dispose();
+      haltRef.current = null;
       io.disconnect();
       offHide();
       document.removeEventListener("visibilitychange", run);
