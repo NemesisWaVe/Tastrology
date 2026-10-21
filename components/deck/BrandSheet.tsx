@@ -14,7 +14,7 @@ import { ScratchReveal } from "@/components/deck/ScratchReveal";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
 import { readSeen, writeSeen, type Seen } from "@/lib/brandSeen";
-import { displayName, proxied, type CardData } from "@/lib/card";
+import { cardNo, displayName, proxied, type CardData } from "@/lib/card";
 import type { Drift } from "@/lib/drift";
 import type { Snap, SnapBrand } from "@/lib/receipt";
 import { sfx } from "@/lib/sound";
@@ -407,7 +407,7 @@ export function BrandSheet({
           {card.archetype}
         </h2>
         <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3">
-          No. {card.serial} · {code}
+          No. {card.print ? cardNo(card) : `${card.serial} · ${code}`}
         </p>
       </div>
       <button

@@ -1,9 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildCard, cardCode } from "@/lib/card";
-import { printId, stamp, unstamped } from "@/lib/print";
+import { buildCard, cardCode, cardNo } from "@/lib/card";
+import { claimPrint, printId, stamp, unstamped } from "@/lib/print";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
-beforeEach(() => vi.stubEnv("ROLL_SECRET", "test-secret"));
+// DynamoDB as a map: claimPrint's write-once claims and the twins filed before claims existed.
+const db = vi.hoisted(() => ({ items: new Map<string, Record<string, unknown>>(), down: false }));
+vi.mock("@/lib/ddb", () => ({
+  ddbPutIfAbsent: async (it: { PK: string; SK: string }) => {
+    if (db.down) return "error";
+    const k = `${it.PK}|${it.SK}`;
+    if (db.items.has(k)) return "exists";
+    db.items.set(k, it);
+    return "created";
+  },
+  ddbGet: async (PK: string, SK: string) => (db.down ? null : (db.items.get(`${PK}|${SK}`) ?? null)),
+}));
+
+beforeEach(() => {
+  vi.stubEnv("ROLL_SECRET", "test-secret");
+  db.items.clear();
+  db.down = false;
+});
 afterEach(() => vi.unstubAllEnvs());
 
 const seed = (id: string, name: string, popularity?: number): QEntity => ({ id, name, kind: "artist", tags: [], popularity });
@@ -105,5 +122,54 @@ describe("Deep Cut reads only what you named", () => {
     const card = buildCard(reading({ seeds: [seed("s1", "Obscure Band", 0.62), seed("s2", "Small Zine", 0.7)] }));
     expect(card.deepCut).toBe(true);
     expect(card.avgPop).toBe(66);
+  });
+});
+
+describe("a card's code is one mint's alone", () => {
+  const codeIn = (r: StyleResult) => cardCode(buildCard(r));
+
+  it("a free code is claimed for this mint, and a retry of the mint finds its own claim", async () => {
+    const a = await claimPrint(reading(), { userId: "u1", runId: "run-a" });
+    expect(a.print).toBe(printId("u1", "run-a"));
+    expect(db.items.get(`CODE#${codeIn(a)}|CLAIM`)?.owner).toBe("u1|run-a");
+    const again = await claimPrint(reading(), { userId: "u1", runId: "run-a" });
+    expect(codeIn(again)).toBe(codeIn(a));
+  });
+
+  it("if another mint already holds the code, this one takes the next print: its own code, the same roll", async () => {
+    const first = stamp(reading(), { userId: "u2", runId: "run-b" });
+    // Someone else got there first with this very code (a hash collision).
+    db.items.set(`CODE#${codeIn(first)}|CLAIM`, { owner: "u9|run-z" });
+    const p = await claimPrint(reading(), { userId: "u2", runId: "run-b" });
+    expect(codeIn(p)).not.toBe(codeIn(first));
+    expect(p.roll).toEqual(first.roll);
+    expect(db.items.get(`CODE#${codeIn(p)}|CLAIM`)?.owner).toBe("u2|run-b");
+  });
+
+  it("a card filed before claims existed keeps its code too", async () => {
+    const first = stamp(reading(), { userId: "u3", runId: "run-c" });
+    db.items.set(`CARD#${codeIn(first)}|META`, { card: JSON.stringify({ print: "ZZZZZZ" }) });
+    const p = await claimPrint(reading(), { userId: "u3", runId: "run-c" });
+    expect(codeIn(p)).not.toBe(codeIn(first));
+  });
+
+  it("its own twin from an earlier attempt is not a collision", async () => {
+    const first = stamp(reading(), { userId: "u4", runId: "run-d" });
+    db.items.set(`CARD#${codeIn(first)}|META`, { card: JSON.stringify(buildCard(first)) });
+    expect(codeIn(await claimPrint(reading(), { userId: "u4", runId: "run-d" }))).toBe(codeIn(first));
+  });
+
+  it("with DynamoDB down the first print goes ahead, and a mock reading is never claimed", async () => {
+    db.down = true;
+    expect((await claimPrint(reading(), { userId: "u5", runId: "run-e" })).print).toBe(printId("u5", "run-e"));
+    db.down = false;
+    expect((await claimPrint(reading({ mode: "mock" }), { userId: "u5", runId: "run-e" })).print).toBeUndefined();
+    expect(db.items.size).toBe(0);
+  });
+
+  it("the number on a print is its code; older cards keep the taste serial", () => {
+    const p = buildCard(stamp(reading(), { userId: "u1", runId: "run-a" }));
+    expect(cardNo(p)).toBe(cardCode(p));
+    expect(cardNo(buildCard(reading()))).toBe(buildCard(reading()).serial);
   });
 });

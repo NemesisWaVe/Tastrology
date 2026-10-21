@@ -21,7 +21,7 @@ import { SkyBackdrop } from "@/components/site/SkyBackdrop";
 import c from "@/components/site/celestial.module.css";
 import { SiteNav } from "@/components/site/SiteShell";
 import { whenAuthReady } from "@/lib/authBridge";
-import { buildCard, cardCode, proxied, SEASON } from "@/lib/card";
+import { buildCard, cardCode, cardNo, proxied, SEASON } from "@/lib/card";
 import { burnFromDeck, claimDeviceDeck, loadDeck, type BurnReply, type DeckBurn, type DeckEntry } from "@/lib/deck";
 import { isPersonaRequest } from "@/lib/personas";
 import { forgetReading } from "@/lib/readings";
@@ -315,7 +315,7 @@ export default function DeckPage() {
                   )}
                   <p className="mt-3 text-center font-serif text-xl italic leading-tight">{card.archetype}</p>
                   <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
-                    No. {card.serial} · {card.rarityLabel} · {code}
+                    No. {cardNo(card)} · {card.rarityLabel}
                   </p>
                   {run && <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">Print {run.n} of {run.of} of this reading</p>}
                   {burnable && armed !== code && (

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
-import type { CardData } from "@/lib/card";
+import { cardNo, type CardData } from "@/lib/card";
 import { ROLL_ODDS } from "@/lib/odds";
 import { EASE } from "./primitives";
 import s from "./landing.module.css";
@@ -86,7 +86,7 @@ function Exhibits({ cards, door }: { cards: { code: string; card: CardData }[]; 
             <span>{card.rarityLabel}</span>
             <b>{card.archetype}</b>
             <small>
-              No. {card.serial}
+              No. {cardNo(card)}
               {card.rarityNo ? ` · ${String(card.rarityNo).padStart(3, "0")} of its tier` : ""}
             </small>
           </p>

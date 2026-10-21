@@ -4,7 +4,7 @@ import { sfx as playSfx } from "@/lib/sound";
 import { motion, useInView, useReducedMotion, type Variants } from "motion/react";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BRAND } from "@/lib/brand";
-import { TWIN_HOST, ablationLines, cardCode, displayName, twinPath, type CardData } from "@/lib/card";
+import { TWIN_HOST, ablationLines, cardCode, cardNo, displayName, twinPath, type CardData } from "@/lib/card";
 import type { BrandMatch, StyleResult } from "@/lib/types";
 import { figureFor } from "@/components/reveal/skyFigures";
 import { skyState } from "@/components/reveal/traceModel";
@@ -133,7 +133,7 @@ export function ReceiptBody({ card, result, compact = false, stagger = true, fad
       <L className={`text-center font-bold tracking-[0.18em] ${compact ? "text-[19px]" : "text-[22px]"}`}>{BRAND.name}</L>
       <L className={`text-center ${sm} tracking-[0.1em]`}>· {BRAND.poweredBy} ·</L>
       <L className={`mt-1.5 flex justify-between ${sm}`}>
-        <span>order #{card.serial}</span>
+        <span>order #{cardNo(card)}</span>
         <span>{BRAND.cardSet}</span>
         <span>{date}</span>
       </L>

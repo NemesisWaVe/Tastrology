@@ -2,7 +2,7 @@
 
 import { Mark } from "@/components/site/Mark";
 import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef } from "react";
-import { SEASON, TWIN_HOST, cardCode, twinUrl, type CardData, type CardType } from "@/lib/card";
+import { SEASON, TWIN_HOST, cardCode, cardNo, twinUrl, type CardData, type CardType } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { KindSigil, Sigil, Sparkle, TypeSigil } from "./Sigils";
 import { qr, qrPath } from "./qr";
@@ -291,9 +291,8 @@ function CardFace({ card }: { card: CardData }) {
         {/* collector line: set and number bottom left, rarity gems bottom right, like a printed card */}
         <span className={s.collector}>
           <span>
-            {BRAND.cardSet} · No. <b className={s.dots}>{card.serial}</b>
-            {/* a print's own check characters, the same ones its link and caption carry, so copies of one reading never read alike */}
-            {card.print && <b className={s.dots}>-{cardCode(card).split("-")[1]}</b>}
+            {/* a print's number is its claimed code (the same as its link): copies of one reading, or two people's, never share one */}
+            {BRAND.cardSet} · No. <b className={s.dots}>{cardNo(card)}</b>
             {card.secondDraw && <> · 2nd draw</>}
             {!!card.recasts?.length && <> · recast ×{card.recasts.length}</>}
           </span>
@@ -505,7 +504,7 @@ export function CardBack({ card, className = "", crack = false, printSafe = fals
     return { n: m.length, d: qrPath(m) };
   }, [url]);
   const ring = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const micro = `${BRAND.name} · certified taste · ${BRAND.cardSet} · S${SEASON} · No ${card.serial} · ${code} · `.toUpperCase();
+  const micro = `${BRAND.name} · certified taste · ${BRAND.cardSet} · S${SEASON} · No ${cardNo(card)} · `.toUpperCase();
   const q = code2d.n + 8; // 4-module quiet zone on each side
 
   return (
@@ -578,7 +577,11 @@ export function CardBack({ card, className = "", crack = false, printSafe = fals
 
           <div className={s.backId}>
             <span className={s.backLabel}>No.</span>
-            <b className={`${s.dots} ${s.backSerial}`}>{card.serial}</b>
+            <b className={`${s.dots} ${s.backSerial}`}>
+              {card.serial}
+              {/* a print's claimed check characters, smaller, so the big number still reads as the taste */}
+              {card.print && <small style={{ fontSize: "0.5em" }}>-{code.slice(5)}</small>}
+            </b>
             <span className={s.backLabel}>/ Season {SEASON}</span>
           </div>
           <p className={s.cert}>

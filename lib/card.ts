@@ -347,6 +347,13 @@ export function cardCode(card: CodeFields): string {
   return `${card.serial}-${c}`;
 }
 
+/**
+ * The card's number as printed on it. A print's is its full code (8466-Q1YE): the serial alone is the taste's, shared
+ * by everyone who loves the same things, while the code is claimed for one mint (lib/print claimPrint). Cards from
+ * before prints keep their serial.
+ */
+export const cardNo = (card: CodeFields) => (card.print ? cardCode(card) : card.serial);
+
 /** Path of the verifiable digital twin, e.g. /c/0427-H7K2. */
 export const twinPath = (card: CodeFields) => `/c/${cardCode(card)}`;
 /** Absolute URL encoded in the printed QR. */

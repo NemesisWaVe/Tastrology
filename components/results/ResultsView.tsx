@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { BattleLink } from "@/components/battle/BattleLink";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { StyleResult } from "@/lib/types";
-import { buildCard } from "@/lib/card";
+import { buildCard, cardNo } from "@/lib/card";
 import { BRAND } from "@/lib/brand";
 import { FlipCard } from "@/components/card/FlipCard";
 import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
@@ -120,7 +120,7 @@ export function ResultsView({
                 </span>
               )}
               <span className="font-mono text-[11px] text-ink-3">
-                № {card.serial} · {BRAND.cardSet}
+                № {cardNo(card)} · {BRAND.cardSet}
               </span>
               {verified !== undefined && (
                 <span className={`font-mono text-[10.5px] uppercase tracking-[0.18em] ${verified ? "text-good" : "text-warn"}`}>

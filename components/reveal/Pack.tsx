@@ -8,7 +8,7 @@ import { FlipCard } from "@/components/card/FlipCard";
 import { Sigil, type SigilKind } from "@/components/card/Sigils";
 import { BRAND } from "@/lib/brand";
 import { sfx } from "@/lib/sound";
-import type { CardData, CardType } from "@/lib/card";
+import { cardNo, type CardData, type CardType } from "@/lib/card";
 import { figureFor, rng } from "./skyFigures";
 import { Sky } from "./Sky";
 import { skyState } from "./traceModel";
@@ -483,7 +483,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
                     {r.stamp} {card.rarityLabel}
                   </span>
                   <p className="mt-2 text-[12.5px] text-ink-2">
-                    {card.dual ? "Dual type" : "Basic"} · specimen #{card.serial}
+                    {card.dual ? "Dual type" : "Basic"} · specimen #{cardNo(card)}
                   </p>
                 </motion.div>
               )}

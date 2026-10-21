@@ -23,7 +23,7 @@ import { dropLease, leaseHeld, takeLease } from "@/lib/runLease";
 import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
 import { numberCard } from "@/lib/cardStyle";
-import { stamp } from "@/lib/print";
+import { claimPrint } from "@/lib/print";
 import { countEvent } from "@/lib/metrics";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
@@ -176,7 +176,7 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       const showcase = personaFor(req)?.showcase;
       if (showcase) result.showcase = showcase;
       if (minter) {
-        f.printed = stamp(result, minter);
+        f.printed = await claimPrint(result, minter);
         await filePrint(minter, f.printed, bg);
       } else if (result.mode !== "mock") {
         const card = buildCard(result);
@@ -347,7 +347,8 @@ export async function POST(request: Request) {
   if (minter && (cached || (flight && flight.owner !== `${minter.userId}|${minter.runId}`))) {
     if (!admin && !(await allow(`agent:u:${minter.userId}`, RATE_LIMIT, RATE_WINDOW_MS))) return reply({ error: RATE_MSG }, { status: 429 });
     // The same run id coming back for a print it already filed (a dropped stream): hand it back, no cap check or charge.
-    const filed = cached ? await ddbGet(`OWNER#${minter.userId}`, `CARD#${cardCode(buildCard(stamp(cached.result, minter)))}`).catch(() => null) : null;
+    const mine = cached ? await claimPrint(cached.result, minter).catch(() => null) : null;
+    const filed = mine ? await ddbGet(`OWNER#${minter.userId}`, `CARD#${cardCode(buildCard(mine))}`).catch(() => null) : null;
     if (!filed) {
       const ok = await admit(minter);
       if (ok instanceof Response) return ok;
@@ -355,7 +356,7 @@ export async function POST(request: Request) {
     }
     const m = minter;
     reprint = (cached ? Promise.resolve(cached.result) : flight!.done).then(async (base) => {
-      const printed = stamp(base, m);
+      const printed = await claimPrint(base, m);
       await filePrint(m, printed, later);
       return printed;
     });

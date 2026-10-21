@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND } from "@/lib/brand";
-import type { CardData } from "@/lib/card";
+import { cardNo, type CardData } from "@/lib/card";
 import { getStyle } from "@/lib/cardStyle";
 import { getTwinStatus, TWIN_CODE } from "@/lib/twins";
 import { isAllowedImageUrl } from "@/app/api/img/allow";
@@ -149,7 +149,7 @@ export default async function Image({ params }: { params: Promise<{ code: string
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logo} width={18} height={18} alt="" />
                 <span style={{ color: INK }}>TASTROLOGY</span>
-                <span>№{card.serial}</span>
+                <span>№{cardNo(card)}</span>
               </div>
               <div style={{ display: "flex", padding: "3px 10px", borderRadius: 999, border: `1px solid ${a}`, color: a, fontSize: 11 }}>{label.toUpperCase()}</div>
             </div>
