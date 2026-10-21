@@ -1,4 +1,4 @@
-import { clerkImage, clerkOn, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
+import { clerkImage, clerkOn, clerkUserGone, clerkUsername, currentUserId, setClerkUsername } from "@/lib/auth";
 import { ddbConfigured } from "@/lib/ddb";
 import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, stampImage, refundRename, closeBout, GENDERS, setProfile, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow, clientId } from "@/lib/ratelimit";
@@ -9,6 +9,7 @@ import { TWIN_CODE } from "@/lib/twins";
 import type { Audience } from "@/lib/types";
 import { countEvent } from "@/lib/metrics";
 import { after } from "next/server";
+import { sweepGhosts } from "@/lib/wipe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,6 +57,8 @@ export async function GET(request: Request) {
   if (!me0) return json({ error: "Couldn't reach the server." }, 503);
   if (q.get("whoami")) return json({ on: true, signedIn: true, me: me0 });
   const me = await syncName(uid, me0);
+  // Accounts deleted where our own close-account flow never saw it leave ghosts on lists: tidy them after answering.
+  after(sweepGhosts(uid, clerkUserGone).catch(() => 0));
   const dOn = dustOn();
   const [[inbox], friends, requests, bouts, ds] = await Promise.all([Promise.all([inboxCount(uid), indexCards(uid, me.pc)]), listFriends(uid), listRequests(uid), listBouts(uid), dOn ? dustStatus(uid).catch(() => null) : null]);
   return json({ on: true, signedIn: true, now: Date.now(), inbox, me, friends: friends ?? [], requests: requests ?? { incoming: [], sent: [] }, bouts: bouts ?? [], dustOn: dOn, dust: ds?.dust ?? null, stakes: STAKES, rename: { fee: renameFee(me), free: FREE_RENAMES, cost: RENAME_DUST } });

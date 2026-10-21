@@ -87,6 +87,9 @@ const CLERK_LOOK = {
     formFieldAction: "text-accent",
     formButtonPrimary: "rounded-full bg-accent py-2.5 text-[15px] font-semibold normal-case text-paper shadow-none transition hover:bg-accent hover:brightness-105",
     buttonArrowIcon: "hidden",
+    // The terms box: Clerk's own drew it borderless in the card's colour, so it vanished (and with it, the step).
+    formFieldCheckboxInput: "h-[18px] w-[18px] cursor-pointer appearance-auto rounded border border-ink-3 accent-[#c6ff3d]",
+    formFieldCheckboxLabel: "text-sm text-ink-2",
     otpCodeFieldInput: "rounded-xl border border-line bg-paper text-ink",
     identityPreview: "rounded-full border border-line bg-paper",
     identityPreviewEditButton: "text-accent",

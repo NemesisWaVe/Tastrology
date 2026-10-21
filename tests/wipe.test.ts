@@ -2,7 +2,8 @@ import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { claimDevice } from "@/lib/claim";
 import { ddbGet, ddbPutIfAbsent } from "@/lib/ddb";
-import { wipeAccount } from "@/lib/wipe";
+import { sweepGhosts, wipeAccount } from "@/lib/wipe";
+import { acceptFriend, addFriend, ensurePlayer, listFriends, listRequests } from "@/lib/friends";
 import { POST as webhookPOST } from "@/app/api/clerk-webhook/route";
 import { FakeDynamo, useFakeDynamo } from "./fakeDynamo";
 
@@ -94,5 +95,33 @@ describe("Clerk webhook", () => {
 
   it("is off without a secret", async () => {
     expect((await webhookPOST(signed("{}"))).status).toBe(404);
+  });
+});
+
+describe("sweepGhosts", () => {
+  async function friends(x: string, y: string) {
+    const a = (await ensurePlayer(x))!;
+    const b = (await ensurePlayer(y))!;
+    await addFriend(x, a, b.pc);
+    await acceptFriend(y, b, a.pc);
+  }
+
+  it("erases a friend Clerk says is gone, off both sides", async () => {
+    await friends("user_a", "user_b");
+    expect(await listFriends("user_a")).toHaveLength(1);
+    expect(await sweepGhosts("user_a", async (u) => u === "user_b")).toBe(1);
+    expect(await listFriends("user_a")).toEqual([]);
+    expect(await ddbGet("USER#user_b", "PLAYER")).toBeNull();
+  });
+
+  it("drops rows whose player no longer exists, and never acts on a live account", async () => {
+    await friends("user_c", "user_d");
+    const e = (await ensurePlayer("user_e"))!;
+    const c = (await ensurePlayer("user_c"))!;
+    await addFriend("user_e", e, c.pc); // a request to c from e
+    db.items.delete("USER#user_e|PLAYER"); // e's player went without its rows being tidied
+    expect(await sweepGhosts("user_c", async () => false)).toBe(1);
+    expect((await listRequests("user_c"))!.incoming).toEqual([]);
+    expect(await listFriends("user_c")).toHaveLength(1); // d is alive and stays
   });
 });

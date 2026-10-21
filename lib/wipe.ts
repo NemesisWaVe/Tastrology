@@ -1,6 +1,6 @@
 import { ENGINE_V } from "./battle";
 import { upstash, upstashConfigured } from "./cache";
-import { ddbConfigured, ddbDelete, ddbGet, ddbQuery } from "./ddb";
+import { ddbConfigured, ddbDelete, ddbGet, ddbGetStatus, ddbQuery } from "./ddb";
 import { purgeFighter } from "./fighters";
 import { purge, wipePlayer } from "./friends";
 import { dropReceipt } from "./receipt";
@@ -79,4 +79,30 @@ async function wipeDevice(dev: string, uid: string): Promise<boolean> {
   if (claim && claim.userId !== uid) return true;
   const out = await Promise.all([purge(`OWNER#${dev}`), purge(`DEVICE#${dev}`)]);
   return !out.includes(false);
+}
+
+const sweptAt = new Map<string, number>();
+/**
+ * Ghosts: a friend or request whose account was deleted somewhere our Close account flow never saw (the Clerk
+ * dashboard before the webhook was set up, or a missed webhook). Run in the background when your friends list loads,
+ * at most every 10 minutes per person: an account Clerk says is gone gets the full erase (which takes it off both
+ * sides), and a row whose player no longer exists here is just dropped from yours.
+ */
+export async function sweepGhosts(uid: string, gone: (uid: string) => Promise<boolean>): Promise<number> {
+  if (!ddbConfigured() || (sweptAt.get(uid) ?? 0) > Date.now()) return 0;
+  sweptAt.set(uid, Date.now() + 10 * 60 * 1000);
+  const PK = `USER#${uid}`;
+  const lists = await Promise.all(["FRIEND#", "REQ#", "SENT#"].map((p) => ddbQuery(PK, p, 200, undefined, ["SK", "uid"])));
+  let n = 0;
+  for (const it of lists.flatMap((l) => l?.items ?? [])) {
+    const other = String(it.uid ?? "");
+    if (!other || other === uid) continue;
+    const player = await ddbGetStatus(`USER#${other}`, "PLAYER");
+    if (player.status === "missing") {
+      if ((await ddbDelete(PK, String(it.SK))) !== "error") n++;
+    } else if (player.status === "found" && (await gone(other))) {
+      if (await wipeAccount(other)) n++;
+    }
+  }
+  return n;
 }

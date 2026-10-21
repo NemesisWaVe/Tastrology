@@ -81,6 +81,26 @@ export async function setClerkUsername(userId: string, username: string): Promis
   }
 }
 
+const goneCache = new Map<string, { gone: boolean; until: number }>();
+/**
+ * True only when Clerk answers that this user doesn't exist (deleted in the dashboard, or by Clerk). Any other
+ * failure is false, so a Clerk outage never erases anyone. Cached an hour per user.
+ */
+export async function clerkUserGone(userId: string): Promise<boolean> {
+  if (!clerkOn()) return false;
+  const hit = goneCache.get(userId);
+  if (hit && hit.until > Date.now()) return hit.gone;
+  let gone = false;
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    await (await clerkClient()).users.getUser(userId);
+  } catch (e) {
+    gone = (e as { status?: number })?.status === 404;
+  }
+  goneCache.set(userId, { gone, until: Date.now() + 3_600_000 });
+  return gone;
+}
+
 export async function deleteClerkUser(userId: string): Promise<boolean> {
   if (!clerkOn()) return false;
   try {
