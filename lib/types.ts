@@ -23,6 +23,8 @@ export const SEED_KINDS: EntityKind[] = [
 export interface QTag {
   id: string;
   name: string;
+  /** Qloo's 0-1 popularity for the tag, when it sends one. */
+  popularity?: number;
 }
 
 /** A Qloo entity, normalized from either the live API or the mock graph. */

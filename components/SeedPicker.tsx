@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { proxied } from "@/lib/card";
+import { normQ } from "@/lib/searchKey";
 import type { EntityKind } from "@/lib/types";
 
 export interface Seed {
@@ -84,6 +85,15 @@ function dedupe(xs: Seed[]): Seed[] {
   });
 }
 
+type SearchAnswer = { hits?: Seed[]; results?: Seed[]; vibes?: { id: string; name: string; label: string }[]; blocked?: boolean; care?: boolean; suggest?: string[] };
+/** This visit's answers by URL (newest last), so going back over a query is instant. */
+const answers = new Map<string, SearchAnswer>();
+function remember(url: string, a: SearchAnswer) {
+  answers.delete(url);
+  answers.set(url, a);
+  if (answers.size > 80) answers.delete(answers.keys().next().value!);
+}
+
 /** Qloo-backed autocomplete. Seeds come back with real Qloo entity ids. */
 export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: Seed[]) => void }) {
   const [q, setQ] = useState("");
@@ -112,37 +122,48 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   }, [kind, q]);
 
   useEffect(() => {
-    if (q.trim().length < 2) {
+    const nq = normQ(q);
+    if (nq.length < 2) {
       setHits([]);
       setLoading(false);
       setOff(null);
       return;
     }
     const id = ++req.current;
+    const url = `/api/search?q=${encodeURIComponent(nq)}${kind === "vibe" ? "&vibes=only" : kind !== "all" ? `&types=${kind}` : "&vibes=1"}`;
+    const show = (data: SearchAnswer) => {
+      if (id !== req.current) return;
+      setOff(data.blocked ? { care: Boolean(data.care), suggest: data.suggest ?? [] } : null);
+      setHits(dedupe(data.hits ?? []).slice(0, 7));
+      setActive(0);
+      setLoading(false);
+    };
+    // Seen this exact query in this visit (backspacing, flipping tabs): no wait, no request.
+    const seen = answers.get(url);
+    if (seen) {
+      show(seen);
+      return;
+    }
     setLoading(true);
+    const ac = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}${kind === "vibe" ? "&vibes=only" : kind !== "all" ? `&types=${kind}` : "&vibes=1"}`);
-        const data = (await res.json()) as { results: Seed[]; vibes?: { id: string; name: string; label: string }[]; blocked?: boolean; care?: boolean; suggest?: string[] };
-        if (id === req.current) setOff(data.blocked ? { care: Boolean(data.care), suggest: data.suggest ?? [] } : null);
-        if (id === req.current) {
-          const ents = dedupe(data.results ?? []);
-          const vs: Seed[] = (data.vibes ?? []).slice(0, kind === "vibe" ? 6 : 2).map((v) => ({ id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` }));
-          // A vibe that matches the words exactly ("ramen") goes first; otherwise it follows the top named hits.
-          const exact = vs.filter((v) => norm(v.name) === norm(q));
-          const rest = kind === "vibe" ? vs.filter((v) => !exact.includes(v)) : exact.length ? [] : vs;
-          // With the vibe on offer, places that are only called "Ramen" are noise, not what was meant.
-          const named = exact.length ? ents.filter((e) => !(e.kind === "place" && norm(e.name) === norm(q))) : ents;
-          setHits([...exact, ...named.slice(0, 3), ...rest, ...named.slice(3)].slice(0, 7));
-          setActive(0);
-        }
+        const res = await fetch(url, { signal: ac.signal });
+        const data = (await res.json()) as SearchAnswer;
+        if (res.ok) remember(url, data);
+        show(data);
       } catch {
-        if (id === req.current) setHits([]);
-      } finally {
-        if (id === req.current) setLoading(false);
+        // Aborted (typed on) or offline: a newer keystroke owns the list.
+        if (id === req.current && !ac.signal.aborted) {
+          setHits([]);
+          setLoading(false);
+        }
       }
     }, 180);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      ac.abort();
+    };
   }, [q, kind]);
 
   useEffect(() => {
@@ -194,7 +215,7 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     try {
       const k = kind !== "all" ? kind : TRY_KIND[t];
       const vibeWord = k === "vibe";
-      const res = await fetch(`/api/search?q=${encodeURIComponent(t)}${vibeWord ? "&vibes=only" : k ? `&types=${k}` : ""}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(normQ(t))}${vibeWord ? "&vibes=only" : k ? `&types=${k}` : ""}`);
       const data = (await res.json()) as { results?: Seed[]; vibes?: { id: string; name: string; label: string }[] };
       const v = (data.vibes ?? []).find((x) => norm(x.name) === norm(t)) ?? (vibeWord ? data.vibes?.[0] : undefined);
       const pick: Seed | undefined = v ? { id: v.id, name: v.name, kind: "vibe", subtitle: `${v.label} · a vibe, not one thing` } : dedupe(data.results ?? [])[0];

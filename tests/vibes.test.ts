@@ -26,9 +26,9 @@ const seeds = [
 ];
 
 describe("vibes", () => {
-  it("offer one tag per name, from the best family, and skip noise", async () => {
+  it("offer one tag per name, from the best family (cuisine over dish), and skip noise", async () => {
     const v = await searchVibes("ramen");
-    expect(v[0]).toMatchObject({ id: "urn:tag:specialty_dish:place:ramen", label: "Food" });
+    expect(v[0]).toMatchObject({ id: "urn:tag:cuisine:qloo:ramen", label: "Food" });
     expect(v.map((x) => x.name)).toEqual(["Ramen", "Ramen restaurant"]);
   });
   it("turn music into artists, food into named brands, the rest into tag signals", async () => {
