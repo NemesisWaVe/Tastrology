@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { clerkOn, currentUserId, isAdmin } from "@/lib/auth";
-import { ddbConfigured, ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
+import { ddbConfigured, ddbGet, ddbPutIfAbsent, ddbUpdate } from "@/lib/ddb";
 import { audienceOf } from "@/lib/friends";
 import { creditsOn, heldRegret, nextRefillAt, refundCredit, refundRegret, RUN_ID_RE, spendCredit, spendRegret } from "@/lib/ledger";
 import { deckFull, DECK_FULL_MSG } from "@/lib/deckCap";
@@ -13,7 +13,7 @@ import { getPersonaRun, putPersonaRun } from "@/lib/personaRuns";
 import { getReceipt, putReceipt } from "@/lib/receipt";
 import { dustOn, refundDust, spendDust } from "@/lib/stardust";
 import { kvCache, upstash } from "@/lib/cache";
-import { buildCard, redrawCap, SEASON } from "@/lib/card";
+import { buildCard, cardCode, redrawCap, SEASON } from "@/lib/card";
 import { llmConfigured } from "@/lib/llm";
 import { isPersonaRequest, personaFor, PERSONAS } from "@/lib/personas";
 import { hasHumanCookie, humanCookie, turnstileOn, verifyTurnstile } from "@/lib/human";
@@ -23,7 +23,7 @@ import { dropLease, leaseHeld, takeLease } from "@/lib/runLease";
 import { recordMint } from "@/lib/stats";
 import { registerTwin } from "@/lib/twins";
 import { numberCard } from "@/lib/cardStyle";
-import { rollFor, rollOn } from "@/lib/roll";
+import { stamp } from "@/lib/print";
 import { countEvent } from "@/lib/metrics";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
@@ -43,7 +43,11 @@ const lastGood = kvCache<Recorded>("lastgood", 300);
 interface Flight {
   events: TraceEvent[];
   listeners: Set<(e: TraceEvent) => void>;
+  /** The reading itself, unstamped (what gets cached and shared). */
   done: Promise<StyleResult>;
+  /** The account and run that started it ("user|run"), and its print once filed: a reconnect with that run id gets it. */
+  owner?: string;
+  printed?: StyleResult;
   /** Settles once the run and its bookkeeping (slot release, mint stats, refund, lease) have all finished. */
   drained: Promise<unknown>;
   ac: AbortController;
@@ -92,8 +96,10 @@ function logRun(x: { runId: string | null; planner: string | null; qlooCalls: nu
 /** Who started a fresh run: their own mint is filed in their deck, and a charged credit is refunded if the run fails. */
 interface Minter {
   userId: string;
-  /** Set when a credit (or dust) was taken for this run (CREDITS_ON=1). */
-  runId?: string;
+  /** The client's run id (x-run-id, else random): names the print, and is what a credit is charged against. */
+  runId: string;
+  /** A credit, regret or dust was taken for this run (CREDITS_ON=1, not admin): refunded if the run fails. */
+  charged?: boolean;
   /** What paid for it: a credit, a regret credit, or READING_DUST Stardust (only with DUST_BUYS_READING=1). */
   paidWith?: "credit" | "dust" | "regret";
   /** Hash of the picks, so a regret credit can't buy back the same card (docs/design/regret-burn.md). */
@@ -105,18 +111,41 @@ interface Minter {
 }
 
 /** Files the account's own fresh mint in its deck as minted:1 (upgrading a card it had only claimed or collected). */
-async function fileOwnMint(minter: Minter, code: string, card: ReturnType<typeof buildCard>) {
+async function fileOwnMint(minter: Minter, code: string, card: ReturnType<typeof buildCard>): Promise<boolean> {
   const PK = `OWNER#${minter.userId}`;
   const SK = `CARD#${code}`;
   // runId + funding let a burn check the ledger (docs/design/burn.md). Every credit is free during the beta; once the shop
   // sells credits, spendCredit must report which kind it took and "paid" goes here (paid mints burn at a flat rate).
   const funding = minter.paidWith === "dust" ? "dust" : minter.paidWith === "regret" ? "regret" : "free";
-  const paid: Record<string, string> = { ...(minter.runId ? { runId: minter.runId, funding } : {}), ...(minter.pick ? { pick: minter.pick } : {}) };
+  const paid: Record<string, string> = { runId: minter.runId, funding, ...(minter.pick ? { pick: minter.pick } : {}) };
   const out = await ddbPutIfAbsent({ PK, SK, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), minted: 1, source: "mint", ...paid });
   if (out === "exists") {
-    const set = minter.runId ? ", runId = :run, funding = :fund" : "";
-    const values: Record<string, string | number> = { ":one": 1, ":src": "mint", ...(minter.runId ? { ":run": paid.runId, ":fund": paid.funding } : {}) };
-    await ddbUpdate(PK, SK, `SET minted = :one, #s = :src${set}`, { names: { "#s": "source" }, values });
+    await ddbUpdate(PK, SK, "SET minted = :one, #s = :src, runId = :run, funding = :fund", { names: { "#s": "source" }, values: { ":one": 1, ":src": "mint", ":run": paid.runId, ":fund": paid.funding } });
+    return false;
+  }
+  return true;
+}
+
+/** Registers and files one print. Every write is keyed by the card code and write-once, so filing twice is harmless. */
+async function filePrint(m: Minter, printed: StyleResult, bg: (p: Promise<unknown>) => void): Promise<void> {
+  if (printed.mode === "mock") return;
+  const card = buildCard(printed);
+  const code = await registerTwin(card);
+  // The receipt behind the card, so an old card can still show its brands (docs/design/brand-return-data.md).
+  bg(putReceipt(code, printed));
+  await registerFighter(code, toSheet(printed));
+  const fresh = await fileOwnMint(m, code, card).catch(() => false);
+  if (!fresh) return;
+  // Real people's fresh cards stock the Battle Pack pool (personas stay out).
+  bg(addToPool(code, card.rarity));
+  bg(numberCard(code, card.rarity));
+  bg(recordMint(code, SEASON, card.rarityScore, card.bigThree.sun.name));
+  if (m.cap) {
+    // Tier jumps on second draws, for spotting rarity farming: counted, and logged without user ids.
+    const natural = buildCard({ ...printed, redraw: undefined }).rarity;
+    const from = m.from ?? m.cap;
+    console.log(JSON.stringify({ event: "redraw", from, cap: m.cap, natural }));
+    bg(upstash([["HINCRBY", "tm:redraw", `${from}>${natural}`, 1]]));
   }
 }
 
@@ -142,27 +171,18 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       // Register the card's twin server-side, before the result is returned or cached. (Stage C: also write the fighter sheet here.)
       // Rarity is a roll for real mints (lib/roll.ts): keyed to the account and the paid run, kept in the cached result so
       // a replay of the same picks is the same card. Personas and runs without an account keep the taste-scored tier.
+      // The reading is cached and shared unstamped; the account that started it gets its own print of it (rarity is
+      // a roll per print, lib/roll.ts). Personas and runs without an account keep the taste-scored tier.
       const showcase = personaFor(req)?.showcase;
       if (showcase) result.showcase = showcase;
-      if (minter && rollOn() && result.mode !== "mock") result.roll = rollFor(minter.userId, minter.runId ?? result.runId, SEASON);
-      if (minter?.cap) {
-        result.redraw = { cap: minter.cap };
-        // Tier jumps on second draws, for spotting rarity farming: counted, and logged without user ids.
-        const natural = buildCard({ ...result, redraw: undefined }).rarity;
-        const from = minter.from ?? minter.cap;
-        console.log(JSON.stringify({ event: "redraw", from, cap: minter.cap, natural }));
-        bg(upstash([["HINCRBY", "tm:redraw", `${from}>${natural}`, 1]]));
-      }
-      if (result.mode !== "mock") {
+      if (minter) {
+        f.printed = stamp(result, minter);
+        await filePrint(minter, f.printed, bg);
+      } else if (result.mode !== "mock") {
         const card = buildCard(result);
         const code = await registerTwin(card);
-        // The receipt behind the card, so an old card can still show its brands (docs/design/brand-return-data.md).
         bg(putReceipt(code, result));
         await registerFighter(code, toSheet(result));
-        if (minter) await fileOwnMint(minter, code, card).catch(() => {});
-        // Real people's fresh cards stock the Battle Pack pool (personas stay out).
-        if (minter) bg(addToPool(code, card.rarity));
-        if (minter) bg(numberCard(code, card.rarity));
         if (!isPersonaRequest(req)) bg(recordMint(code, SEASON, card.rarityScore, card.bigThree.sun.name));
       }
       // An LLM run is pinned for the full TTL. A fallback (autopilot) run only briefly: repeat clicks replay it instead of
@@ -181,7 +201,8 @@ function startFlight(key: string, fallbackKey: string, req: AgentRequest, releas
       throw err;
     },
   );
-  const charged = minter?.runId ? { userId: minter.userId, runId: minter.runId, paidWith: minter.paidWith } : null;
+  if (minter) f.owner = `${minter.userId}|${minter.runId}`;
+  const charged = minter?.charged ? { userId: minter.userId, runId: minter.runId, paidWith: minter.paidWith } : null;
   const settled = charged
     ? run.catch((err) => {
         // The run didn't produce a card: give the credit (or dust) back (write-once per run id).
@@ -276,14 +297,80 @@ export async function POST(request: Request) {
     return r;
   };
   const running = () => reply({ reason: "running", hint: "Already reading this one. Poll again." }, { status: 202, headers: { "retry-after": "4", "cache-control": "no-store" } });
+
+  // Admins skip the per-person limits, the daily cap and credits. They still queue for a run slot, and still have a
+  // 12-card deck like everyone else.
+  const admin = await isAdmin(userId);
+  // Every signed-in mint is a print of its own (stamp()), named by the client's run id, which stays the same across
+  // its retries, so a retry is the same print and the same charge.
+  const hdr = request.headers.get("x-run-id") ?? "";
+  let minter: Minter | undefined =
+    userId && !persona ? { userId, runId: RUN_ID_RE.test(hdr) ? hdr : randomUUID(), pick: createHash("sha256").update(key).digest("base64url").slice(0, 22) } : undefined;
+  /** The deck has room, then the mint is paid for (idempotent per run id). Credits come last, so a refusal never costs one. */
+  const admit = async (m: Minter): Promise<Minter | Response> => {
+    if (await deckFull(m.userId)) return reply({ error: DECK_FULL_MSG, reason: "deckfull" }, { status: 409 });
+    if (!creditsOn() || admin) return m;
+    // A held regret credit pays first, but never for the picks of the card it came from.
+    const regret = await heldRegret(m.userId).catch(() => null);
+    if (regret?.pick && regret.pick === m.pick) return reply({ error: "Change at least one pick. A regret can't buy back the loves you just let go.", reason: "samepicks" }, { status: 409 });
+    let paidWith: Minter["paidWith"] = regret ? "regret" : "credit";
+    let spent = regret ? await spendRegret(m.userId, m.runId) : await spendCredit(m.userId, m.runId, deviceId(request.headers));
+    if (regret && spent === "empty") {
+      paidWith = "credit";
+      spent = await spendCredit(m.userId, m.runId, deviceId(request.headers));
+    }
+    // Out of credits: Stardust buys a reading only if DUST_BUYS_READING=1. Off by default: burning never frees a card (identity-limits.md).
+    if (spent === "empty" && dustOn() && process.env.DUST_BUYS_READING === "1") {
+      const d = await spendDust(m.userId, m.runId);
+      if (d === "spent" || d === "dup" || d === "used") {
+        spent = d;
+        paidWith = "dust";
+      }
+    }
+    if (spent !== "spent" && spent !== "dup") {
+      if (spent === "empty") {
+        const at = await nextRefillAt(m.userId).catch(() => null);
+        const days = at ? Math.max(1, Math.ceil((at - Date.now()) / 86_400_000)) : null;
+        const when = days ? `Your next card comes at the new moon, in ${days} day${days === 1 ? "" : "s"}.` : "Your next card comes at the new moon.";
+        return reply({ error: `${when} Fight someone while you wait.`, reason: "credits", refillAt: at }, { status: 402 });
+      }
+      if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
+      return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
+    }
+    return { ...m, charged: true, paidWith, ...(paidWith === "regret" && regret ? { cap: redrawCap(regret.tier), from: regret.tier } : {}) };
+  };
+
+  // These loves were read before (cached), or are being read right now for someone else: the reading is shared, the
+  // print isn't. Nothing new goes to Qloo, but it is a real mint: deck room, a credit, its own roll and code.
+  let reprint: Promise<StyleResult> | undefined;
+  let reprinted = false;
+  if (minter && (cached || (flight && flight.owner !== `${minter.userId}|${minter.runId}`))) {
+    if (!admin && !(await allow(`agent:u:${minter.userId}`, RATE_LIMIT, RATE_WINDOW_MS))) return reply({ error: RATE_MSG }, { status: 429 });
+    // The same run id coming back for a print it already filed (a dropped stream): hand it back, no cap check or charge.
+    const filed = cached ? await ddbGet(`OWNER#${minter.userId}`, `CARD#${cardCode(buildCard(stamp(cached.result, minter)))}`).catch(() => null) : null;
+    if (!filed) {
+      const ok = await admit(minter);
+      if (ok instanceof Response) return ok;
+      minter = ok;
+    }
+    const m = minter;
+    reprint = (cached ? Promise.resolve(cached.result) : flight!.done).then(async (base) => {
+      const printed = stamp(base, m);
+      await filePrint(m, printed, later);
+      return printed;
+    });
+    // A joined reading that fails gives this print's credit back too.
+    if (m.charged)
+      reprint.catch(() => (m.paidWith === "dust" ? refundDust(m.userId, m.runId) : m.paidWith === "regret" ? refundRegret(m.userId, m.runId) : refundCredit(m.userId, m.runId)));
+    later(reprint);
+    reprinted = !filed;
+  }
   // Already running elsewhere (another instance, or our own stream dropped and the client came back): don't start a
   // second run or charge again; the client polls and gets the cached replay once it lands.
   if (!cached && !flight && (await leaseHeld(key))) return running();
   if (!cached && !flight) {
     // Mint gate: demo personas stay anonymous; any other fresh reading needs an account when Clerk is on.
     const who = userId ? `u:${userId}` : clientId(request.headers);
-    // Admins skip the per-person limits, the daily cap and credits. They still queue for a run slot like everyone else.
-    const admin = await isAdmin(userId);
     // Bot check before anything that costs quota (anonymous only: Clerk's sign-up already ran one). The token is spent here, so queue retries ride on the cookie.
     if (!userId && !persona && turnstileOn() && !hasHumanCookie(request.headers)) {
       const token = request.headers.get("x-turnstile") ?? "";
@@ -315,50 +402,15 @@ export async function POST(request: Request) {
       await release();
       return running();
     }
-    // Credits last, after every free gate, so being turned away never costs one. Idempotent per run id (the client reuses it across retries).
-    let minter: Minter | undefined = userId && !persona ? { userId, pick: createHash("sha256").update(key).digest("base64url").slice(0, 22) } : undefined;
-    if (minter && !admin && (await deckFull(minter.userId))) {
-      await release();
-      await dropLease(key);
-      return reply({ error: DECK_FULL_MSG, reason: "deckfull" }, { status: 409 });
-    }
-    if (minter && creditsOn() && !admin) {
-      const hdr = request.headers.get("x-run-id") ?? "";
-      const runId = RUN_ID_RE.test(hdr) ? hdr : randomUUID();
-      // A held regret credit pays first, but never for the picks of the card it came from.
-      const regret = await heldRegret(minter.userId).catch(() => null);
-      if (regret?.pick && regret.pick === minter.pick) {
+    // Deck room and payment last, after every free gate, so being turned away never costs a credit.
+    if (minter) {
+      const ok = await admit(minter);
+      if (ok instanceof Response) {
         await release();
         await dropLease(key);
-        return reply({ error: "Change at least one pick. The same loves give the same card you just let go.", reason: "samepicks" }, { status: 409 });
+        return ok;
       }
-      let paidWith: Minter["paidWith"] = regret ? "regret" : "credit";
-      let spent = regret ? await spendRegret(minter.userId, runId) : await spendCredit(minter.userId, runId, deviceId(request.headers));
-      if (regret && spent === "empty") {
-        paidWith = "credit";
-        spent = await spendCredit(minter.userId, runId, deviceId(request.headers));
-      }
-      // Out of credits: Stardust buys a reading only if DUST_BUYS_READING=1. Off by default: burning never frees a card (identity-limits.md).
-      if (spent === "empty" && dustOn() && process.env.DUST_BUYS_READING === "1") {
-        const d = await spendDust(minter.userId, runId);
-        if (d === "spent" || d === "dup" || d === "used") {
-          spent = d;
-          paidWith = "dust";
-        }
-      }
-      if (spent !== "spent" && spent !== "dup") {
-        await release();
-        await dropLease(key);
-        if (spent === "empty") {
-          const at = await nextRefillAt(minter.userId).catch(() => null);
-          const days = at ? Math.max(1, Math.ceil((at - Date.now()) / 86_400_000)) : null;
-          const when = days ? `Your next card comes at the new moon, in ${days} day${days === 1 ? "" : "s"}.` : "Your next card comes at the new moon.";
-          return reply({ error: `${when} Fight someone while you wait.`, reason: "credits", refillAt: at }, { status: 402 });
-        }
-        if (spent === "used") return reply({ error: "That reading already ran. Start a new one.", reason: "runid" }, { status: 409 });
-        return reply({ ...BUSY, reason: "ledger" }, { status: 503, headers: { "retry-after": "20" } });
-      }
-      minter = { ...minter, runId, paidWith, ...(paidWith === "regret" && regret ? { cap: redrawCap(regret.tier), from: regret.tier } : {}) };
+      minter = ok;
     }
     if (guest && !(await reserveGuest(guest, key))) {
       await release();
@@ -414,7 +466,14 @@ export async function POST(request: Request) {
           send(e);
           await new Promise((r) => setTimeout(r, 70));
         }
-        send({ type: "result", result: { ...cached.result, cached: true } });
+        if (reprint) {
+          if (reprinted) send({ type: "thought", text: "You've read these exact loves before, so the reading is the same. This is a new print of it, with its own roll." });
+          try {
+            send({ type: "result", result: { ...(await reprint), cached: true } });
+          } catch {
+            send({ type: "error", message: "Couldn't print that card. Nothing was charged; try again." });
+          }
+        } else send({ type: "result", result: { ...cached.result, cached: true } });
         finish();
         return;
       }
@@ -429,8 +488,10 @@ export async function POST(request: Request) {
         f.listeners.delete(listener);
       };
       try {
-        const result = await f.done;
-        send({ type: "result", result });
+        const base = await f.done;
+        // Your own mint (or its reconnect) gets your print; someone else's reading you joined gets a print of yours.
+        const mine = minter && f.owner === `${minter.userId}|${minter.runId}` ? f.printed : undefined;
+        send({ type: "result", result: reprint ? await reprint : (mine ?? base) });
       } catch (err) {
         if (!closed) {
           const fallback = (await results.get(key)) ?? (await lastGood.get(fallbackKey));

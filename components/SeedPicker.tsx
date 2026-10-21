@@ -111,6 +111,54 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
   // a suggestion being looked up after a tap (it adds itself: one tap, not search-then-pick)
   const [adding, setAdding] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // The type chips: one swipeable row on phones, faded only on the side that hides more chips, with a single peek
+  // the first time so people learn it scrolls; from tablet width up, a 4 x 2 grid where every type is in sight.
+  const rail = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ l: false, r: false });
+  useEffect(() => {
+    const el = rail.current;
+    if (!el) return;
+    const read = () => setEdges({ l: el.scrollLeft > 4, r: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    // The peek waits until the whole row is on screen (not under the intro), once per device.
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        io.disconnect();
+        try {
+          if (el.scrollWidth <= el.clientWidth + 4 || localStorage.getItem("tastrology:chip-peek") || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+          localStorage.setItem("tastrology:chip-peek", "1");
+        } catch {
+          return;
+        }
+        t = setTimeout(() => {
+          if (el.scrollLeft > 4) return; // already swiping: no need
+          el.scrollTo({ left: 64, behavior: "smooth" });
+          t = setTimeout(() => el.scrollTo({ left: 0, behavior: "smooth" }), 650);
+        }, 500);
+      },
+      { threshold: 1 },
+    );
+    io.observe(el);
+    return () => {
+      el.removeEventListener("scroll", read);
+      ro.disconnect();
+      io.disconnect();
+      clearTimeout(t);
+    };
+  }, []);
+  // A picked chip slides fully into view (sideways only: the page never jumps).
+  useEffect(() => {
+    const el = rail.current;
+    const chip = el?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!el || !chip) return;
+    const l = chip.offsetLeft; // the rail is the chips' offset parent (relative)
+    if (l < el.scrollLeft || l + chip.offsetWidth > el.scrollLeft + el.clientWidth) el.scrollTo({ left: l - 24, behavior: "smooth" });
+  }, [kind]);
   const listId = useId();
   const full = seeds.length >= MAX;
   // The Vibes field cycles examples until you type (fixed on reduced motion).
@@ -200,6 +248,13 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
     }
     setNote(null);
     onChange([...seeds, h]);
+    // Qloo starts on this love now (its own lookups only), so the mint finds that part of the work already done.
+    void fetch("/api/warm", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(h.kind === "vibe" ? { vibe: { id: h.id, name: h.name } } : { seed: { id: h.id, name: h.name, kind: h.kind } }),
+      keepalive: true,
+    }).catch(() => {});
     setQ("");
     setHits([]);
     input.current?.focus();
@@ -238,13 +293,22 @@ export function SeedPicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: S
 
   return (
     <div>
-      <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="group" aria-label="Filter by type">
+      <div
+        ref={rail}
+        className="relative -mx-1 mb-3 flex gap-1.5 overflow-x-auto scroll-px-6 px-1 pb-1 [scrollbar-width:none] md:grid md:grid-cols-4 md:overflow-visible"
+        style={(() => {
+          const m = `linear-gradient(to right, ${edges.l ? "transparent 0, #000 28px" : "#000 0"}, ${edges.r ? "#000 calc(100% - 28px), transparent 100%" : "#000 100%"})`;
+          return edges.l || edges.r ? { WebkitMaskImage: m, maskImage: m } : undefined;
+        })()}
+        role="group"
+        aria-label="Filter by type"
+      >
         {FILTERS.map((k) => (
           <button
             key={k}
             onClick={() => setKind((cur) => (cur === k ? "all" : k))}
             aria-pressed={kind === k}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] transition ${
+            className={`shrink-0 justify-center rounded-full px-3 py-1.5 text-[12px] transition md:inline-flex md:items-center ${
               k === "vibe"
                 ? "vibeChip inline-flex items-center gap-1.5 font-semibold"
                 : kind === k

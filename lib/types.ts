@@ -125,6 +125,12 @@ export interface StyleResult {
   roll?: { tier: "common" | "rare" | "holo" | "secret"; u: number; season: string };
   /** Demo personas only: the fixed tier each one shows, so the home page displays Rare, Holo Rare and Secret Rare. */
   showcase?: "common" | "rare" | "holo" | "secret";
+  /**
+   * This print's id: one mint of a reading by one account (6 Crockford chars from the account and the run id). The
+   * reading is shared and cached by picks; the print is not, so minting the same loves again is a new card with its
+   * own roll and code. Absent on older cards and personas.
+   */
+  print?: string;
   mode: "live" | "mock";
   planner: "llm" | "autopilot";
   cached?: boolean;

@@ -6,7 +6,7 @@ import { BRAND } from "./brand";
 import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
 import { displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
-import { findTags, insights, isUpstreamError, lookupEntities, qlooMode, searchEntities, withQlooSignal } from "./qloo";
+import { findTags, insights, isUpstreamError, lookupEntities, qlooMode, searchEntities, withQlooLane, withQlooSignal } from "./qloo";
 import type {
   AgentRequest,
   BrandMatch,
@@ -852,6 +852,31 @@ export class UpstreamError extends Error {
   constructor() {
     super("Qloo isn't answering right now.");
   }
+}
+
+/**
+ * Prefetch for one love, sent the moment it's picked: the calls that depend on that love alone, with exactly the
+ * parameters the reading uses (resolveSeeds, styleTags, resolveVibes), so they land in the shared Qloo cache and the
+ * mint finds them there. What needs the loves together (consensus, the brand query, leave-one-out) can only run once
+ * the set is final, at mint. Best effort in the "warm" lane: errors and a busy lane are ignored.
+ */
+export async function warmLove(seed: { id: string; name: string; kind: AgentRequest["seeds"][number]["kind"] }): Promise<void> {
+  if (qlooMode() !== "live") return;
+  const log: QlooCallLog[] = [];
+  const t0 = Date.now();
+  await withQlooLane("warm", async () => {
+    const q = seed.name.split(/\s+\/\s+/)[0].slice(0, 60).trim();
+    const hits = await searchEntities(q, [seed.kind], 5, log).catch(() => []);
+    const id = hits.find((h) => h.id === seed.id)?.id ?? seed.id;
+    await insights({ type: "tag", entityIds: [id], tagTypes: STYLE_TAG_TYPES, take: 12 }, log).catch(() => []);
+  });
+  console.log(JSON.stringify({ evt: "warm", kind: seed.kind, calls: log.length, cached: log.filter((c) => c.cached).length, ms: Date.now() - t0 }));
+}
+
+/** Prefetch for one vibe: what it resolves to (its artists, brands or tag), as the reading will ask for it. */
+export async function warmVibe(vibe: { id: string; name: string }): Promise<void> {
+  if (qlooMode() !== "live") return;
+  await withQlooLane("warm", () => resolveVibes([vibe]).then(() => undefined, () => undefined));
 }
 
 export function runAgent(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<StyleResult> {

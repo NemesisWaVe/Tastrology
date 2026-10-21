@@ -89,15 +89,19 @@ const inflight = new Map<string, Promise<Record<string, unknown>>>();
  * "run": readings and everything else, patient (a reading would rather wait than fail).
  * "search": typeahead. Many people typing at once must never queue behind readings, and a keystroke that waits more
  * than a moment is already stale, so it gives up fast and retries little.
+ * "warm": prefetching a love the moment it's picked (lib/agent warmLove). Pure speed-up, so it takes the fewest
+ * slots, waits least and never retries: under load it just doesn't happen, and the reading does the work itself.
  */
-export type QlooLane = "run" | "search";
+export type QlooLane = "run" | "search" | "warm";
 const LANES: Record<QlooLane, { max: number; waitMs: number; attempts: number; timeoutMs: number }> = {
   run: { max: Number(process.env.QLOO_CONCURRENCY) || 4, waitMs: 30_000, attempts: 4, timeoutMs: 8000 },
   search: { max: Number(process.env.QLOO_SEARCH_CONCURRENCY) || 6, waitMs: 2500, attempts: 2, timeoutMs: 4000 },
+  warm: { max: Number(process.env.QLOO_WARM_CONCURRENCY) || 2, waitMs: 1500, attempts: 1, timeoutMs: 6000 },
 };
 const slots: Record<QlooLane, { active: number; waiting: (() => void)[] }> = {
   run: { active: 0, waiting: [] },
   search: { active: 0, waiting: [] },
+  warm: { active: 0, waiting: [] },
 };
 
 const abortError = (signal?: AbortSignal) => (signal?.reason instanceof Error ? signal.reason : Object.assign(new Error("Qloo request aborted"), { name: "AbortError" }));

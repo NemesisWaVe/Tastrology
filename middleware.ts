@@ -3,7 +3,7 @@ import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server
 
 /**
  * Clerk session middleware, only when both keys are set. Without them this is a pass-through, so the anonymous
- * app behaves exactly as before. /api/img, /api/card, /api/battle and /api/search are skipped: they never read the session,
+ * app behaves exactly as before. /api/img, /api/card, /api/battle, /api/search and /api/warm are skipped: they never read the session,
  * and keeping them out of middleware keeps their CDN caching simple. /api/health is skipped so uptime checks never
  * depend on Clerk.
  */
@@ -23,7 +23,7 @@ export default async function middleware(req: NextRequest, ev: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    // Everything except Next internals, static files, the cached image/card/battle/search APIs, the health check and Clerk's webhook.
-    "/((?!_next|api/img|api/card|api/battle|api/search|api/health|api/clerk-webhook|[^?]*\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)",
+    // Everything except Next internals, static files, the cached image/card/battle/search/warm APIs, the health check and Clerk's webhook.
+    "/((?!_next|api/img|api/card|api/battle|api/search|api/warm|api/health|api/clerk-webhook|[^?]*\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)",
   ],
 };

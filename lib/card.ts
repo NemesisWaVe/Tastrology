@@ -47,10 +47,12 @@ export interface CardData {
   /** "Weak to: <love>. Moved N% of your picks." Only when the critique found an inert love. */
   weakness?: string;
   weak?: { name: string; pct: number };
-  /** Average seed popularity under 30%: you love things few people do. Pure function of the run. */
+  /** Your named loves average under Qloo's top 10% by popularity. Vibes' stand-in brands don't count. */
   deepCut: boolean;
-  /** Average seed popularity, 0-100, when Qloo gave it for at least half the seeds. */
+  /** Average popularity of your named loves, 0-100 (vibes' stand-ins left out), when Qloo gave it for most of them. */
   avgPop?: number;
+  /** Print id (StyleResult.print): part of the code, so two prints of one reading are two cards. Absent on older cards. */
+  print?: string;
   ignores?: string;
   evolvesFrom: { name: string; kind: string; image?: string }[];
   /** The vibes picked next to the loves (lib/vibes.ts), so the card's sky shows them too. Absent on older cards. */
@@ -178,7 +180,13 @@ export function buildCard(r: StyleResult): CardData {
     ...(con ? [`+${pts.tension} tension: ${seedLabel(r, con.a)} and ${seedLabel(r, con.b)} share ${pc(con.overlap)}`] : []),
     ...(cap ? [`Second draw: can rank up to ${{ common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[cap]}`] : []),
   ];
-  const deepCut = avgPop !== undefined && avgPop < 0.9;
+  // Deep Cut reads only what you named: a vibe's stand-in brand (Matcha Maiden for "matcha") isn't your pick, and
+  // counting it stamped Deep Cut on Hatsune Miku. Needs two named loves with a popularity. Display only (the rarity
+  // score above keeps every seed, so no existing card's tier or code moves).
+  const standIns = new Set((r.vibes ?? []).flatMap((v) => v.via));
+  const namedPops = r.seeds.filter((s) => !standIns.has(s.name)).map((s) => s.popularity).filter((p): p is number => typeof p === "number");
+  const pickPop = namedPops.length >= 2 ? namedPops.reduce((t, p) => t + p, 0) / namedPops.length : undefined;
+  const deepCut = pickPop !== undefined && pickPop < 0.9;
 
   const sideB = r.dna.lobes[1];
   // Weakness: the seed that moved none (well, next to none) of your brand picks, straight from the critique. Absent if there isn't one.
@@ -279,7 +287,8 @@ export function buildCard(r: StyleResult): CardData {
     weakness: weak ? `Weak to: ${weak.name}. Moved ${weak.pct}% of your picks.` : undefined,
     weak,
     deepCut,
-    avgPop: avgPop === undefined ? undefined : Math.round(avgPop * 100),
+    avgPop: pickPop === undefined ? undefined : Math.round(pickPop * 100),
+    ...(r.print ? { print: r.print } : {}),
     ignores: weak?.name,
     evolvesFrom: r.seeds.map((s) => ({ name: displayName(s.name), kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
     ...(r.vibes?.length ? { vibes: r.vibes.map((v) => ({ name: v.name, via: v.via, ...(v.image ? { image: proxied(v.image) } : {}) })) } : {}),
@@ -323,12 +332,13 @@ export const TWIN_HOST =
   process.env.NEXT_PUBLIC_SITE_HOST || process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL || "tastrology.app";
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32: no I, L, O, U
 
-type CodeFields = Pick<CardData, "serial" | "rarity" | "mrz" | "archetype" | "moves">;
+type CodeFields = Pick<CardData, "serial" | "rarity" | "mrz" | "archetype" | "moves"> & { print?: string };
 
 /** Short, human-typeable verify code: the serial plus 4 check characters hashed from the card's own fields (v2). */
 export function cardCode(card: CodeFields): string {
   const moves = (card.moves ?? []).map((m) => `${m.name}:${m.value}`).join(",");
-  let h = hash(`v2|${card.serial}|${card.rarity}|${card.mrz?.[0] ?? ""}|${card.mrz?.[1] ?? ""}|${card.archetype}|${moves}`);
+  // A print id joins the hash only when there is one, so every card minted before prints keeps its code.
+  let h = hash(`v2|${card.serial}|${card.rarity}|${card.mrz?.[0] ?? ""}|${card.mrz?.[1] ?? ""}|${card.archetype}|${moves}${card.print ? `|p${card.print}` : ""}`);
   let c = "";
   for (let i = 0; i < 4; i++) {
     c += B32[h & 31];
