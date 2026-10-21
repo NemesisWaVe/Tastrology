@@ -1,4 +1,5 @@
 import type { BrandMatch, StyleResult } from "./types";
+import { SIGNS } from "./signs";
 
 /**
  * Turns an agent result into a collectible card. Every number on the card is derived from
@@ -89,20 +90,7 @@ export const redrawCap = (replaced: Rarity): Rarity => (replaced === "common" ? 
 /** Qloo popularity is a percentile and real loves cluster at 0.95+, so obscurity is scored over the top 15% only. */
 const OBSCURE_SPAN = 0.15;
 
-const TYPE_STYLES: [RegExp, Omit<CardType, "name">][] = [
-  [/futur|tech|industrial|architect|precision|engineer|cyber|sharp/i, { glyph: "⚡", a: "#38bdf8", b: "#8b5cf6" }],
-  [/floral|romantic|feminine|soft|delicate|whimsical pattern/i, { glyph: "✿", a: "#f472b6", b: "#fda4af" }],
-  [/vintage|retro|heritage|nostalg|classic|timeless/i, { glyph: "◷", a: "#f59e0b", b: "#b45309" }],
-  [/minimal|clean|understated|neutral|monochrom|modern/i, { glyph: "◯", a: "#e2e8f0", b: "#94a3b8" }],
-  [/boho|bohemian|ethnic|handcraft|embroider|textile|texture|artisan|traditional/i, { glyph: "❋", a: "#fb923c", b: "#c2410c" }],
-  [/edgy|grunge|dark|noir|punk|rebel|gothic/i, { glyph: "✦", a: "#f43f5e", b: "#1f2937" }],
-  [/athleisure|sport|utility|utilitarian|outdoor|functional|practical/i, { glyph: "▲", a: "#a3e635", b: "#15803d" }],
-  [/luxe|luxury|elegant|sophisticat|refined|polished|chic|dapper/i, { glyph: "◆", a: "#fcd34d", b: "#a16207" }],
-  [/whimsical|playful|quirk|colorful|pop/i, { glyph: "☻", a: "#facc15", b: "#ec4899" }],
-  [/avant|unconventional|artistic|eclectic|individual|experimental|oversized|silhouette/i, { glyph: "◐", a: "#d946ef", b: "#22d3ee" }],
-  [/british|preppy|tailored|professional/i, { glyph: "♜", a: "#60a5fa", b: "#1e3a8a" }],
-  [/authentic|organic|natural|earthy/i, { glyph: "❦", a: "#86efac", b: "#4d7c0f" }],
-];
+const TYPE_STYLES: [RegExp, Omit<CardType, "name">][] = SIGNS.map((x) => [x.re, { glyph: x.glyph, a: x.a, b: x.b }]);
 
 function hash(s: string): number {
   let h = 2166136261;

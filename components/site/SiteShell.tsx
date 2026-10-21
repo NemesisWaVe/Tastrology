@@ -35,6 +35,9 @@ export function SiteNav() {
       <span className="flex items-center gap-2.5 sm:gap-4">
         {/* phones: links move into the menu, so the bar fits a 320px screen */}
         <span className="hidden items-center gap-4 sm:flex">
+        <Link href="/signs" className="hidden whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink md:inline">
+          This week
+        </Link>
         <AfterEconomy>
         <Link href="/shop" className="whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-2 transition hover:text-ink sm:text-[11px] sm:tracking-[0.18em]">
           Shop

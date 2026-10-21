@@ -199,6 +199,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
         <div className="flex items-center gap-3 sm:gap-5">
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 md:inline">Powered by Qloo</span>
           <span className="hidden items-center gap-5 sm:flex">
+          <a href="/signs" className="hidden whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink md:inline">This week</a>
           <AfterEconomy>
           <a href="/shop" className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 transition hover:text-ink">Shop</a>
           </AfterEconomy>

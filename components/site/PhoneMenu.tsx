@@ -42,6 +42,7 @@ export function PhoneMenu({ newHref = "/?new=1", onNew }: { newHref?: string; on
   }, [open]);
 
   const links = [
+    { href: "/signs", label: "This week", hint: "your sign's reading" },
     ...(has ? [{ href: "/deck", label: "My deck", hint: "your cards" }, { href: "/friends", label: "Friends", hint: "fight a friend" }] : []),
     ...(has && econ ? [{ href: "/shop", label: "Shop", hint: "packs & stardust" }] : []),
   ];

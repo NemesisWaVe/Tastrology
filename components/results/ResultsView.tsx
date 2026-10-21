@@ -11,6 +11,7 @@ import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
 import { Sparkle } from "@/components/card/Sigils";
 import { BigThree } from "./BigThree";
 import { TasteCensus } from "./TasteCensus";
+import { signFor } from "@/lib/signs";
 import { BrandCard } from "./Brands";
 import { CapsuleAndBridges, Changes, Critique, Matrix } from "./Sections";
 import { SectionHead, Thumb, useWidth, type Vote } from "./ui";
@@ -55,6 +56,7 @@ export function ResultsView({
   after?: ReactNode;
 }) {
   const card = useMemo(() => buildCard(result), [result]);
+  const sign = signFor(card.bigThree.sun.name);
   const [colRef, colW] = useWidth<HTMLDivElement>();
   const heroRef = useRef<HTMLElement>(null);
   const [navOn, setNavOn] = useState(false);
@@ -222,6 +224,11 @@ export function ResultsView({
               <a href="#receipt" className="underline-offset-4 hover:text-ink hover:underline">
                 Receipts ↓
               </a>
+              {sign && (
+                <a href={`/signs/${sign.id}`} className="underline-offset-4 hover:text-ink hover:underline">
+                  <span style={{ color: sign.a }}>{sign.glyph}</span> {sign.name} this week ↗
+                </a>
+              )}
               {onPull && (
                 <button type="button" onClick={onPull} className="underline-offset-4 hover:text-ink hover:underline">
                   This week&apos;s pull ↗
