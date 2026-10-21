@@ -1,5 +1,6 @@
 "use client";
 
+import { LostCard } from "@/components/site/LostCard";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -70,10 +71,14 @@ export function Invite({ pc }: { pc: string }) {
   if (p === undefined) return <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Looking them up…</p>;
   if (!p)
     return (
-      <div className="mx-auto max-w-md text-center">
-        <h1 className="font-serif text-4xl italic">No player with code {pc}</h1>
-        <Link href="/" className="mt-6 inline-block rounded-full bg-accent px-6 py-3 font-semibold text-paper">Mint your card</Link>
-      </div>
+      <LostCard
+        kicker="Invite not found"
+        title="Nobody answers to that code."
+        body="Player codes are six letters and numbers. Ask your friend to send their invite link again, or mint your card and send yours."
+        stamp={pc}
+        cta={{ href: "/", label: "Mint your card" }}
+        more={{ href: "/friends", label: "Add them by @username" }}
+      />
     );
 
   return (

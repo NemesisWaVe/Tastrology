@@ -1,0 +1,128 @@
+/* LostCard: an empty card frame adrift in the night sky. Animations stop under prefers-reduced-motion. */
+.wrap {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 96px 16px 64px;
+  text-align: center;
+}
+
+.frame {
+  position: relative;
+  width: 168px;
+  aspect-ratio: 63 / 88;
+  margin-bottom: 36px;
+  border-radius: 14px;
+  background:
+    radial-gradient(70% 50% at 50% 40%, rgb(198 255 61 / 0.06), transparent 70%),
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 0.025) 0 2px, transparent 2px 10px),
+    rgb(12 12 18 / 0.7);
+  box-shadow: 0 40px 80px -40px rgb(0 0 0 / 0.95);
+  animation: drift 7s ease-in-out infinite;
+}
+/* the edge: the holo palette, dashed out, as if the card never finished arriving */
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from 210deg, #ff7773, #ffed5f, #c6ff3d, #83fff7, #d875ff, #ff7773);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.55;
+}
+.ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px dashed rgb(7 7 10);
+}
+.q {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--nf-serif), Georgia, serif;
+  font-style: italic;
+  font-size: 92px;
+  line-height: 1;
+  color: rgb(243 241 236 / 0.85);
+  text-shadow: 0 0 30px rgb(216 117 255 / 0.45);
+}
+.stamp {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgb(255 119 115 / 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 10px;
+}
+.mote {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 99px;
+  background: #fff;
+  box-shadow: 0 0 8px #fff;
+  animation: blink 4.5s ease-in-out infinite;
+}
+
+.kicker {
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #ff7773;
+}
+.title {
+  margin-top: 12px;
+  font-family: var(--nf-serif), Georgia, serif;
+  font-style: italic;
+  font-size: clamp(34px, 9vw, 52px);
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+}
+.body {
+  margin-top: 14px;
+  color: var(--ink-2);
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .frame,
+  .mote {
+    animation: none;
+  }
+}

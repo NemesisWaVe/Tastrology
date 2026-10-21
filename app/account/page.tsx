@@ -1,5 +1,6 @@
 "use client";
 
+import { PageSky } from "@/components/site/PageSky";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -61,6 +62,7 @@ export default function AccountPage() {
 
   return (
     <SiteShell>
+      <PageSky />
       <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">Account</p>
       <h1 className="mt-2 font-serif text-5xl italic leading-[0.95] sm:text-6xl">Your chart room</h1>
       {me?.admin && (
@@ -83,11 +85,24 @@ export default function AccountPage() {
       {authOn && signedIn === null && <p className="mt-4 text-ink-2">Checking the stars…</p>}
 
       {authOn && signedIn === false && (
-        <div className="mt-6 max-w-md">
-          <p className="text-ink-2">Sign in to keep every card you mint, on any device.</p>
+        <div className="mt-8 max-w-xl rounded-[22px] border border-white/[0.07] bg-paper/70 p-6 backdrop-blur-sm">
+          <p className="text-ink-2">Sign in to keep every card you mint, on any device. What an account holds:</p>
+          <ul className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[
+              ["Your deck", "Every card you mint, on every device."],
+              ["Friends", "A code to add rivals and fight them."],
+              ["Stardust", "Earned by retiring cards, spent on packs."],
+            ].map(([t, d]) => (
+              <li key={t} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <p className="font-serif text-xl italic text-ink">{t}</p>
+                <p className="mt-1 text-xs text-ink-3">{d}</p>
+              </li>
+            ))}
+          </ul>
           <button onClick={() => bridge?.openSignIn()} disabled={!bridge} className="mt-6 rounded-full bg-accent px-6 py-2.5 font-semibold text-paper disabled:opacity-50">
             Sign in
           </button>
+          <p className="mt-3 text-xs text-ink-3">Cards you made before signing in come with you.</p>
         </div>
       )}
 

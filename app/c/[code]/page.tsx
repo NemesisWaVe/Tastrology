@@ -1,5 +1,6 @@
 "use client";
 
+import { LostCard } from "@/components/site/LostCard";
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -171,12 +172,13 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
       )}
 
       {card === null && !burned && !unavailable && (
-        <div className="max-w-md text-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-bad">Not found</p>
-          <h1 className="mt-3 font-display text-4xl font-bold tracking-tight">No card with code {code}</h1>
-          <p className="mt-3 text-ink-2">Check the code under the QR on the back of the card. Every code is a checksum of the card it belongs to, so a typo won&apos;t match anything.</p>
-          <CTA />
-        </div>
+        <LostCard
+          kicker="Not found"
+          title="This card never landed."
+          body="Check the code under the QR on the back of the card. Every code is a checksum of the card it belongs to, so a typo won't match anything."
+          stamp={code}
+          more={{ href: "/hall", label: "See real pulls in the Hall" }}
+        />
       )}
 
       {card && (

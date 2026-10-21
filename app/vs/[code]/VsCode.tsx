@@ -1,5 +1,6 @@
 "use client";
 
+import { LostCard } from "@/components/site/LostCard";
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -107,12 +108,14 @@ export function VsCode({ code }: { code: string }) {
       )}
       {st.kind === "burned" && <Burned code={st.code} what="fighter" />}
       {st.kind === "missing" && (
-        <>
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-bad">Not found</p>
-          <h1 className="font-display text-4xl font-bold tracking-tight">No fighter with code {code}</h1>
-          <p className="text-ink-2">That card isn&apos;t on file, or the code has a typo. Mint your own and pick someone else.</p>
-          <Link href="/" className="rounded-full bg-accent px-6 py-3.5 font-semibold text-paper">Mint yours</Link>
-        </>
+        <LostCard
+          kicker="Not found"
+          title="No fighter in that corner."
+          body="That card isn't on file, or the code has a typo. Mint your own and pick someone else."
+          stamp={code}
+          cta={{ href: "/", label: "Mint yours" }}
+          more={{ href: "/vs", label: "Fight a house card instead" }}
+        />
       )}
       {st.kind === "card" && (
         <>
