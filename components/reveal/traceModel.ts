@@ -68,7 +68,7 @@ export interface Folded {
   critique?: Extract<SceneData, { kind: "critique" }>;
   bridges: { id: string; name: string; kind: string }[];
   /** Vibes picked next to the loves, with what each was read as. */
-  vibes?: { name: string; via: string[] }[];
+  vibes?: { name: string; via: string[]; image?: string }[];
   /** Kind of the newest beat applied. */
   last?: SceneData["kind"];
 }
@@ -94,7 +94,13 @@ export function foldBeats(beats: SceneData[]): Folded {
  * A finished reading's sky, for screens after the reading (story, pack, /c, /vs). The lit constellation is the
  * love the sign is named after ("The <noun> Who…"), so the sky and the card always agree.
  */
-export function skyState(seeds: { id?: string; name: string; kind?: string }[], signName: string, sides: string[][] = [], inert: string[] = []): Folded {
+export function skyState(
+  seeds: { id?: string; name: string; kind?: string }[],
+  signName: string,
+  sides: string[][] = [],
+  inert: string[] = [],
+  vibes?: { name: string; via?: string[] }[],
+): Folded {
   const noun = signName.match(/^The\s+(.+?)\s+Who\s/)?.[1]?.toLowerCase();
   const list = seeds.map((s) => ({ id: s.id ?? s.name, name: s.name, kind: s.kind ?? "" }));
   const strongest = noun ? list.find((s) => shortSeed(s.name).toLowerCase() === noun)?.id : undefined;
@@ -107,8 +113,25 @@ export function skyState(seeds: { id?: string; name: string; kind?: string }[], 
     drops: {},
     ablated: [],
     bridges: [],
+    ...(vibes?.length ? { vibes: vibes.map((v) => ({ name: v.name, via: v.via ?? [] })) } : {}),
     critique: { kind: "critique", kept: [], rejected: [], strongest, inert },
   };
+}
+
+/**
+ * Where the vibes sit on the loves' ring: in the gaps between the loves (seed i sits at -90° + i/n of a turn), spread
+ * over the gaps so two vibes never share one. The loves never move to make room, so a vibe landing mid-reading is calm.
+ */
+export function vibeAngles(n: number, v: number): number[] {
+  const TAU = Math.PI * 2;
+  if (!v) return [];
+  if (n < 1) return Array.from({ length: v }, (_, i) => -Math.PI / 2 + (TAU * i) / v);
+  const gapOf = Array.from({ length: v }, (_, i) => Math.floor((i * n) / v));
+  return gapOf.map((g, i) => {
+    const inGap = gapOf.filter((x) => x === g).length;
+    const j = gapOf.slice(0, i).filter((x) => x === g).length;
+    return -Math.PI / 2 + (TAU / n) * (g + (j + 1) / (inGap + 1));
+  });
 }
 
 /**

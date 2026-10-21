@@ -56,10 +56,19 @@ export async function searchVibes(q: string, take = 3): Promise<(Vibe & { label:
 }
 
 /** What the brand query gets from the vibes: anchor entities and/or plain tag signals. Failures just drop out. */
-export async function resolveVibes(vibes: Vibe[], log?: QlooCallLog[]): Promise<{ anchors: QEntity[]; tags: string[]; via: Record<string, string[]> }> {
+export async function resolveVibes(
+  vibes: Vibe[],
+  log?: QlooCallLog[],
+): Promise<{ anchors: QEntity[]; tags: string[]; via: Record<string, string[]>; image: Record<string, string> }> {
   const anchors: QEntity[] = [];
   const tags: string[] = [];
   const via: Record<string, string[]> = {};
+  // A tag has no picture, so a vibe shows the picture of what it was read as (Matcha Maiden for matcha), when Qloo has one.
+  const image: Record<string, string> = {};
+  const pic = (id: string, xs: QEntity[]) => {
+    const src = xs.find((x) => x.image)?.image;
+    if (src) image[id] = src;
+  };
   await Promise.all(
     vibes.slice(0, VIBES_MAX).map(async (v) => {
       const f = familyOf(v.id)?.family ?? "other";
@@ -69,6 +78,7 @@ export async function resolveVibes(vibes: Vibe[], log?: QlooCallLog[]): Promise<
         if (top.length) {
           anchors.push(...top);
           via[v.id] = top.map((x) => x.name);
+          pic(v.id, top);
         } else tags.push(v.id);
       } else if (f === "food") {
         const word = norm(v.name).split(" ")[0];
@@ -77,9 +87,10 @@ export async function resolveVibes(vibes: Vibe[], log?: QlooCallLog[]): Promise<
         if (named.length) {
           anchors.push(...named);
           via[v.id] = named.map((x) => x.name);
+          pic(v.id, named);
         } else tags.push(v.id);
       } else tags.push(v.id);
     }),
   );
-  return { anchors, tags, via };
+  return { anchors, tags, via, image };
 }

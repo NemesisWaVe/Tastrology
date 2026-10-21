@@ -80,7 +80,7 @@ export function VsCode({ code }: { code: string }) {
   const reduce = Boolean(useReducedMotion());
   const cardRef = useRef<HTMLDivElement>(null);
   const challenger = st.kind === "card" ? st.card : null;
-  const sky = useMemo(() => (challenger ? skyState(challenger.evolvesFrom, challenger.archetype) : null), [challenger]);
+  const sky = useMemo(() => (challenger ? skyState(challenger.evolvesFrom, challenger.archetype, [], [], challenger.vibes) : null), [challenger]);
 
   if (st.kind === "fight") return <BattleStage out={st.out} />;
 

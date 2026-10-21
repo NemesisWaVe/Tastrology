@@ -133,7 +133,7 @@ function LandingBody({ onStart, touch = false }: { onStart: (req: AgentRequest) 
   // The specimen's sky sits far back behind the whole landing: quiet (no captions), like art on a wall.
   const reduce = Boolean(useReducedMotion());
   const sky = useMemo(
-    () => (shown ? skyState(shown.seeds, shown.dna.name, shown.dna.lobes.map((l) => l.seedIds), (shown.inert ?? []).map((x) => x.id)) : skyState([], "")),
+    () => (shown ? skyState(shown.seeds, shown.dna.name, shown.dna.lobes.map((l) => l.seedIds), (shown.inert ?? []).map((x) => x.id), shown.vibes) : skyState([], "")),
     [shown],
   );
 

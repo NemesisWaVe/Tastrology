@@ -243,7 +243,7 @@ export default function Home() {
 
   // Your sky behind the calm "not now" screen.
   const sky = useMemo(
-    () => (result ? skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id)) : null),
+    () => (result ? skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id), result.vibes) : null),
     [result],
   );
 

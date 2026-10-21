@@ -47,6 +47,7 @@ class RunState {
   vibeAnchors: QEntity[] = [];
   vibeTags: string[] = [];
   vibeVia: Record<string, string[]> = {};
+  vibeImage: Record<string, string> = {};
   seedTags = new Map<string, QTag[]>();
   inert: string[] = [];
   inertInfo: { id: string; influence: number }[] = [];
@@ -187,11 +188,12 @@ async function resolveSeeds(st: RunState) {
   if (st.req.vibes?.length) {
     const vibes = st.req.vibes;
     await logged(st, "resolve_vibes", vibes.map((v) => v.name).join(", "), async (log) => {
-      const r = await resolveVibes(vibes, log).catch(() => ({ anchors: [], tags: [], via: {} as Record<string, string[]> }));
+      const r = await resolveVibes(vibes, log).catch(() => ({ anchors: [], tags: [], via: {} as Record<string, string[]>, image: {} as Record<string, string> }));
       const seedIds = new Set(st.seeds.map((s) => s.id));
       st.vibeAnchors = r.anchors.filter((a, i) => !seedIds.has(a.id) && r.anchors.findIndex((x) => x.id === a.id) === i);
       st.vibeTags = r.tags;
       st.vibeVia = r.via;
+      st.vibeImage = r.image;
       return { value: null, summary: `Vibes read as ${[...st.vibeAnchors.map((a) => a.name), ...(r.tags.length ? [`${r.tags.length} tag signal${r.tags.length > 1 ? "s" : ""}`] : [])].join(", ") || "nothing usable"}` };
     });
     // One named love plus vibes: the vibes' anchors stand in as loves (one per vibe first), so the reading has the two
@@ -206,7 +208,7 @@ async function resolveSeeds(st: RunState) {
   }
   st.ledger.record(st.seeds);
   st.emit({ type: "data", data: { kind: "seeds", seeds: st.seeds.map((s) => ({ id: s.id, name: s.name, kind: s.kind, image: s.image })) } });
-  if (st.req.vibes?.length) st.emit({ type: "data", data: { kind: "vibes", vibes: st.req.vibes.map((v) => ({ name: v.name, via: st.vibeVia[v.id] ?? [] })) } });
+  if (st.req.vibes?.length) st.emit({ type: "data", data: { kind: "vibes", vibes: st.req.vibes.map((v) => ({ name: v.name, via: st.vibeVia[v.id] ?? [], image: st.vibeImage[v.id] })) } });
   st.done.add("resolve");
   st.emit({ type: "step", id: "resolve", label: "Seeds resolved", status: "done", detail: st.seeds.map((s) => s.name).join(" · ") });
   if (st.seeds.length < 2) throw new Error("Need at least 2 seeds that Qloo recognises.");
@@ -892,6 +894,7 @@ async function runAgentInner(req: AgentRequest, emit: Emit, signal?: AbortSignal
             id: v.id,
             name: v.name,
             via: st.vibeVia[v.id] ?? [],
+            ...(st.vibeImage[v.id] ? { image: st.vibeImage[v.id] } : {}),
           })),
         }
       : {}),

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { proxied } from "@/lib/card";
-import { KIND_LABEL, pullShares, type Folded } from "./traceModel";
+import { KIND_LABEL, pullShares, vibeAngles, type Folded } from "./traceModel";
 
 /**
  * The Gravity Well: the reading as a living constellation. Seeds are stars; Qloo's tags spray out of them and the
@@ -11,7 +11,7 @@ import { KIND_LABEL, pullShares, type Folded } from "./traceModel";
  * Every position and motion is a number from this run. Canvas 2D, one rAF loop, springs to targets (no physics sim).
  */
 
-type Kind = "seed" | "tag" | "cons" | "brand" | "bridge";
+type Kind = "seed" | "vibe" | "tag" | "cons" | "brand" | "bridge";
 interface Body {
   id: string;
   kind: Kind;
@@ -79,7 +79,7 @@ export function Orrery({
   const box = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const bodies = useRef(new Map<string, Body>());
-  const labels = useRef(new Map<string, HTMLButtonElement>());
+  const labels = useRef(new Map<string, HTMLElement>());
   const betRef = useRef(bet);
   betRef.current = bet;
 
@@ -108,21 +108,24 @@ export function Orrery({
     const inert = new Set(crit?.inert ?? []);
     const { top: strongest } = crit ? pullShares(f) : { top: undefined };
 
+    const picture = (b: Body, src?: string) => {
+      if (b.img || b.imgFailed || !src) return;
+      const img = new Image();
+      img.decoding = "async";
+      // A broken image is dropped for good: the body keeps its letter disc, and nothing retries it every frame.
+      img.onerror = () => {
+        b.img = undefined;
+        b.imgFailed = true;
+      };
+      img.src = proxied(src);
+      b.img = img;
+    };
+
     // Seeds
     for (const s of f.seeds) {
       const ang = seedAng.get(s.id) ?? 0;
       const b = get(`s:${s.id}`, "seed", polar(ang, 0.15), { letter: s.name[0] });
-      if (!b.img && !b.imgFailed && s.image) {
-        const img = new Image();
-        img.decoding = "async";
-        // A broken image is dropped for good: the seed keeps its letter disc, and nothing retries it every frame.
-        img.onerror = () => {
-          b.img = undefined;
-          b.imgFailed = true;
-        };
-        img.src = proxied(s.image);
-        b.img = img;
-      }
+      picture(b, s.image);
       let r = sideB.has(s.id) ? 0.92 : 0.78;
       let ta = 1;
       if (s.id === current) {
@@ -136,6 +139,17 @@ export function Orrery({
       b.tone = sideB.has(s.id) ? "m" : crit && s.id === strongest ? "accent" : "ink";
       seen.add(b.id);
     }
+
+    // Vibes: on the loves' ring, in the gaps between them, a little smaller (they steer the brands, never the rarity)
+    const vAng = vibeAngles(n, f.vibes?.length ?? 0);
+    (f.vibes ?? []).forEach((v, i) => {
+      const ang = vAng[i];
+      const b = get(`v:${v.name}`, "vibe", polar(ang, 0.15), { letter: v.name[0] });
+      picture(b, v.image);
+      const p = polar(ang, 0.78);
+      Object.assign(b, { tx: p.x, ty: p.y, ta: crit ? 0.6 : 1, ts: (n > 6 ? 0.1 : 0.125) * 0.62, tone: "ink" as const });
+      seen.add(b.id);
+    });
 
     // Tags: each seed's own tags spray outward; the consensus tags gather between the seeds that share them.
     const brandsIn = f.brands.length > 0;
@@ -366,7 +380,7 @@ export function Orrery({
       // Small bodies: tags, consensus, brands, bridges
       ctx.textBaseline = "middle";
       for (const b of map.values()) {
-        if (b.kind === "seed" || b.a < 0.01) continue;
+        if (b.kind === "seed" || b.kind === "vibe" || b.a < 0.01) continue;
         const p = px(b);
         const r = Math.max(1, b.s * R);
         const c = b.hot && b.hot > 0.15 ? C.warn : tone(b.tone);
@@ -433,17 +447,24 @@ export function Orrery({
         }
       }
 
-      // Seeds
+      // Seeds, and the vibes beside them (a turning rainbow rim instead of a picture)
       const betNow = betRef.current;
       for (const b of map.values()) {
-        if (b.kind !== "seed" || b.a < 0.01) continue;
+        if ((b.kind !== "seed" && b.kind !== "vibe") || b.a < 0.01) continue;
         const p = px(b);
         const r = b.s * R;
         if (r < 4) continue; // still growing in; the clip ring below needs r > 2.5
         const ring = tone(b.tone);
         ctx.globalAlpha = b.a;
         if (b.tone !== "ink") ctx.drawImage(glow(ring), p.x - r * 2.2, p.y - r * 2.2, r * 4.4, r * 4.4);
-        ctx.fillStyle = b.tone === "ink" ? "rgba(255,255,255,.32)" : ring;
+        if (b.kind === "vibe" && ctx.createConicGradient) {
+          const g = ctx.createConicGradient(reduce ? 0 : now / 1000, p.x, p.y);
+          ["#ff7ab6", "#ffd36e", "#c6ff3d", "#6ee7ff", "#b18cff", "#ff7ab6"].forEach((c, k) => g.addColorStop(k / 5, c));
+          ctx.globalAlpha = b.a * 0.35;
+          ctx.drawImage(glow(C.accent), p.x - r * 2, p.y - r * 2, r * 4, r * 4);
+          ctx.globalAlpha = b.a;
+          ctx.fillStyle = g;
+        } else ctx.fillStyle = b.tone === "ink" ? "rgba(255,255,255,.32)" : ring;
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, TAU);
         ctx.fill();
@@ -479,7 +500,7 @@ export function Orrery({
           ctx.lineWidth = 1;
         }
         // DOM label (also the bet button) follows the star.
-        const el = labels.current.get(b.id.slice(2));
+        const el = labels.current.get(b.kind === "seed" ? b.id.slice(2) : b.id);
         if (el) {
           el.style.transform = `translate(${p.x}px, ${p.y + r + 6}px) translateX(-50%)`;
           el.style.opacity = String(Math.max(0.25, b.a));
@@ -527,6 +548,22 @@ export function Orrery({
             )}
           </span>
         </button>
+      ))}
+      {(f.vibes ?? []).map((v) => (
+        <span
+          key={v.name}
+          ref={(el) => {
+            if (el) labels.current.set(`v:${v.name}`, el);
+            else labels.current.delete(`v:${v.name}`);
+          }}
+          className="pointer-events-none absolute left-0 top-0 w-[30%] max-w-[150px] px-1 text-center"
+          style={{ transform: "translate(-999px,-999px)" }}
+        >
+          <span className="block truncate text-[10px] font-medium leading-tight text-ink-2 sm:text-[11px]">{v.name}</span>
+          <span className="block truncate font-mono text-[8px] uppercase tracking-[0.18em] text-ink-3">
+            vibe{v.via.length ? ` · via ${v.via[0]}` : ""}
+          </span>
+        </span>
       ))}
     </div>
   );

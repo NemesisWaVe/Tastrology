@@ -297,7 +297,9 @@ function Constellation({ card }: { card: CardData }) {
 }
 
 function ArtCollage({ card }: { card: CardData }) {
-  if (!card.art.length) {
+  // the vibes print beside the loves: the picture of what each was read as, or the word itself set as a plate
+  const vibes = (card.vibes ?? []).slice(0, Math.max(0, 5 - Math.min(card.art.length, 4)));
+  if (!card.art.length && !vibes.length) {
     // Generative fallback: layered orbs in the card's type colours.
     return (
       <div className={s.gen}>
@@ -307,13 +309,24 @@ function ArtCollage({ card }: { card: CardData }) {
       </div>
     );
   }
-  const imgs = card.art.slice(0, 5);
+  const imgs = card.art.slice(0, 5 - vibes.length);
   return (
-    <div className={s.collage} data-n={imgs.length}>
+    <div className={s.collage} data-n={imgs.length + vibes.length}>
       {imgs.map((src, i) => (
         // eslint-disable-next-line @next/next/no-img-element
         <img key={src} src={src} alt="" crossOrigin="anonymous" style={{ ["--i" as string]: i }} />
       ))}
+      {vibes.map((v) =>
+        v.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={v.name} src={v.image} alt="" crossOrigin="anonymous" />
+        ) : (
+          <span key={v.name} className={s.vibePlate}>
+            <b>{v.name}</b>
+            <small>vibe</small>
+          </span>
+        ),
+      )}
     </div>
   );
 }

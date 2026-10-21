@@ -117,7 +117,7 @@ export default function DeckPage() {
   }, [toast]);
 
   const reduce = Boolean(useReducedMotion());
-  const sky = useMemo(() => (cards?.[0] ? skyState(cards[0].card.evolvesFrom, cards[0].card.archetype) : null), [cards]);
+  const sky = useMemo(() => (cards?.[0] ? skyState(cards[0].card.evolvesFrom, cards[0].card.archetype, [], [], cards[0].card.vibes) : null), [cards]);
 
   // ---- Burning (docs/design/burn.md). Only for signed-in accounts, only on your own mints.
   const [armed, setArmed] = useState<string | null>(null);

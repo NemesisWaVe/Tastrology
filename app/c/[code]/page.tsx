@@ -117,7 +117,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   // The card hangs in its owner's sky: one constellation per love, the one it's named after lit.
   const reduce = Boolean(useReducedMotion());
   const cardRef = useRef<HTMLDivElement>(null);
-  const sky = useMemo(() => (card ? skyState(card.evolvesFrom, card.archetype) : null), [card]);
+  const sky = useMemo(() => (card ? skyState(card.evolvesFrom, card.archetype, [], [], card.vibes) : null), [card]);
 
   // The owner, on the device that minted it: the card's home is the whole reading (receipts, matches, capsule, re-plan).
   // It shows straight away from this device; the server check only adds the verified mark, or takes it down if burned.

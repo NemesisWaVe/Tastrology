@@ -3,7 +3,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { displayName } from "@/lib/card";
 import { figureFor, rng, TAU, type FigureShape } from "./skyFigures";
-import { KIND_LABEL, pullShares, type Folded } from "./traceModel";
+import { KIND_LABEL, pullShares, vibeAngles, type Folded } from "./traceModel";
 
 /**
  * The sky behind the reading, story, pack, /c and /vs. A long-exposure night sky with an engraved atlas plate on top:
@@ -525,20 +525,29 @@ export function Sky({
       const oc = off(18);
 
       const keyOf = (name: string) => displayName(name).toLowerCase();
-      for (const s of real) {
+      // vibes get figures too, on the loves' ring in the gaps between them (vibeAngles), engraved in the rainbow
+      const vAng = vibeAngles(n, real.length ? st.vibes?.length ?? 0 : 0);
+      const vibes = real.length ? (st.vibes ?? []).map((v, i) => ({ id: `vibe:${v.name}`, name: v.name, kind: "vibe", via: v.via, ang: vAng[i] })) : [];
+      const items = [...real.map((s) => ({ ...s, via: undefined as string[] | undefined, ang: -Math.PI / 2 + (TAU * st.seeds.indexOf(s)) / Math.max(1, n) })), ...vibes];
+      for (const s of items) {
         const k = keyOf(s.name);
         if (!figures.has(k)) figures.set(k, { id: k, name: displayName(s.name), kind: s.kind, ...figureFor(k, size), born: drawn ? now - 5000 : now, a: 0 });
       }
-      real.forEach((s) => {
+      items.forEach((s, i) => {
         const fig = figures.get(keyOf(s.name))!;
-        const i = st.seeds.indexOf(s);
-        const ang = -Math.PI / 2 + (TAU * i) / Math.max(1, n);
+        const ang = s.ang;
+        const vibe = s.kind === "vibe";
         const d = wellR + size * 1.9;
         const maxX = Math.min(W, 2 * cx) - size * 1.2;
         const ax = Math.min(maxX, Math.max(size * 1.2, cx + Math.cos(ang) * d * 1.25)) + oc.x;
         const ay = Math.min(H - size, Math.max(size, cy + Math.sin(ang) * d)) + oc.y;
         const lead = st.critique && s.id === strongest;
-        const tone = lead ? C.accent : sideB.has(s.id) ? C.m : C.ink;
+        let tone: string | CanvasGradient = lead ? C.accent : sideB.has(s.id) ? C.m : C.ink;
+        if (vibe) {
+          const g = ctx.createLinearGradient(ax - size, ay - size * 0.7, ax + size, ay + size * 0.7);
+          ["#ff7ab6", "#ffd36e", "#c6ff3d", "#6ee7ff", "#b18cff"].forEach((c, k) => g.addColorStop(k / 4, c));
+          tone = g;
+        }
         const want = s.id === current ? 0.25 : inert.has(s.id) ? 0.35 : lead ? 1 : 0.75;
         fig.a += ((narrow ? want * 0.55 : want) * D - fig.a) * (reduce ? 1 : 0.06);
         const age = now - fig.born;
@@ -612,7 +621,7 @@ export function Sky({
             ctx.stroke();
             // ignition when the love resolves: spikes flare over ~600ms, then settle
             const flare = reduce || drawn || quiet ? 0 : Math.max(0, 1 - Math.abs(age - 350) / 450);
-            spikes(x, y, r * (4 + flare * 9), fig.a * (0.35 + flare * 0.6), tone);
+            spikes(x, y, r * (4 + flare * 9), fig.a * (0.35 + flare * 0.6), typeof tone === "string" ? tone : "#e9ddff");
             if (lead) {
               ctx.globalAlpha = fig.a * 0.8;
               ctx.strokeStyle = C.accent;
@@ -634,7 +643,7 @@ export function Sky({
         ctx.textBaseline = "middle";
         const name = fig.name.length > 26 ? `${fig.name.slice(0, 25)}…` : fig.name;
         arcText(ctx, name, ax, ay + low + sway + 22, size * 4.2, 0.4);
-        const kind = (KIND_LABEL[fig.kind] ?? fig.kind ?? "").toUpperCase();
+        const kind = (vibe && s.via?.[0] ? `vibe · via ${s.via[0]}` : KIND_LABEL[fig.kind] ?? fig.kind ?? "").toUpperCase();
         const share = lead && pulled ? Math.round((pulled.shares[s.id] ?? 0) * 100) : 0;
         const sub = [kind, share > 0 ? `${share}% OF THE PULL` : "", sideB.has(s.id) ? "SIDE B" : ""].filter(Boolean).join("  ·  ");
         if (sub) {

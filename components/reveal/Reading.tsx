@@ -159,8 +159,6 @@ export function Reading({
                   center={<Core calls={m.calls} done={done} reduce={reduce} />}
                 />
               </div>
-              {/* the vibes picked next to the loves, under the well (lib/vibes.ts) */}
-              <VibeRow vibes={f.vibes ?? []} hidden={collapsing} />
               <BetLine f={f} bet={bet} pickable={pickable} />
               <SignSlots f={f} finalName={done ? finalName : undefined} reduce={reduce} />
               <Headline m={m} done={done} error={error} small />

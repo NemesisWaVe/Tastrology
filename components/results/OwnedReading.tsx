@@ -160,7 +160,7 @@ export function OwnedReading({
   // Your sky stays with you on the reading: far back, no captions (quiet), so the receipt and cards lead.
   const reduce = Boolean(useReducedMotion());
   const sky = useMemo(
-    () => skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id)),
+    () => skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id), result.vibes),
     [result],
   );
 

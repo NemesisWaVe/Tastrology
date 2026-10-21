@@ -37,7 +37,7 @@ interface Beat {
 export function Story({ result, card, reduce, onFinish }: { result: StyleResult; card: CardData; reduce: boolean; onFinish: () => void }) {
   const beats = useMemo(() => buildBeats(result, card), [result, card]);
   const sky = useMemo(
-    () => skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id)),
+    () => skyState(result.seeds, result.dna.name, result.dna.lobes.map((l) => l.seedIds), (result.inert ?? []).map((x) => x.id), result.vibes),
     [result],
   );
   const [i, setI] = useState(0);

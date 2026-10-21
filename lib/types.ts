@@ -129,7 +129,7 @@ export interface StyleResult {
   createdAt: number;
   seeds: QEntity[];
   /** Tastes that aren't one named thing (Qloo tags), and what they were read as. Never part of rarity. */
-  vibes?: { id: string; name: string; via: string[] }[];
+  vibes?: { id: string; name: string; via: string[]; image?: string }[];
   dna: {
     name: string;
     tagline: string;
@@ -165,7 +165,7 @@ export type SceneData =
   | { kind: "critique"; kept: string[]; rejected: { id: string; why: "fluke" | "budget" }[]; strongest?: string; inert: string[] }
   | { kind: "bridges"; bridges: { id: string; name: string; kind: string }[] }
   /** The vibes picked next to the loves, and what each was read as (lib/vibes.ts). */
-  | { kind: "vibes"; vibes: { name: string; via: string[] }[] };
+  | { kind: "vibes"; vibes: { name: string; via: string[]; image?: string }[] };
 
 export type TraceEvent = { at?: number } & (
   | { type: "step"; id: string; label: string; status: "run" | "done" | "warn"; detail?: string }

@@ -53,6 +53,8 @@ export interface CardData {
   avgPop?: number;
   ignores?: string;
   evolvesFrom: { name: string; kind: string; image?: string }[];
+  /** The vibes picked next to the loves (lib/vibes.ts), so the card's sky shows them too. Absent on older cards. */
+  vibes?: { name: string; via: string[]; image?: string }[];
   art: string[]; // seed images (proxied), for the art window collage
   /** Constellation for the art window: one star per seed (0-1 coords), size = how much it drives your brands (Qloo explainability). */
   stars: { name: string; kind: string; x: number; y: number; weight: number }[];
@@ -280,6 +282,7 @@ export function buildCard(r: StyleResult): CardData {
     avgPop: avgPop === undefined ? undefined : Math.round(avgPop * 100),
     ignores: weak?.name,
     evolvesFrom: r.seeds.map((s) => ({ name: displayName(s.name), kind: KIND_LABEL[s.kind] ?? s.kind, image: s.image ? proxied(s.image) : undefined })),
+    ...(r.vibes?.length ? { vibes: r.vibes.map((v) => ({ name: v.name, via: v.via, ...(v.image ? { image: proxied(v.image) } : {}) })) } : {}),
     art: r.seeds.map((s) => s.image).filter((x): x is string => Boolean(x)).slice(0, 5).map(proxied),
   };
 }

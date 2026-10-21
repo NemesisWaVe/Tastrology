@@ -429,7 +429,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
   );
 
   const stageRef = useRef<HTMLDivElement>(null);
-  const sky = useMemo(() => skyState(card.evolvesFrom, card.archetype), [card]);
+  const sky = useMemo(() => skyState(card.evolvesFrom, card.archetype, [], [], card.vibes), [card]);
   // Until the reveal, the sky keeps its secrets too: unlabelled patterns, nothing lit.
   const revealed = stage === "revealed";
   const sealedSky = useMemo(() => ({ ...sky, critique: undefined }), [sky]);
