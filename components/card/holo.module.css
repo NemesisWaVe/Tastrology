@@ -54,8 +54,12 @@
   background-position: var(--mx) var(--my);
 }
 .secret {
-  --frame: linear-gradient(135deg, #fff1b8 0%, #b7791f 22%, #fff6d6 44%, #8a5a12 64%, #f8dc84 82%, #a16207 100%);
-  background-size: 180% 180%;
+  /* polished gold: hard light-to-shadow bands read as metal, where soft beige stops read as paint */
+  --frame: linear-gradient(118deg, #4a3108 0%, #f7d77a 9%, #fffbea 14%, #d9a73a 22%, #6e4a0c 33%, #f3cf6b 45%, #fff9e3 50%, #c8902a 58%, #5a3b08 70%, #f0c95e 82%, #fffbe6 88%, #a87420 100%);
+  --a: #f5c451;
+  --a2: #fff1c2;
+  --b: #b8862b;
+  background-size: 260% 260%;
   background-position: var(--mx) var(--my);
 }
 
@@ -122,9 +126,10 @@
 .top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1.6cqw;
   font-family: var(--f-mono);
-  font-size: 1.95cqw;
+  font-size: 2.3cqw;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   line-height: 1;
@@ -150,18 +155,6 @@
   font-weight: 800;
   letter-spacing: 0.06em;
 }
-.serial .dots {
-  font-size: 2.5cqw;
-  margin-right: 0.6cqw;
-  color: rgb(245 243 238 / 0.8);
-}
-.serial {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgb(245 243 238 / 0.45);
-}
 
 .rarity {
   display: inline-flex;
@@ -181,7 +174,7 @@
 }
 .rarity i {
   font-style: normal;
-  font-size: 1.6cqw;
+  font-size: 1.9cqw;
   letter-spacing: 0.05em;
 }
 
@@ -191,10 +184,45 @@
   padding-top: 0.6cqw;
 }
 
+.kickRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2cqw;
+  margin-bottom: 1.2cqw;
+}
+.power {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.8cqw;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.power b {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 6.2cqw;
+  letter-spacing: -0.04em;
+  background: var(--frame);
+  background-size: 220% 220%;
+  background-position: var(--mx) var(--my);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 1.6cqw color-mix(in oklab, var(--a) 45%, transparent));
+}
+.power span {
+  font-family: var(--f-mono);
+  font-size: 2.1cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgb(245 243 238 / 0.6);
+}
 .kicker {
   margin: 0;
   font-family: var(--f-mono);
-  font-size: 1.95cqw;
+  font-size: 2.2cqw;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: color-mix(in oklab, var(--a) 70%, white);
@@ -219,9 +247,9 @@
     100deg,
     var(--paperw) 0%,
     var(--paperw) 38%,
-    color-mix(in oklab, var(--a) 55%, white) 46%,
+    color-mix(in oklab, color-mix(in oklab, var(--a) 55%, white) calc(25% + var(--hyp) * 75%), var(--paperw)) 46%,
     #ffffff 50%,
-    color-mix(in oklab, var(--a2) 55%, white) 54%,
+    color-mix(in oklab, color-mix(in oklab, var(--a2) 55%, white) calc(25% + var(--hyp) * 75%), var(--paperw)) 54%,
     var(--paperw) 62%,
     var(--paperw) 100%
   );
@@ -302,41 +330,63 @@
   grid-column: span 6;
 }
 
-/* a vibe with no picture (a bare Qloo tag) prints as a word plate; the duotone below tints it like the photos */
-.vibePlate {
-  /* the plate is its own container, so the word can size to the panel it landed in (cqi below = plate width) */
-  container-type: inline-size;
+/* vibes: die-cut holographic stickers stuck on the art's lower corner (white kiss-cut border, a little crooked) */
+.vibes {
+  position: absolute;
+  z-index: 4;
+  left: 2cqw;
+  right: 2cqw;
+  bottom: 2cqw;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 1.4cqw;
+  pointer-events: none;
+}
+.vibe {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.6cqw;
-  overflow: hidden;
-  padding: 1.5cqw;
-  background:
-    repeating-radial-gradient(circle at 50% 120%, rgb(255 255 255 / 0.08) 0 0.4cqw, transparent 0.4cqw 1.6cqw),
-    linear-gradient(160deg, #f4f1ea, #8d8a84);
-  color: #111;
-  text-align: center;
+  gap: 0.8cqw;
+  max-width: 48%;
+  padding: 0.9cqw 2cqw 0.9cqw 1.4cqw;
+  border-radius: 99px;
+  rotate: var(--t);
+  color: #14121c;
+  background: linear-gradient(115deg, #ffd1e8, #fff3b8 22%, #d4ffd0 40%, #c9f4ff 58%, #dcd2ff 76%, #ffd1e8);
+  background-size: 260% 100%;
+  background-position: var(--mx) 0;
+  box-shadow:
+    0 0 0 0.45cqw #fbfaf6,
+    0 0.9cqw 1.8cqw -0.4cqw rgb(0 0 0 / 0.7);
 }
-.vibePlate b {
-  max-width: 100%;
-  font-family: var(--font-serif), Georgia, serif;
-  font-style: italic;
-  font-weight: 500;
-  /* --n = the longest word's length: a long word ("Cryptocurrency") shrinks to fit on one line instead of splitting */
-  font-size: min(22cqi, calc(165cqi / var(--n, 6)));
-  line-height: 1;
-  overflow-wrap: normal;
-  word-break: keep-all;
-  hyphens: none;
-}
-.vibePlate small {
-  font-family: var(--font-mono), monospace;
-  font-size: 7cqi;
-  letter-spacing: 0.3em;
+.vibe small {
+  flex: 0 0 auto;
+  font-family: var(--f-mono);
+  font-size: 1.8cqw;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  opacity: 0.6;
+  opacity: 0.55;
+}
+.vibe b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--f-serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 3.6cqw;
+  line-height: 1.05;
+}
+.vibeMark {
+  flex: 0 0 auto;
+  width: 2.4cqw;
+  height: 2.4cqw;
+}
+.secret .vibe {
+  color: #2a1a02;
+  background: linear-gradient(115deg, #b8862b, #fff6d6 30%, #f0c95e 50%, #fffbea 70%, #a87420);
+  background-size: 260% 100%;
+  background-position: var(--mx) 0;
 }
 
 .collage::after {
@@ -421,85 +471,6 @@
   height: 100%;
 }
 
-.seal {
-  position: absolute;
-  z-index: 4;
-  top: 1.8cqw;
-  right: 1.8cqw;
-  width: 14.5cqw;
-  height: 14.5cqw;
-  border-radius: 50%;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  color: var(--paperw);
-  background:
-    radial-gradient(circle, #0d0d13 0 60%, transparent 61%),
-    conic-gradient(from var(--ang), #ff7773, #ffed5f, #a8ff5f, #83fff7, #7894ff, #d875ff, #ff7773);
-  box-shadow:
-    0 0 0 0.35cqw rgb(13 13 19 / 0.9),
-    0 1cqw 2.4cqw rgb(0 0 0 / 0.6);
-}
-.secret .seal {
-  background:
-    radial-gradient(circle, #0d0d13 0 60%, transparent 61%),
-    conic-gradient(from var(--ang), #fff1b8, #b7791f, #fff6d6, #8a5a12, #f8dc84, #fff1b8);
-}
-.common .seal {
-  background:
-    radial-gradient(circle, #0d0d13 0 60%, transparent 61%),
-    conic-gradient(from var(--ang), #f4f6f8, #8a929c, #e7eaee, #6b7280, #f4f6f8);
-}
-.seal b {
-  font-family: var(--f-display);
-  font-weight: 700;
-  font-size: 5.6cqw;
-  line-height: 0.9;
-  letter-spacing: -0.03em;
-}
-.seal span {
-  font-family: var(--f-mono);
-  font-size: 1.5cqw;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.artTag {
-  position: absolute;
-  z-index: 4;
-  left: 1.6cqw;
-  bottom: 1.6cqw;
-  max-width: calc(100% - 3.2cqw);
-  display: flex;
-  gap: 1cqw;
-  padding: 0.8cqw 1.8cqw;
-  border-radius: 99px;
-  font-family: var(--f-mono);
-  font-size: 1.95cqw;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  color: #0b0b10;
-  background: rgb(255 255 255 / 0.86);
-}
-.artTag span {
-  display: inline-flex;
-  align-items: center;
-}
-.tagSigil {
-  width: 2.3cqw;
-  height: 2.3cqw;
-  margin-right: 0.6cqw;
-  flex: 0 0 auto;
-}
-.artTag em {
-  font-style: normal;
-  opacity: 0.4;
-  margin-right: 1cqw;
-}
-
 /* ---------------------------------------------------------------- big three */
 
 .big3 {
@@ -529,8 +500,8 @@
   align-items: center;
   gap: 0.8cqw;
   font-family: var(--f-mono);
-  font-size: 1.85cqw;
-  letter-spacing: 0.18em;
+  font-size: 2.15cqw;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgb(245 243 238 / 0.6);
   line-height: 1;
@@ -569,7 +540,7 @@
   display: block;
   margin-top: 0.7cqw;
   font-family: var(--f-mono);
-  font-size: 1.6cqw;
+  font-size: 1.95cqw;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgb(245 243 238 / 0.42);
@@ -604,7 +575,7 @@
 
 .moveIdx {
   font-family: var(--f-mono);
-  font-size: 1.9cqw;
+  font-size: 2.2cqw;
   color: color-mix(in oklab, var(--a) 75%, white);
   flex: 0 0 auto;
 }
@@ -625,7 +596,7 @@
   margin-top: 0.3cqw;
   font-family: var(--f-mono);
   font-weight: 400;
-  font-size: 1.75cqw;
+  font-size: 2.1cqw;
   letter-spacing: 0.02em;
   color: rgb(245 243 238 / 0.48);
   overflow: hidden;
@@ -644,7 +615,7 @@
 }
 .moveVal small {
   font-family: var(--f-mono);
-  font-size: 1.5cqw;
+  font-size: 1.9cqw;
   font-weight: 400;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -666,7 +637,7 @@
 }
 .stats span {
   font-family: var(--f-mono);
-  font-size: 1.75cqw;
+  font-size: 2cqw;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgb(245 243 238 / 0.55);
@@ -679,7 +650,7 @@
 }
 .stats > div > i {
   grid-column: 1 / -1;
-  height: 0.55cqw;
+  height: 0.75cqw;
   border-radius: 99px;
   background: rgb(255 255 255 / 0.1);
   overflow: hidden;
@@ -701,7 +672,7 @@
 .weak {
   margin: 0;
   font-family: var(--f-mono);
-  font-size: 1.9cqw;
+  font-size: 2.2cqw;
   letter-spacing: 0.03em;
   color: rgb(245 243 238 / 0.55);
   white-space: nowrap;
@@ -770,6 +741,39 @@
   color: rgb(245 243 238 / 0.38);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.collector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2cqw;
+  margin-top: 0.5cqw;
+  font-size: 2cqw;
+  letter-spacing: 0.16em;
+  color: rgb(245 243 238 / 0.55);
+}
+.collector .dots {
+  font-size: 2.6cqw;
+  letter-spacing: 0.04em;
+  color: rgb(245 243 238 / 0.85);
+}
+.tierNo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1cqw;
+  flex: 0 0 auto;
+}
+.gems {
+  font-style: normal;
+  font-size: 2.4cqw;
+  letter-spacing: 0.1em;
+  background: var(--frame);
+  background-size: 300% 300%;
+  background-position: var(--mx) var(--my);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* ---------------------------------------------------------------- foil */
@@ -940,6 +944,220 @@
   opacity: calc(var(--o) * 0.55);
 }
 
+/* ---------------------------------------------------------------- secret rare: the chase card
+   Everything a top pull does on a real trading card: full-bleed art, gold-toned and etched; a mirror-gold frame;
+   gold-foil type; glitter that twinkles on its own; a light sweep that crosses the card every few seconds;
+   and a breathing gold aura. Holo is tilt-lit rainbow; Secret is gold that stays alive with nobody touching it. */
+
+.secret {
+  box-shadow:
+    0 3cqw 7cqw -2cqw rgb(0 0 0 / 0.75),
+    inset 0 0 0 0.3cqw rgb(255 248 220 / 0.7),
+    inset 0 0 0 0.9cqw rgb(60 40 5 / 0.25);
+}
+.secret::before {
+  /* the aura: an outer glow only (box-shadow never paints under the card), breathing */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow:
+    0 0 9cqw 0.5cqw rgb(252 211 77 / 0.55),
+    0 0 26cqw 2cqw rgb(245 158 11 / 0.32);
+  animation: aura 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes aura {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.secret .face {
+  color: #fdf3d6;
+  background:
+    /* diamond etch, the texture a gold-foil card is pressed with */
+    repeating-linear-gradient(45deg, rgb(255 214 120 / 0.05) 0 0.18cqw, transparent 0.18cqw 1.6cqw),
+    repeating-linear-gradient(-45deg, rgb(255 214 120 / 0.05) 0 0.18cqw, transparent 0.18cqw 1.6cqw),
+    radial-gradient(110% 60% at 100% 0%, rgb(245 196 81 / 0.28), transparent 60%),
+    radial-gradient(90% 55% at 0% 100%, rgb(184 134 43 / 0.3), transparent 62%),
+    linear-gradient(180deg, #17110a, #0a0806);
+  box-shadow:
+    inset 0 0 0 0.25cqw rgb(255 230 160 / 0.35),
+    inset 0 0 0 0.9cqw rgb(0 0 0 / 0.35);
+}
+
+/* full art: the window runs edge to edge of the face, no box, no rounded corners */
+.secret .art {
+  margin-inline: -3.8cqw;
+  border-radius: 0;
+  box-shadow:
+    inset 0 0.25cqw 0 rgb(255 230 160 / 0.55),
+    inset 0 -0.25cqw 0 rgb(255 230 160 / 0.55);
+}
+.secret .collage {
+  gap: 0;
+  padding: 0;
+}
+.secret .collage > * {
+  border-radius: 0;
+}
+.secret .collage::after {
+  /* gold duotone: every picture prints in the same gold, so the art reads as one piece */
+  background:
+    radial-gradient(140% 100% at 50% 40%, transparent 40%, rgb(20 12 2 / 0.75) 100%),
+    linear-gradient(160deg, #ffe9b0, #d39a34 45%, #5a3606 100%);
+}
+/* the art's foil goes gold too: the rainbow over a gold duotone mixed to green */
+.secret .artShine {
+  background-image:
+    linear-gradient(118deg, transparent 20%, rgb(255 236 170 / 0.55) 40%, rgb(255 255 255 / 0.9) 48%, rgb(255 214 120 / 0.55) 56%, transparent 74%),
+    repeating-linear-gradient(45deg, rgb(255 230 160 / 0.14) 0 0.2cqw, transparent 0.2cqw 1.4cqw);
+  background-size: 260% 100%, auto;
+  background-position: calc(100% - var(--mx)) 0, 0 0;
+  background-blend-mode: normal;
+  filter: none;
+  mix-blend-mode: overlay;
+}
+.secret .star {
+  color: #fff6d8;
+  filter: drop-shadow(0 0 1cqw rgb(255 240 200 / 0.95)) drop-shadow(0 0 2.6cqw #f5b82e);
+}
+
+/* gold-foil type on every number */
+.secret .moveVal,
+.secret .stats b,
+.secret .signVal {
+  background: linear-gradient(100deg, #fff6d8 0%, #f3cc66 35%, #fffbea 50%, #d49a32 70%, #fff1c2 100%);
+  background-size: 240% 100%;
+  background-position: calc(100% - var(--mx)) 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.secret .moveVal small {
+  -webkit-text-fill-color: rgb(253 243 214 / 0.5);
+}
+/* one metal: the sign boxes drop their type colours (set inline, hence !important) */
+.secret .sign {
+  --c1: #f5c451 !important;
+  --c2: #b8862b !important;
+}
+.secret .moveIdx,
+.secret .kicker {
+  color: #f3cc66;
+}
+.secret .moves li,
+.secret .moves li:last-child {
+  border-color: rgb(245 196 81 / 0.18);
+}
+.secret .stats > div > i > i {
+  background: linear-gradient(90deg, #a87420, #f7d77a 60%, #fffbea);
+}
+.secret .mrz {
+  border-top-color: rgb(245 196 81 / 0.3);
+  color: rgb(245 214 140 / 0.45);
+}
+.secret .brandMark {
+  color: #f5c451;
+}
+
+/* the pill: black lacquer with gold letters and a glint that runs through it */
+.secret .rarity {
+  color: #fbe3a0;
+  background:
+    linear-gradient(100deg, transparent 30%, rgb(255 250 230 / 0.85) 45%, transparent 60%) 0 0 / 300% 100% no-repeat,
+    linear-gradient(180deg, #2a1e0a, #0d0905);
+  box-shadow:
+    inset 0 0 0 0.22cqw #f0c95e,
+    0 0 3cqw -0.4cqw rgb(252 211 77 / 0.9);
+  animation: pillGlint 3.2s ease-in-out infinite;
+}
+@keyframes pillGlint {
+  0% { background-position: 130% 0, 0 0; }
+  45%, 100% { background-position: -60% 0, 0 0; }
+}
+
+/* frame shine: gold glitter instead of the rainbow */
+.secret .frameShine {
+  background-image:
+    radial-gradient(circle at 30% 40%, #fff 0 0.25cqw, transparent 0.5cqw),
+    radial-gradient(circle at 70% 70%, #ffe9a8 0 0.2cqw, transparent 0.45cqw),
+    linear-gradient(118deg, transparent 30%, rgb(255 250 225 / 0.9) 48%, transparent 66%);
+  background-size: 4.2cqw 5.1cqw, 6.3cqw 5.7cqw, 300% 100%;
+  background-position: var(--mx) var(--my), var(--my) var(--mx), calc(100% - var(--mx) * 1.6) 0;
+  background-blend-mode: normal;
+  filter: none;
+  mix-blend-mode: screen;
+  opacity: calc(0.35 + var(--o) * 0.5);
+}
+
+/* glitter: two offset fields of gold specks that twinkle out of phase, lit harder where the light falls */
+.glitter {
+  position: absolute;
+  inset: 2.2cqw;
+  z-index: 4;
+  border-radius: 3cqw;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgb(0 0 0 / 0.45) 50%, rgb(0 0 0 / 0.2) 100%);
+  mask-image: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgb(0 0 0 / 0.45) 50%, rgb(0 0 0 / 0.2) 100%);
+}
+/* specks on large, co-prime tiles with several per tile, so no grid shows; 4-point flares only on the few big ones */
+.glitter::before,
+.glitter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 13% 21%, #fffbe6 0 0.12cqw, transparent 0.3cqw),
+    radial-gradient(circle at 67% 9%, #ffd76a 0 0.1cqw, transparent 0.26cqw),
+    radial-gradient(circle at 41% 58%, #fff 0 0.14cqw, transparent 0.34cqw),
+    radial-gradient(circle at 88% 77%, #ffe7a0 0 0.1cqw, transparent 0.24cqw),
+    radial-gradient(circle at 29% 93%, #fff 0 0.1cqw, transparent 0.26cqw),
+    radial-gradient(0.2cqw 2.2cqw at 74% 44%, #fffbe6, transparent),
+    radial-gradient(2.2cqw 0.2cqw at 74% 44%, #fffbe6, transparent);
+  background-size: 23cqw 29cqw, 31cqw 19cqw, 37cqw 41cqw, 17cqw 27cqw, 43cqw 23cqw, 53cqw 61cqw, 53cqw 61cqw;
+  animation: twinkleA 1.9s ease-in-out infinite;
+}
+.glitter::after {
+  background-size: 29cqw 17cqw, 19cqw 37cqw, 41cqw 23cqw, 27cqw 31cqw, 21cqw 47cqw, 47cqw 71cqw, 47cqw 71cqw;
+  background-position: 7cqw 3cqw, 11cqw 5cqw, 2cqw 13cqw, 5cqw 9cqw, 15cqw 2cqw, 21cqw 17cqw, 21cqw 17cqw;
+  animation-name: twinkleB;
+  animation-duration: 2.7s;
+}
+@keyframes twinkleA {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.25; }
+}
+@keyframes twinkleB {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.9; }
+}
+
+/* the sweep: a bright band of light crosses the whole card every few seconds, untouched */
+.sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sweep::before {
+  content: "";
+  position: absolute;
+  inset: -20% -60%;
+  background: linear-gradient(105deg, transparent 38%, rgb(255 236 170 / 0.35) 45%, rgb(255 255 255 / 0.85) 50%, rgb(255 236 170 / 0.35) 55%, transparent 62%);
+  mix-blend-mode: overlay;
+  transform: translateX(-70%);
+  animation: sweep 4.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+@keyframes sweep {
+  0%, 8% { transform: translateX(-70%); }
+  42%, 100% { transform: translateX(70%); }
+}
+
 /* ---------------------------------------------------------------- still (export) mode
    No blend modes: a pre-composed foil band that survives html-to-image / canvas export. */
 
@@ -952,7 +1170,10 @@
 }
 .card[data-still] .face::after,
 .card[data-still] .glare,
-.card[data-still] .frameShine {
+.card[data-still] .frameShine,
+.card[data-still] .glitter,
+.card[data-still] .sweep,
+.card[data-still]::before {
   display: none;
 }
 .card[data-still] .faceFoil,
@@ -1464,7 +1685,12 @@
   .card[data-living] .sigil,
   .card[data-living] .typeSigil,
   .backSheen,
-  .backCard::before {
+  .backCard::before,
+  .secret::before,
+  .secret .rarity,
+  .glitter::before,
+  .glitter::after,
+  .sweep::before {
     animation: none !important;
   }
 }

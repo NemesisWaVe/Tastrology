@@ -144,6 +144,13 @@ export const HoloCard = forwardRef<
           <DotoFont />
           <CardFace card={card} />
           <div className={s.frameShine} aria-hidden />
+          {card.rarity === "secret" && (
+            <>
+              {/* the chase tier: gold glitter that twinkles on its own, and a light sweep that crosses the card */}
+              <div className={s.glitter} aria-hidden />
+              <div className={s.sweep} aria-hidden />
+            </>
+          )}
           <div className={s.glare} aria-hidden />
         </div>
       </div>
@@ -164,20 +171,21 @@ function CardFace({ card }: { card: CardData }) {
           <Mark className={s.brandMark} color="currentColor" />
           {BRAND.name}
         </span>
-        <span className={s.serial}>
-          <b className={s.dots}>№{card.serial}</b> {BRAND.cardSet}
-          {card.secondDraw && <> · 2nd draw</>}
-          {!!card.recasts?.length && <> · recast ×{card.recasts.length}</>}
-        </span>
         <span className={`${s.rarity} ${s.heroRarity}`}>
           <i>{GEMS[card.rarity]}</i>
           {card.rarityLabel}
-          {card.rarityNo ? ` #${card.rarityNo}` : ""}
         </span>
       </header>
 
       <div className={`${s.titleBlock} ${s.heroTitle}`}>
-        <p className={s.kicker}>{card.dual ? "dual-type taste sign" : "taste sign"}</p>
+        {/* taste power sits where a trading card prints its HP: top right, beside the name, never over the art */}
+        <div className={s.kickRow}>
+          <p className={s.kicker}>{card.dual ? "dual-type taste sign" : "taste sign"}</p>
+          <p className={s.power}>
+            <b>{card.power}</b>
+            <span>taste</span>
+          </p>
+        </div>
         <h3 className={s.title} data-size={len > 24 ? "s" : len > 15 ? "m" : "l"}>
           {card.archetype}
         </h3>
@@ -186,26 +194,14 @@ function CardFace({ card }: { card: CardData }) {
       <div className={`${s.art} ${s.heroArt}`}>
         <ArtCollage card={card} />
         <Constellation card={card} />
+        <VibeStickers card={card} />
         <div className={s.artShine} aria-hidden />
-        <div className={s.seal}>
-          <b>{card.power}</b>
-          <span>taste</span>
-        </div>
         {card.deepCut && (
           <div className={s.stamp} aria-label={`Deep Cut: your loves average ${card.avgPop}% popularity`}>
             <b>Deep Cut</b>
             <small>{card.avgPop}% avg pop</small>
           </div>
         )}
-        <div className={s.artTag}>
-          {card.types.map((t, i) => (
-            <span key={t.name}>
-              {i > 0 && <em>/</em>}
-              <TypeSigil glyph={t.glyph} className={s.tagSigil} />
-              {t.name}
-            </span>
-          ))}
-        </div>
       </div>
 
       <div className={s.big3}>
@@ -220,7 +216,8 @@ function CardFace({ card }: { card: CardData }) {
             <span className={s.moveIdx}>{String(i + 1).padStart(2, "0")}</span>
             <span className={s.moveName}>
               {m.name}
-              {m.note && <small>via {m.note}</small>}
+              {/* the "via" line prints once: rows that share it would just repeat it */}
+              {m.note && m.note !== card.moves[i - 1]?.note && <small>via {m.note}</small>}
             </span>
             <b className={s.moveVal}>
               {m.value}
@@ -246,14 +243,26 @@ function CardFace({ card }: { card: CardData }) {
         <p className={s.flavor}>{card.flavor}</p>
         {card.weak && (
           <p className={s.weak}>
-            <b>Weak to:</b> {card.weak.name}. Moved {card.weak.pct}% of your picks.
+            <b>Weak to:</b> {card.weak.name}. {card.weak.pct < 1 ? "Barely moved your picks." : `Moved ${card.weak.pct}% of your picks.`}
           </p>
         )}
       </div>
 
       <footer className={`${s.mrz} ${s.pr}`} style={pd(8 + card.moves.length)}>
         <span>{card.mrz?.[0]}</span>
-        <span>{card.mrz?.[1]}</span>
+        {/* collector line: set and number bottom left, rarity gems bottom right, like a printed card */}
+        <span className={s.collector}>
+          <span>
+            {BRAND.cardSet} · No. <b className={s.dots}>{card.serial}</b>
+            {card.secondDraw && <> · 2nd draw</>}
+            {!!card.recasts?.length && <> · recast ×{card.recasts.length}</>}
+          </span>
+          {/* the tier's own print number, like a numbered parallel: the 12th Holo Rare ever pulled reads 012 */}
+          <span className={s.tierNo}>
+            <i className={s.gems}>{GEMS[card.rarity]}</i>
+            {card.rarityNo ? <b className={s.dots}>{String(card.rarityNo).padStart(3, "0")}</b> : null}
+          </span>
+        </span>
       </footer>
     </div>
   );
@@ -297,9 +306,9 @@ function Constellation({ card }: { card: CardData }) {
 }
 
 function ArtCollage({ card }: { card: CardData }) {
-  // the vibes print beside the loves: the picture of what each was read as, or the word itself set as a plate
-  const vibes = (card.vibes ?? []).slice(0, Math.max(0, 5 - Math.min(card.art.length, 4)));
-  if (!card.art.length && !vibes.length) {
+  // only the loves print as art: a vibe's Qloo picture is whatever entity anchored the tag ("ramen" can come back as a
+  // noodle brand's packet), so vibes print as stickers instead (VibeStickers)
+  if (!card.art.length) {
     // Generative fallback: layered orbs in the card's type colours.
     return (
       <div className={s.gen}>
@@ -309,29 +318,33 @@ function ArtCollage({ card }: { card: CardData }) {
       </div>
     );
   }
-  const imgs = card.art.slice(0, 5 - vibes.length);
+  const imgs = card.art.slice(0, 5);
   return (
-    <div className={s.collage} data-n={imgs.length + vibes.length}>
+    <div className={s.collage} data-n={imgs.length}>
       {imgs.map((src, i) => (
         // eslint-disable-next-line @next/next/no-img-element
         <img key={src} src={src} alt="" crossOrigin="anonymous" style={{ ["--i" as string]: i }} />
       ))}
-      {vibes.map((v) =>
-        v.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={v.name} src={v.image} alt="" crossOrigin="anonymous" />
-        ) : (
-          <span key={v.name} className={s.vibePlate}>
-            <b style={{ ["--n" as string]: longestWord(v.name) }}>{v.name}</b>
-            <small>vibe</small>
-          </span>
-        ),
-      )}
     </div>
   );
 }
 
-const longestWord = (t: string) => Math.max(4, ...t.split(/\s+/).map((w) => w.length));
+/** Vibes as die-cut foil stickers on the art's corner: the word itself, never a borrowed picture. */
+function VibeStickers({ card }: { card: CardData }) {
+  const vibes = (card.vibes ?? []).slice(0, 2);
+  if (!vibes.length) return null;
+  return (
+    <div className={s.vibes}>
+      {vibes.map((v, i) => (
+        <span key={v.name} className={s.vibe} style={{ ["--t" as string]: i % 2 ? "2.5deg" : "-3deg" }}>
+          <Sparkle className={s.vibeMark} />
+          <small>vibe</small>
+          <b>{v.name}</b>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /** Guilloche rosette (banknote / passport security linework), generated once. */
 const ROSETTE = (() => {

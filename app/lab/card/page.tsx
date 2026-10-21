@@ -6,12 +6,14 @@ import { buildCard } from "@/lib/card";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { useAgentRun } from "@/lib/useAgentRun";
 
-/** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1) */
+/** Dev lab: renders the collectible card for a persona. /lab/card?p=neon (&w=300,340,380 &still=1 &tiers=1: the same card in every rarity &vibes=Ramen,Cryptocurrency) */
 export default function CardLab() {
   const { result, running, error, run, setResult } = useAgentRun();
   const [widths, setWidths] = useState<number[]>([360]);
   const [still, setStill] = useState(false);
   const [sim, setSim] = useState(false);
+  const [tiers, setTiers] = useState(false);
+  const [vibes, setVibes] = useState<string[]>([]);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     const key = q.get("p") ?? "neon";
@@ -19,6 +21,8 @@ export default function CardLab() {
     if (w) setWidths(w.split(",").map(Number).filter(Boolean));
     setStill(q.get("still") === "1");
     setSim(q.get("sim") === "1");
+    setTiers(q.get("tiers") === "1");
+    setVibes((q.get("vibes") ?? "").split(",").filter(Boolean));
     const p = PERSONAS.find((x) => x.key === key) ?? PERSONAS[1];
     // Lab-only: reuse the result /lab/results cached for this persona (?fresh=1 to re-run).
     let cached = null;
@@ -36,10 +40,11 @@ export default function CardLab() {
   // ?sim=1: lab-only what-if so the Deep Cut stamp and Weakness line can be eyeballed (seeds read as 20% popular, the quietest seed inert). Never used outside /lab.
   const card = useMemo(() => {
     if (!result) return null;
-    if (!sim) return buildCard(result);
+    const vr = vibes.length ? { ...result, vibes: vibes.map((name) => ({ id: name, name, via: [] as string[] })) } : result;
+    if (!sim) return buildCard(vr);
     const quiet = [...result.seeds].sort((a, b) => result.brands.reduce((t, x) => t + (x.explain[a.id] ?? 0), 0) - result.brands.reduce((t, x) => t + (x.explain[b.id] ?? 0), 0))[0];
     return buildCard({ ...result, seeds: result.seeds.map((s) => ({ ...s, popularity: 0.2 })), inert: [{ id: quiet.id, influence: 0.02 }] });
-  }, [result, sim]);
+  }, [result, sim, vibes]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
@@ -47,9 +52,11 @@ export default function CardLab() {
       {error && <p className="text-bad">{error}</p>}
       {card && (
         <div className="flex flex-wrap items-start justify-center gap-8">
-          {widths.map((w) => (
-            <HoloCard key={w} card={card} width={w} still={still} />
-          ))}
+          {tiers
+            ? (["common", "rare", "holo", "secret"] as const).map((r) => (
+                <HoloCard key={r} card={{ ...card, rarity: r, rarityLabel: { common: "Common", rare: "Rare", holo: "Holo Rare", secret: "Secret Rare" }[r] }} width={widths[0]} still={still} />
+              ))
+            : widths.map((w) => <HoloCard key={w} card={card} width={w} still={still} />)}
         </div>
       )}
       {card && (

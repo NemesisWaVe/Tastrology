@@ -246,11 +246,12 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
   const seedName = (id: string) => displayName(r.seeds.find((x) => x.id === id)?.name ?? "");
   const beats: Beat[] = [];
   const n = r.seeds.length;
-  // the vibes were read too (they steer the brands), so they count here and join the fan: their picture, or the word
+  // the vibes were read too (they steer the brands), so they count here and join the fan as words: a vibe's Qloo
+  // picture is just whatever entity anchored the tag, which can be off ("ramen" came back as a noodle-brand packet)
   const vibes = r.vibes ?? [];
   const fan = [
     ...r.seeds.map((x) => ({ key: x.id, src: x.image ? proxied(x.image) : undefined, word: undefined as string | undefined })),
-    ...vibes.map((v) => ({ key: `vibe:${v.name}`, src: v.image ? proxied(v.image) : undefined, word: v.image ? undefined : v.name })),
+    ...vibes.map((v) => ({ key: `vibe:${v.name}`, src: undefined as string | undefined, word: v.name as string | undefined })),
   ];
   const m = fan.length;
 
