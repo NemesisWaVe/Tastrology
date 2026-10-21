@@ -9,6 +9,7 @@ import { LEVELS, levelOf } from "@/lib/friendLevels";
 import { useReducedMotion } from "motion/react";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
+import { Countdown } from "./Countdown";
 import { FriendSky, SKY_TINT } from "./FriendSky";
 import type { Bout, Friend, Player } from "@/lib/friends";
 import { rememberPlayerCode } from "@/lib/player";
@@ -30,12 +31,13 @@ type Data = {
 };
 
 /**
- * Live pacing: right after anything happens (you act, or the counter moves) the page checks every 1.5s for a minute,
- * so a fight lands on both screens at once; then the gap stretches x1.5 per check up to 30s while nothing happens.
+ * Live pacing: right after anything happens (you act, or the counter moves) the page checks every 1.5s for five
+ * minutes (a challenge's whole life), so a fight lands on both screens at once; then it eases out to every 4s.
+ * Each check is one tiny counter read.
  */
 const HOT_MS = 1500;
-const HOT_FOR_MS = 60_000;
-const COOL_MAX_MS = 30_000;
+const HOT_FOR_MS = 5 * 60_000;
+const COOL_MAX_MS = 4000;
 
 export async function friendsOp(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; a?: string; b?: string; outcome?: string; status?: string }> {
   try {
@@ -235,10 +237,11 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
     });
   const incoming = d.requests?.incoming ?? [];
   const sent = d.requests?.sent ?? [];
-  const open = (d.bouts ?? []).filter((b) => b.status === "open" || (b.status === "expired" && b.role === "out"));
+  // Live challenges only: a lapsed one just goes (a bet you put up comes back to you on its own).
+  const open = (d.bouts ?? []).filter((b) => b.status === "open");
   // Fights that happened, with the running record; challenges that never happened collapse into one count.
   const fights = (d.bouts ?? []).filter((b) => b.status === "done" && b.outcome);
-  const skipped = (d.bouts ?? []).filter((b) => b.status === "declined" || b.status === "cancelled").length;
+  const skipped = (d.bouts ?? []).filter((b) => b.status === "declined" || b.status === "cancelled" || b.status === "expired").length;
   const record = { won: fights.filter((b) => b.outcome === "won").length, lost: fights.filter((b) => b.outcome === "lost").length, tied: fights.filter((b) => b.outcome === "tied").length };
   // Current run (newest first) and per-rival tallies, so the log reads at a glance instead of growing forever.
   const streak = { w: fights[0]?.outcome, n: fights.findIndex((b) => b.outcome !== fights[0]?.outcome) };
@@ -251,7 +254,8 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
     return m.set(b.pc, r);
   }, new Map<string, { pc: string; name: string; w: number; l: number; n: number }>()).values()].sort((x, y) => y.n - x.n);
   const friendPcs = new Set((d.friends ?? []).map((f) => f.pc));
-  const fighting = new Set((d.bouts ?? []).filter((b) => b.status === "open").map((b) => b.pc));
+  const fighting = new Set(open.map((b) => b.pc));
+  const live = new Map(open.map((b) => [b.pc, b.ends]));
 
   return (
     <div className="relative isolate flex flex-col gap-6">
@@ -287,14 +291,16 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                     <>
                       <b className="font-semibold">{who(b)}</b> challenged you{b.stake ? <> for <span className="text-accent">{b.stake} dust</span>, blind draw</> : " to a friendly fight"}
                     </>
-                  ) : b.status === "expired" ? (
-                    <>Your challenge to {who(b)} expired{b.stake ? `. Take your ${b.stake} dust back.` : "."}</>
                   ) : (
                     <>
                       You challenged <b className="font-semibold">{who(b)}</b>
-                      {b.stake ? <> for <span className="text-accent">{b.stake}</span></> : ""} · waiting
+                      {b.stake ? <> for <span className="text-accent">{b.stake}</span></> : ""} · waiting for them
                     </>
                   )}
+                  <span className="mt-1 flex items-center gap-2 text-xs text-ink-3">
+                    <Countdown ends={b.ends} onEnd={() => void load()} />
+                    {b.role === "in" ? "to answer, then it's gone" : b.stake ? "then your dust comes back" : "then it lapses"}
+                  </span>
                 </p>
                 <span className="flex gap-2">
                   {b.role === "in" && (
@@ -303,7 +309,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                     </button>
                   )}
                   <button type="button" disabled={busy !== null} onClick={() => void run(`${b.id}x`, { op: "decline", id: b.id })} className={pill}>
-                    {b.role === "in" ? "Decline" : b.status === "expired" ? "Close" : "Cancel"}
+                    {b.role === "in" ? "Decline" : "Cancel"}
                   </button>
                 </span>
               </li>
@@ -515,7 +521,9 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                         <div className="flex w-full shrink-0 items-center gap-1.5 pl-[52px] sm:w-auto sm:pl-0">
                           {me.card && f.card ? (
                             fighting.has(f.pc) ? (
-                              <span className={`${mono} rounded-full border border-accent/30 px-3 py-1.5 text-accent/80`}>Waiting</span>
+                              <span className="inline-flex items-center rounded-full border border-accent/30 px-3 py-1">
+                                <Countdown ends={live.get(f.pc) ?? 0} bar={false} />
+                              </span>
                             ) : (
                               <button type="button" disabled={busy !== null} onClick={() => void challenge(f.pc, 0)} className={lime}>
                                 Fight

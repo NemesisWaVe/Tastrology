@@ -25,8 +25,8 @@ const ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const FRIENDS_MAX = 200;
 export const STAKES = [10, 25, 50] as const;
 export const BOUTS_PER_DAY = 5;
-/** An unanswered challenge lapses after three days; the challenger can then take any stake back. */
-export const BOUT_TTL_MS = 3 * 24 * 3600 * 1000;
+/** A challenge is live: unanswered for five minutes, it lapses (both sides see the clock) and any stake goes back. */
+export const BOUT_TTL_MS = 5 * 60 * 1000;
 const DAY_MS = 86_400_000;
 export const BOUT_SK = /^BOUT#[0-9a-z]{6,12}#[0-9A-Za-z_-]{8}$/;
 
@@ -68,6 +68,8 @@ export interface Bout {
   stake: number;
   status: "open" | "done" | "declined" | "cancelled" | "expired";
   at: number;
+  /** When an open challenge lapses (ms). */
+  ends: number;
   /** Settled bouts: the drawn cards (a = challenger) and how it went for you. */
   a?: string;
   b?: string;
@@ -287,11 +289,11 @@ export async function markSeen(uid: string): Promise<void> {
 }
 
 /** What needs you, for the site-wide alert: open challenges sent to you and friend requests. */
-export async function alerts(uid: string): Promise<{ bouts: { id: string; who: string; stake: number }[]; requests: number } | null> {
+export async function alerts(uid: string): Promise<{ bouts: { id: string; who: string; stake: number; ends: number }[]; requests: number } | null> {
   const [b, r] = await Promise.all([ddbQuery(U(uid), "BOUT#", 15, undefined, undefined, true), ddbQuery(U(uid), "REQ#", 50, undefined, ["pc"])]);
   if (!b || !r) return null;
   const open = b.items.map(toBout).filter((x) => x.role === "in" && x.status === "open");
-  return { bouts: open.map((x) => ({ id: x.id, who: x.user ? `@${x.user}` : x.name || x.pc, stake: x.stake })), requests: r.items.length };
+  return { bouts: open.map((x) => ({ id: x.id, who: x.user ? `@${x.user}` : x.name || x.pc, stake: x.stake, ends: x.ends })), requests: r.items.length };
 }
 
 export async function inboxCount(uid: string): Promise<number | null> {
@@ -500,6 +502,7 @@ const toBout = (it: Flat): Bout => ({
   stake: Number(it.stake) || 0,
   status: lapsed(it) ? "expired" : ((str(it.status) || "open") as Bout["status"]),
   at: Number(it.at) || 0,
+  ends: (Number(it.at) || 0) + BOUT_TTL_MS,
   ...(it.a ? { a: str(it.a), b: str(it.b), outcome: str(it.outcome) as Bout["outcome"] } : {}),
 });
 
@@ -508,7 +511,11 @@ const BOUTS_SEEN = 50;
 
 export async function listBouts(uid: string): Promise<Bout[] | null> {
   const page = await ddbQuery(U(uid), "BOUT#", BOUTS_SEEN, undefined, undefined, true);
-  return page ? page.items.map(toBout) : null;
+  if (!page) return null;
+  // A lapsed bet you put up comes back to you on its own, the next time your list loads.
+  const due = page.items.filter((it) => it.role === "out" && (Number(it.stake) || 0) > 0 && lapsed(it));
+  if (due.length) await Promise.allSettled(due.map((it) => closeBout(uid, str(it.SK), "expired")));
+  return page.items.map(toBout);
 }
 
 /**
@@ -521,13 +528,11 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   const other = str(f?.uid);
   if (!other) return "friends-only";
   const now = Date.now();
-  // One friendly challenge waits per pair (Stardust bouts have their own daily cap): repeat taps would otherwise
-  // stack copies on their list and push older challenges out of the recent window.
-  if (!stake) {
-    const recent = await ddbQuery(U(uid), "BOUT#", BOUTS_SEEN, undefined, ["pc", "role", "status", "stake", "at"], true);
-    const waiting = recent?.items.find((it) => str(it.pc) === pc && !(Number(it.stake) || 0) && it.status === "open" && !lapsed(it, now));
-    if (waiting) return waiting.role === "in" ? "theirs" : "already";
-  }
+  // One live challenge per pair, friendly or bet, from either side: repeat taps would otherwise stack copies on
+  // their list and push older challenges out of the recent window.
+  const recent = await ddbQuery(U(uid), "BOUT#", BOUTS_SEEN, undefined, ["pc", "role", "status", "at"], true);
+  const waiting = recent?.items.find((it) => str(it.pc) === pc && it.status === "open" && !lapsed(it, now));
+  if (waiting) return waiting.role === "in" ? "theirs" : "already";
   const SK = `BOUT#${now.toString(36)}#${randomBytes(6).toString("base64url")}`;
   const day = new Date(now).toISOString().slice(0, 10);
   const base = { stake, status: "open", at: now };
@@ -623,13 +628,13 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
 }
 
 /** Declined by the friend or cancelled by the challenger: any stake goes back to the challenger. */
-export async function closeBout(uid: string, sk: string): Promise<"closed" | "gone" | "error"> {
+export async function closeBout(uid: string, sk: string, as?: "expired"): Promise<"closed" | "gone" | "error"> {
   const mine = await ddbGet(U(uid), sk);
   if (!mine || mine.status !== "open") return "gone";
   const other = str(mine.uid);
   const challenger = mine.role === "out" ? uid : other;
   const stake = Number(mine.stake) || 0;
-  const status = mine.role === "out" ? "cancelled" : "declined";
+  const status = as ?? (mine.role === "out" ? "cancelled" : "declined");
   const now = Date.now();
   const close = (who: string): TxOp => ({
     update: { PK: U(who), SK: sk },

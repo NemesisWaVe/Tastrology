@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Countdown } from "./Countdown";
 
-type Alerts = { bouts: { id: string; who: string; stake: number }[]; requests: number };
+type Alerts = { bouts: { id: string; who: string; stake: number; ends: number }[]; requests: number };
 
-const BEAT_MS = 25_000;
+/** A challenge lives five minutes, so the counter is read every 4s while the tab is visible (one tiny read). */
+const BEAT_MS = 4000;
 
 /**
- * Site-wide, while signed in and the tab is visible: one tiny ping every 25s keeps you "online" for friends and
+ * Site-wide, while signed in and the tab is visible: one tiny ping every 4s keeps you "online" for friends and
  * watches your change counter. When it moves, it asks what needs you; a challenge then stays pinned on every page
  * until you open Friends.
  * No sockets, no push service: the same counter the friends page uses, so it costs one read per beat.
@@ -92,7 +94,8 @@ export function LiveAlerts() {
       sessionStorage.setItem("tastrology:acked", JSON.stringify([...next]));
     } catch {}
   }, [onFriends, waiting, acked]);
-  const fresh = waiting.filter((b) => !acked.has(b.id));
+  const [, setTick] = useState(0);
+  const fresh = waiting.filter((b) => !acked.has(b.id) && b.ends > Date.now());
   const top = fresh[0];
   if (!top || onFriends || hidden === path) return null;
   const text = `${top.who} challenged you${top.stake ? ` for ${top.stake} dust` : ""}${fresh.length > 1 ? ` · +${fresh.length - 1} more` : ""}`;
@@ -101,6 +104,7 @@ export function LiveAlerts() {
       <div className="flex w-full max-w-md items-center gap-3 rounded-full border border-accent/40 bg-card/90 py-2 pl-5 pr-2 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.9)] backdrop-blur-md">
         <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent shadow-[0_0_10px_#c6ff3d]" />
         <p className="min-w-0 flex-1 truncate text-sm text-ink">{text}</p>
+        <Countdown key={top.id} ends={top.ends} bar={false} onEnd={() => setTick((n) => n + 1)} />
         <Link href="/friends" className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-paper">
           Fight
         </Link>

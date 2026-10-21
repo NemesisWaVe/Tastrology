@@ -260,8 +260,9 @@ describe("stardust bouts", () => {
     const [a, b] = await pair();
     wallet("ann", 50);
     wallet("bo", 5);
+    expect(await openBout("bo", b, a.pc, 10)).toBe("empty");
     await openBout("ann", a, b.pc, 50);
-    expect(await openBout("ann", a, b.pc, 10)).toBe("empty");
+    expect(await openBout("ann", a, b.pc, 10)).toBe("already");
     const [bout] = (await listBouts("bo"))!;
     expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "empty" });
     expect(await closeBout("bo", bout.id)).toBe("closed");
@@ -282,7 +283,7 @@ describe("stardust bouts", () => {
     expect((await listFriends("bo"))![0].days).toBe(1);
   });
 
-  it("keeps one friendly challenge waiting per pair, from either side", async () => {
+  it("keeps one live challenge per pair, friendly or bet, from either side", async () => {
     const [a, b] = await pair();
     expect(await openBout("ann", a, b.pc, 0)).toBe("open");
     expect(await openBout("ann", a, b.pc, 0)).toBe("already");
@@ -292,9 +293,11 @@ describe("stardust bouts", () => {
     const open = (await listBouts("bo"))!.find((x) => x.status === "open")!;
     await closeBout("bo", open.id);
     expect(await openBout("bo", b, a.pc, 0)).toBe("open");
+    wallet("ann", 50);
+    expect(await openBout("ann", a, b.pc, 10)).toBe("theirs");
   });
 
-  it("lets challenges lapse after three days", async () => {
+  it("lets challenges lapse after five minutes and hands a lapsed bet back on its own", async () => {
     const [a, b] = await pair();
     wallet("ann", 50);
     await openBout("ann", a, b.pc, 10);
@@ -303,16 +306,24 @@ describe("stardust bouts", () => {
     row.at = N(Date.now() - BOUT_TTL_MS - 1);
     db.items.get(`USER#ann|${bout.id}`)!.at = N(Date.now() - BOUT_TTL_MS - 1);
     expect((await listBouts("bo"))![0].status).toBe("expired");
+    expect((await listBouts("bo"))![0].ends).toBe(Number(row.at.N) + BOUT_TTL_MS);
     expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "gone" });
-    expect(await closeBout("ann", bout.id)).toBe("closed");
+    expect(dust("ann")).toBe(40);
+    expect((await listBouts("ann"))![0].status).toBe("expired");
     expect(dust("ann")).toBe(50);
+    expect(await closeBout("ann", bout.id)).toBe("gone");
+    expect(await openBout("ann", a, b.pc, 0)).toBe("open"); // a lapsed one doesn't block the next
   });
 
   it("caps bouts per day", async () => {
     const [a, b] = await pair();
     wallet("ann", 500);
-    for (let i = 0; i < 5; i++) expect(await openBout("ann", a, b.pc, 10)).toBe("open");
+    for (let i = 0; i < 5; i++) {
+      expect(await openBout("ann", a, b.pc, 10)).toBe("open");
+      // one live challenge per pair: cancel it (stake back) before the next
+      await closeBout("ann", (await listBouts("ann"))!.find((x) => x.status === "open")!.id);
+    }
     expect(await openBout("ann", a, b.pc, 10)).toBe("daily");
-    expect(dust("ann")).toBe(450);
+    expect(dust("ann")).toBe(500);
   });
 });
