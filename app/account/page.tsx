@@ -209,7 +209,7 @@ function CloseAccount({ onDone }: { onDone: () => void }) {
       ) : (
         <div className="mt-3">
           <p className="max-w-xl text-sm text-ink-2">
-            This can&apos;t be undone. Your deck, credits and Stardust go with it. Cards you already shared stay readable at their links, with no name on them.
+            This can&apos;t be undone. Your deck, credits and Stardust go with it, and every card you minted is erased, so links you shared stop working.
           </p>
           <p className="mt-4 text-sm text-ink-2">
             Type <span className="font-mono text-ink">close</span> to confirm.

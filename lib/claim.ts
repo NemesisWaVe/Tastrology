@@ -12,6 +12,7 @@ export type ClaimResult =
  *    The same account may re-run the claim, so a half-finished copy can be retried.
  * 2. Every OWNER#<dev> card is copied write-once to OWNER#<userId> with minted:0, source:"claim" (the device never proved who minted it).
  * The device items stay where they are (retry window); `complete` says whether every copy landed, so the caller knows it may clear tm_d.
+ * USER#<userId>/CLAIM#<dev> and `own: 1` on cards minted on that device let closing the account find and erase them (lib/wipe.ts).
  */
 export async function claimDevice(userId: string, dev: string): Promise<ClaimResult> {
   const put = await ddbPutIfAbsent({ PK: `DEVICE#${dev}`, SK: "CLAIM", userId, at: Date.now() });
@@ -21,6 +22,7 @@ export async function claimDevice(userId: string, dev: string): Promise<ClaimRes
     if (!prior) return { ok: false, reason: "error" };
     if (prior.userId !== userId) return { ok: false, reason: "other-account" };
   }
+  if ((await ddbPutIfAbsent({ PK: `USER#${userId}`, SK: `CLAIM#${dev}`, dev, at: Date.now() })) === "error") return { ok: false, reason: "error" };
   const page = await ddbQuery(`OWNER#${dev}`, "CARD#", CLAIM_MAX);
   if (!page) return { ok: false, reason: "error" };
   let moved = 0;
@@ -38,6 +40,8 @@ export async function claimDevice(userId: string, dev: string): Promise<ClaimRes
       addedAt: Number(it.addedAt) || Date.now(),
       minted: guest?.code === code && it.source === "guest" ? 1 : 0,
       source: guest?.code === code && it.source === "guest" ? "guest" : "claim",
+      // minted on this device (not collected there): it goes when the account is closed
+      ...(Number(it.minted) === 1 ? { own: 1 } : {}),
     });
     if (out === "created") moved++;
     else if (out === "error") complete = false;

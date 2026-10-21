@@ -665,7 +665,7 @@ export async function wipePlayer(uid: string): Promise<boolean> {
 }
 
 /** Deletes every row in a partition (sort keys all start with a capital letter or digit). Rare, so plain deletes. */
-async function purge(PK: string): Promise<boolean> {
+export async function purge(PK: string): Promise<boolean> {
   for (const lead of "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
     for (let page = 0; page < 20; page++) {
       const q = await ddbQuery(PK, lead, 100, undefined, ["SK"]);

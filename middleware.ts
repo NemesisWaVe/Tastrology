@@ -23,7 +23,7 @@ export default async function middleware(req: NextRequest, ev: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    // Everything except Next internals, static files, the cached image/card/battle APIs and the health check.
-    "/((?!_next|api/img|api/card|api/battle|api/health|[^?]*\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)",
+    // Everything except Next internals, static files, the cached image/card/battle APIs, the health check and Clerk's webhook.
+    "/((?!_next|api/img|api/card|api/battle|api/health|api/clerk-webhook|[^?]*\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)",
   ],
 };
