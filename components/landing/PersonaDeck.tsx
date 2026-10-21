@@ -80,10 +80,14 @@ function PersonaCard({ p, tier, i, total, onPick, picked, dim }: { p: Persona; t
     el.style.setProperty("--tx", `${(0.5 - py) * 8}deg`);
     el.style.setProperty("--px", `${px * 100}%`);
     el.style.setProperty("--py", `${py * 100}%`);
+    el.style.setProperty("--mx", (px - 0.5).toFixed(3));
+    el.style.setProperty("--my", (py - 0.5).toFixed(3));
   };
   const leave = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.currentTarget.style.setProperty("--ty", "0deg");
     e.currentTarget.style.setProperty("--tx", "0deg");
+    e.currentTarget.style.setProperty("--mx", "0");
+    e.currentTarget.style.setProperty("--my", "0");
   };
 
   return (
@@ -107,6 +111,7 @@ function PersonaCard({ p, tier, i, total, onPick, picked, dim }: { p: Persona; t
           backgroundImage: `radial-gradient(120% 70% at 100% 0%, ${look.a}33 0%, transparent 55%), radial-gradient(90% 60% at 0% 100%, ${look.b}26 0%, transparent 60%)`,
         }}
       >
+        {tier.tier === "holo" && <span className={s.holoFoil} aria-hidden />}
         <span className={s.personaSheen} aria-hidden />
 
         <span className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
@@ -118,7 +123,7 @@ function PersonaCard({ p, tier, i, total, onPick, picked, dim }: { p: Persona; t
           </span>
         </span>
 
-        <span className="relative mt-6 grid h-20 w-20 place-items-center sm:mt-8 sm:h-28 sm:w-28">
+        <span className={`${s.orb} relative mt-6 grid h-20 w-20 place-items-center sm:mt-8 sm:h-28 sm:w-28`}>
           <span
             className="absolute inset-0 rounded-full opacity-80 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
             style={{ background: `radial-gradient(circle, ${look.a}, transparent 70%)` }}

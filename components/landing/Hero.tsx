@@ -110,19 +110,23 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             </Magnetic>
           </motion.div>
 
-          <motion.p
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 1.2 }}
-            className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3 max-[480px]:mt-5"
+            className="mt-7 flex flex-wrap items-center gap-2 max-[480px]:mt-5"
           >
-            <span className="text-ink-2">No</span>
+            <span className="mr-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Not needed</span>
             {["birth chart", "purchase history", "40-question quiz"].map((w, i) => (
-              <span key={w} className={s.strike} style={{ "--k": struck ? 1 : 0, "--d": `${i * 0.18}s` } as React.CSSProperties}>
+              <span key={w} className={s.nope} style={{ "--k": struck ? 1 : 0, "--d": `${i * 0.18}s` } as React.CSSProperties}>
                 {w}
+                {/* a quick marker scribble, drawn on once the line has settled */}
+                <svg viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden>
+                  <path d={i === 1 ? "M2 8 C 22 4, 40 9, 60 5 S 88 4, 98 6" : i === 2 ? "M2 6 C 18 9, 38 3, 58 7 S 84 8, 98 4" : "M2 5 C 20 8, 42 4, 62 7 S 86 5, 98 7"} pathLength={1} />
+                </svg>
               </span>
             ))}
-          </motion.p>
+          </motion.div>
         </motion.div>
 
         <motion.div id="hero-card" style={{ y: cardY }} className="relative z-10 pb-16 max-[480px]:order-first max-[480px]:pb-0 lg:pb-0">

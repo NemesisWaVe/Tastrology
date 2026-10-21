@@ -3,7 +3,7 @@
 import { PersonaGlyph } from "./PersonaGlyph";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
-import { HoloCard } from "@/components/card/HoloCard";
+import { FlipCard } from "@/components/card/FlipCard";
 import Link from "next/link";
 import type { CardData } from "@/lib/card";
 import type { Persona } from "@/lib/personas";
@@ -85,7 +85,8 @@ export function Specimen({
               transition={{ duration: 0.75, ease: EASE }}
               style={{ transformPerspective: 1200 }}
             >
-              <HoloCard card={card} width={width} idle />
+              {/* a real card: drag sideways or double-tap to turn it over (the Flip chip says so) */}
+              <FlipCard card={card} width={width} idle />
             </motion.div>
           ) : (
             <motion.div key="ph" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.4 }}>
