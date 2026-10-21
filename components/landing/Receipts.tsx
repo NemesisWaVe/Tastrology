@@ -13,7 +13,8 @@ const clean = (n: string) => n.replace(/\s*\(.*\)$/, "");
 interface View {
   sign: string;
   seeds: string[];
-  brands: { name: string; aff: number; cat: string }[];
+  /** explain: share of the match each love carries; lost: affinity lost when that love is removed (real re-query). */
+  brands: { name: string; aff: number; cat: string; explain: Record<string, number>; lost: Record<string, number> }[];
   item: { name: string; cat: string; aff: number; tier?: number };
   earned: { name: string; share: number }[];
   voided?: { name: string; aff: number; reason: string };
@@ -30,9 +31,9 @@ const FALLBACK: View = {
   sign: "Futuristic Industrial Minimalist",
   seeds: ["Blade Runner 2049", "Daft Punk", "Cyberpunk 2077", "Neuromancer", "The Great British Baking Show"],
   brands: [
-    { name: "Rimowa", aff: 0.876, cat: "Bags & Leather" },
-    { name: "Vollebak", aff: 0.865, cat: "Activewear" },
-    { name: "Golden Concept", aff: 0.865, cat: "Bags & Leather" },
+    { name: "Rimowa", aff: 0.876, cat: "Bags & Leather", explain: { "Daft Punk": 0.549, "Blade Runner 2049": 0.363, "Cyberpunk 2077": 0.088 }, lost: {} },
+    { name: "Vollebak", aff: 0.865, cat: "Activewear", explain: {}, lost: {} },
+    { name: "Golden Concept", aff: 0.865, cat: "Bags & Leather", explain: {}, lost: {} },
   ],
   item: { name: "Rimowa", cat: "Bags & Leather", aff: 0.876, tier: 3 },
   earned: [
@@ -66,10 +67,17 @@ function toView(r: StyleResult | null): View {
     .filter((e) => e.name);
   const dual = r.dna.lobes.length > 1;
   const v = r.rejected[0];
+  const byName = (m: Record<string, number>) => Object.fromEntries(Object.entries(m).map(([id, x]) => [name(id), x]).filter(([k]) => k));
   return {
     sign: r.dna.name,
     seeds: r.seeds.map((x) => clean(x.name)),
-    brands: main.slice(0, 3).map((b) => ({ name: b.entity.name, aff: b.affinity, cat: b.category })),
+    brands: main.slice(0, 3).map((b) => ({
+      name: b.entity.name,
+      aff: b.affinity,
+      cat: b.category,
+      explain: byName(b.explain ?? {}),
+      lost: byName(b.ablation ?? {}),
+    })),
     item: { name: top.entity.name, cat: top.category, aff: top.affinity, tier: top.entity.tier },
     earned: earned.length ? earned : FALLBACK.earned,
     voided: v ? { name: v.entity.name, aff: v.affinity, reason: v.reason } : undefined,
@@ -86,6 +94,9 @@ function toView(r: StyleResult | null): View {
 
 export function Receipts({ result }: { result: StyleResult | null }) {
   const v = useMemo(() => toView(result), [result]);
+  /** The love the visitor has dropped from the graph (leave-one-out, one at a time); the terminal reports it. */
+  const [drop, setDrop] = useState<string | null>(null);
+  useEffect(() => setDrop(null), [v]);
 
   return (
     <section id="receipts" className="relative py-20 sm:py-28">
@@ -97,7 +108,7 @@ export function Receipts({ result }: { result: StyleResult | null }) {
               <MaskedWords text="never showed its math." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
             </h2>
           </div>
-          <MathReadout v={v} />
+          <MathReadout v={v} drop={drop} />
         </div>
 
         <div className="mt-16 space-y-20 sm:mt-24 sm:space-y-28">
@@ -111,7 +122,7 @@ export function Receipts({ result }: { result: StyleResult | null }) {
               </>
             }
           >
-            <Graph v={v} />
+            <Graph v={v} drop={drop} onDrop={setDrop} />
           </Beat>
 
           <Beat
@@ -169,15 +180,19 @@ function Beat({ tag, title, body, children, flip }: { tag: string; title: string
   );
 }
 
-/* Beat 1: seeds → Qloo → brands, drawn as live wires. */
-function Graph({ v }: { v: View }) {
+/* Beat 1: seeds → Qloo → brands, drawn as live wires. Playable: hover a love to light its share of every brand, tap it to
+   drop it and see what each brand really lost when Qloo was asked again without it (the agent's leave-one-out data). */
+function Graph({ v, drop, onDrop }: { v: View; drop: string | null; onDrop: (n: string | null) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const on = useInView(ref, { once: true, margin: "200px" });
+  const [hover, setHover] = useState<string | null>(null);
   const seeds = v.seeds.slice(0, 5);
   const brands = v.brands;
   const ys = (n: number) => Array.from({ length: n }, (_, i) => ((i + 0.5) / n) * 100);
   const sy = ys(seeds.length);
   const by = ys(brands.length);
+  const focus = drop ?? hover;
+  const playable = brands.some((b) => Object.keys(b.explain).length);
 
   return (
     <div ref={ref} className="relative bg-[radial-gradient(80%_70%_at_50%_50%,rgba(198,255,61,0.05),transparent_70%)] p-4 sm:p-6">
@@ -187,54 +202,99 @@ function Graph({ v }: { v: View }) {
       </div>
       <div className="relative h-[300px] sm:h-[340px]">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          {sy.map((y, i) => (
-            <g key={`s${i}`}>
-              <motion.path
-                d={`M33 ${y} C 42 ${y}, 42 50, 50 50`}
-                fill="none"
-                stroke="rgba(243,241,236,0.18)"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-                initial={{ pathLength: 0 }}
-                animate={on ? { pathLength: 1 } : undefined}
-                transition={{ duration: 1.1, ease: EASE, delay: 0.1 + i * 0.08 }}
-              />
-              {on && (
-                <path d={`M33 ${y} C 42 ${y}, 42 50, 50 50`} fill="none" stroke="#c6ff3d" strokeOpacity={0.55} strokeWidth={1.2} vectorEffect="non-scaling-stroke" className={s.flow} />
-              )}
-            </g>
-          ))}
-          {by.map((y, i) => (
-            <g key={`b${i}`}>
-              <motion.path
-                d={`M50 50 C 58 50, 58 ${y}, 67 ${y}`}
-                fill="none"
-                stroke="rgba(243,241,236,0.18)"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-                initial={{ pathLength: 0 }}
-                animate={on ? { pathLength: 1 } : undefined}
-                transition={{ duration: 1, ease: EASE, delay: 0.8 + i * 0.1 }}
-              />
-              {on && (
-                <path d={`M50 50 C 58 50, 58 ${y}, 67 ${y}`} fill="none" stroke="#c6ff3d" strokeOpacity={0.55} strokeWidth={1.2} vectorEffect="non-scaling-stroke" className={s.flow} />
-              )}
-            </g>
-          ))}
+          {sy.map((y, i) => {
+            const n = seeds[i];
+            const gone = drop === n;
+            const lit = focus === n && !gone;
+            return (
+              <g key={`s${i}`}>
+                <motion.path
+                  d={`M33 ${y} C 42 ${y}, 42 50, 50 50`}
+                  fill="none"
+                  stroke={gone ? "rgba(255,138,128,0.35)" : "rgba(243,241,236,0.18)"}
+                  strokeDasharray={gone ? "2 3" : undefined}
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                  initial={{ pathLength: 0 }}
+                  animate={on ? { pathLength: 1 } : undefined}
+                  transition={{ duration: 1.1, ease: EASE, delay: 0.1 + i * 0.08 }}
+                />
+                {on && !gone && (
+                  <path
+                    d={`M33 ${y} C 42 ${y}, 42 50, 50 50`}
+                    fill="none"
+                    stroke="#c6ff3d"
+                    strokeOpacity={lit ? 1 : focus ? 0.15 : 0.55}
+                    strokeWidth={lit ? 2.4 : 1.2}
+                    vectorEffect="non-scaling-stroke"
+                    className={s.flow}
+                    style={{ transition: "stroke-opacity .3s, stroke-width .3s" }}
+                  />
+                )}
+              </g>
+            );
+          })}
+          {by.map((y, i) => {
+            const b = brands[i];
+            const k = focus ? (b.explain[focus] ?? 0) : null;
+            return (
+              <g key={`b${i}`}>
+                <motion.path
+                  d={`M50 50 C 58 50, 58 ${y}, 67 ${y}`}
+                  fill="none"
+                  stroke="rgba(243,241,236,0.18)"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                  initial={{ pathLength: 0 }}
+                  animate={on ? { pathLength: 1 } : undefined}
+                  transition={{ duration: 1, ease: EASE, delay: 0.8 + i * 0.1 }}
+                />
+                {on && (
+                  // the wire to each brand thickens with how much of it the focused love carries
+                  <path
+                    d={`M50 50 C 58 50, 58 ${y}, 67 ${y}`}
+                    fill="none"
+                    stroke={drop ? "#ff8a80" : "#c6ff3d"}
+                    strokeOpacity={k === null ? 0.55 : 0.25 + k * 0.75}
+                    strokeWidth={k === null ? 1.2 : 1 + k * 4}
+                    vectorEffect="non-scaling-stroke"
+                    className={s.flow}
+                    style={{ transition: "stroke-opacity .3s, stroke-width .3s, stroke .3s" }}
+                  />
+                )}
+              </g>
+            );
+          })}
         </svg>
 
-        {seeds.map((n, i) => (
-          <motion.div
-            key={n}
-            className="absolute left-0 flex w-[32%] -translate-y-1/2 justify-end"
-            style={{ top: `${sy[i]}%` }}
-            initial={{ opacity: 0, x: -10 }}
-            animate={on ? { opacity: 1, x: 0 } : undefined}
-            transition={{ duration: 0.6, ease: EASE, delay: i * 0.08 }}
-          >
-            <span className="max-w-full truncate rounded-full border border-line bg-paper px-2.5 py-1 text-[11px] text-ink-2 sm:text-[12.5px]">{n}</span>
-          </motion.div>
-        ))}
+        {seeds.map((n, i) => {
+          const gone = drop === n;
+          return (
+            <motion.div
+              key={n}
+              className="absolute left-0 flex w-[32%] -translate-y-1/2 justify-end"
+              style={{ top: `${sy[i]}%` }}
+              initial={{ opacity: 0, x: -10 }}
+              animate={on ? { opacity: 1, x: 0 } : undefined}
+              transition={{ duration: 0.6, ease: EASE, delay: i * 0.08 }}
+            >
+              <button
+                type="button"
+                disabled={!playable}
+                onClick={() => onDrop(gone ? null : n)}
+                onPointerEnter={(e) => e.pointerType === "mouse" && setHover(n)}
+                onPointerLeave={() => setHover(null)}
+                aria-pressed={gone}
+                aria-label={gone ? `Put ${n} back` : `Drop ${n} and re-read`}
+                className={`${s.love} max-w-full truncate`}
+                data-gone={gone ? "1" : undefined}
+                data-lit={focus === n && !gone ? "1" : undefined}
+              >
+                {n}
+              </button>
+            </motion.div>
+          );
+        })}
 
         <motion.div
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
@@ -242,34 +302,58 @@ function Graph({ v }: { v: View }) {
           animate={on ? { scale: 1, opacity: 1 } : undefined}
           transition={{ duration: 0.8, ease: EASE, delay: 0.55 }}
         >
-          <div className={`${s.pulse} grid h-[68px] w-[68px] place-items-center rounded-full border border-accent/50 bg-paper sm:h-20 sm:w-20`}>
-            <span className="text-center font-mono text-[9px] uppercase leading-tight tracking-[0.16em] text-accent sm:text-[10px]">
-              Qloo
+          <motion.div
+            key={drop ?? "all"}
+            initial={drop ? { scale: 0.86 } : false}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 420, damping: 12 }}
+            className={`${s.pulse} grid h-[68px] w-[68px] place-items-center rounded-full border bg-paper sm:h-20 sm:w-20 ${drop ? "border-[#ff8a80]/60" : "border-accent/50"}`}
+          >
+            <span className={`text-center font-mono text-[9px] uppercase leading-tight tracking-[0.16em] sm:text-[10px] ${drop ? "text-[#ff8a80]" : "text-accent"}`}>
+              {drop ? "re-" : "Qloo"}
               <br />
-              <span className="text-ink-3">graph</span>
+              <span className="text-ink-3">{drop ? "query" : "graph"}</span>
             </span>
-          </div>
+          </motion.div>
         </motion.div>
 
-        {brands.map((b, i) => (
-          <motion.div
-            key={b.name}
-            className="absolute right-0 w-[32%] -translate-y-1/2"
-            style={{ top: `${by[i]}%` }}
-            initial={{ opacity: 0, x: 10 }}
-            animate={on ? { opacity: 1, x: 0 } : undefined}
-            transition={{ duration: 0.6, ease: EASE, delay: 1.2 + i * 0.1 }}
-          >
-            <div className="rounded-xl border border-line bg-paper-2 px-2.5 py-2">
-              <p className="truncate text-[12px] font-medium text-ink sm:text-[13.5px]">{b.name}</p>
-              <p className="mt-0.5 flex items-center justify-between gap-2 font-mono text-[9.5px] text-ink-3 sm:text-[10.5px]">
-                <span className="truncate">{b.cat}</span>
-                <span className="text-accent">{b.aff.toFixed(3)}</span>
-              </p>
-            </div>
-          </motion.div>
-        ))}
+        {brands.map((b, i) => {
+          const share = focus ? (b.explain[focus] ?? 0) : null;
+          const lost = drop ? (b.lost[drop] ?? 0) : 0;
+          const leans = share !== null && share >= 0.45;
+          return (
+            <motion.div
+              key={b.name}
+              className="absolute right-0 w-[32%] -translate-y-1/2"
+              style={{ top: `${by[i]}%` }}
+              initial={{ opacity: 0, x: 10 }}
+              animate={on ? { opacity: 1, x: 0 } : undefined}
+              transition={{ duration: 0.6, ease: EASE, delay: 1.2 + i * 0.1 }}
+            >
+              <div className={s.brandCard} data-leans={drop && leans ? "1" : undefined}>
+                <p className="truncate text-[12px] font-medium text-ink sm:text-[13.5px]">{b.name}</p>
+                <p className="mt-0.5 flex items-center justify-between gap-2 font-mono text-[9.5px] text-ink-3 sm:text-[10.5px]">
+                  <span className="truncate">{share !== null ? `${Math.round(share * 100)}% of it` : b.cat}</span>
+                  <span className={drop ? "text-[#ff8a80]" : "text-accent"}>{(b.aff - lost).toFixed(3)}</span>
+                </p>
+                {/* how much of this brand the focused love carries */}
+                <i className={s.shareBar} style={{ transform: `scaleX(${share ?? 0})` }} aria-hidden />
+                {drop && (
+                  <span className={s.delta}>
+                    {lost > 0 ? `−${lost.toFixed(3)}` : "±0"}
+                    {leans ? " · leans" : ""}
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
+      {playable && (
+        <p className="mt-3 text-center font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-3">
+          {drop ? "tap it again to put it back" : "tap a love to drop it · watch the brands re-score"}
+        </p>
+      )}
     </div>
   );
 }
@@ -387,22 +471,27 @@ function Split({ v }: { v: View }) {
   const tb = typeOf(b.tags[0] ?? "Moon");
 
   return (
-    <div ref={ref} className="relative overflow-hidden p-5 sm:p-8">
+    <div ref={ref} className="relative p-5 sm:p-8">
+      {/* no clipping here: the glows spill into the sky like the bodies they are */}
       <div className="relative mx-auto flex h-[240px] max-w-[520px] items-center justify-center sm:h-[300px]">
         <motion.div
-          className="absolute grid aspect-square w-[52%] place-items-center rounded-full mix-blend-screen"
-          style={{ background: `radial-gradient(circle at 35% 35%, ${ta.a}, ${ta.b} 70%)`, boxShadow: `0 0 80px -10px ${ta.a}` }}
+          className="absolute aspect-square w-[52%] mix-blend-screen"
+          style={{ "--c": ta.a } as React.CSSProperties}
           initial={{ x: "0%", opacity: 0.6 }}
           animate={on ? { x: "-38%", opacity: 0.9 } : { x: "0%", opacity: 0.6 }}
           transition={on ? { duration: 1.4, ease: EASE, delay: 0.2 } : { duration: 0.6, ease: EASE }}
-        />
+        >
+          <span className={s.body} style={{ "--bg": `radial-gradient(circle at 35% 35%, ${ta.a}, ${ta.b} 70%)` } as React.CSSProperties} />
+        </motion.div>
         <motion.div
-          className="absolute grid aspect-square w-[44%] place-items-center rounded-full mix-blend-screen"
-          style={{ background: `radial-gradient(circle at 35% 35%, ${tb.a}, ${tb.b} 70%)`, boxShadow: `0 0 80px -10px ${tb.a}` }}
+          className="absolute aspect-square w-[44%] mix-blend-screen"
+          style={{ "--c": tb.a } as React.CSSProperties}
           initial={{ x: "0%", opacity: 0.6 }}
           animate={on ? { x: "52%", opacity: 0.9 } : { x: "0%", opacity: 0.6 }}
           transition={on ? { duration: 1.4, ease: EASE, delay: 0.2 } : { duration: 0.6, ease: EASE }}
-        />
+        >
+          <span className={`${s.body} ${s.bodyB}`} style={{ "--bg": `radial-gradient(circle at 35% 35%, ${tb.a}, ${tb.b} 70%)` } as React.CSSProperties} />
+        </motion.div>
         <motion.div
           className="relative z-10 rounded-full border border-white/20 bg-paper/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink backdrop-blur"
           initial={{ opacity: 0, scale: 0.8 }}
@@ -428,7 +517,7 @@ function Split({ v }: { v: View }) {
  * The math, printed like a terminal: the real numbers behind the card on show (or the archived run), line by line.
  * Short on purpose: five lines that say this is a computation, not a paragraph somebody wrote.
  */
-function MathReadout({ v }: { v: View }) {
+function MathReadout({ v, drop }: { v: View; drop: string | null }) {
   const ref = useRef<HTMLDivElement>(null);
   const on = useInView(ref, { once: true, amount: 0.5 });
   const reduce = useReducedMotion();
@@ -458,9 +547,25 @@ function MathReadout({ v }: { v: View }) {
             <span>{val}</span>
           </motion.li>
         ))}
+        {/* the visitor's own move in the graph below, reported like any other line */}
+        {drop && (
+          <motion.li key={drop} className={s.mathYou} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, ease: EASE }}>
+            <i>drop</i>
+            <span>
+              {drop} →{" "}
+              {v.brands.map((b, i) => (
+                <span key={b.name}>
+                  {i ? " · " : ""}
+                  {b.name} {(b.lost[drop] ?? 0) > 0 ? `−${(b.lost[drop] ?? 0).toFixed(3)}` : "±0"}
+                </span>
+              ))}
+            </span>
+          </motion.li>
+        )}
       </ol>
       <p className={s.mathFoot}>
-        0 purchases read · nothing typed in by us<span className={s.caret} aria-hidden />
+        {drop ? "your re-query · real leave-one-out data" : "0 purchases read · nothing typed in by us"}
+        <span className={s.caret} aria-hidden />
       </p>
     </div>
   );
@@ -493,25 +598,80 @@ function Count({ to, on }: { to: number; on: boolean }) {
   return <>{n}</>;
 }
 
+/**
+ * The three numbers, each with its proof beside it: an empty receipt for zero purchases, the call log ticking for the
+ * Qloo calls (one tick per real call), and the seven domains lighting up. Number and proof share a row on phones too.
+ */
+const DOMAINS: [string, string][] = [
+  ["◐", "Film"],
+  ["♪", "Music"],
+  ["❡", "Books"],
+  ["⌖", "Places"],
+  ["✦", "Games"],
+  ["◉", "Podcasts"],
+  ["▭", "TV"],
+];
+
 function Stats({ calls }: { calls: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const on = useInView(ref, { once: true, margin: "200px" });
-  const items: [number, string, string][] = [
-    [0, "purchases needed", "We never look at what you buy. No account, no history."],
-    [calls, "live Qloo calls", "Behind the specimen above, re-queries that check its work included."],
-    [7, "taste domains", "Film, music, books, places, games, podcasts and TV, cross-read."],
-  ];
+  const on = useInView(ref, { once: true, amount: 0.35 });
+  const reduce = useReducedMotion();
+  const ticks = Math.max(1, Math.min(40, calls));
   return (
-    <div ref={ref} className="mt-24 grid gap-px overflow-hidden rounded-[28px] border border-line bg-line sm:mt-32 sm:grid-cols-3">
-      {items.map(([n, label, sub]) => (
-        <div key={label} className="bg-paper p-6 sm:p-8">
-          <p className="font-display text-[clamp(3.5rem,8vw,5.5rem)] font-bold leading-none tracking-[-0.05em] text-ink">
-            <Count to={n} on={on} />
+    <div ref={ref} className={`${s.stats} mt-24 sm:mt-32`} data-on={on ? "1" : undefined} data-still={reduce ? "1" : undefined}>
+      <div className={s.stat}>
+        <div>
+          <p className={s.statN}>
+            <Count to={0} on={on} />
           </p>
-          <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.2em] text-accent">{label}</p>
-          <p className="mt-2 max-w-[26ch] text-[14px] leading-relaxed text-ink-3">{sub}</p>
+          <p className={s.statL}>purchases needed</p>
+          <p className={s.statS}>We never look at what you buy.</p>
         </div>
-      ))}
+        {/* an empty receipt, voided */}
+        <div className={s.statViz} aria-hidden>
+          <div className={s.slip}>
+            <i />
+            <i />
+            <i />
+            <b>void</b>
+          </div>
+        </div>
+      </div>
+      <div className={s.stat}>
+        <div>
+          <p className={s.statN}>
+            <Count to={calls} on={on} />
+          </p>
+          <p className={s.statL}>live Qloo calls</p>
+          <p className={s.statS}>Behind the card above, re-checks included.</p>
+        </div>
+        {/* the call log: one tick per call, lit in order */}
+        <div className={s.statViz} aria-hidden>
+          <div className={s.ticks}>
+            {Array.from({ length: ticks }, (_, i) => (
+              <i key={i} style={{ "--i": i } as React.CSSProperties} />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className={s.stat}>
+        <div>
+          <p className={s.statN}>
+            <Count to={DOMAINS.length} on={on} />
+          </p>
+          <p className={s.statL}>taste domains</p>
+          <p className={s.statS}>Every one cross-read against the rest.</p>
+        </div>
+        <div className={s.statViz} aria-hidden>
+          <div className={s.domains}>
+            {DOMAINS.map(([g, n], i) => (
+              <span key={n} style={{ "--i": i } as React.CSSProperties} title={n}>
+                {g}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
