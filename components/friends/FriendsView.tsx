@@ -89,6 +89,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   const [showQr, setShowQr] = useState(false);
   const [uname, setUname] = useState("");
   const [editName, setEditName] = useState(false);
+  const [logAll, setLogAll] = useState(false);
   const hotUntil = useRef(Date.now() + HOT_FOR_MS);
   const heat = () => (hotUntil.current = Date.now() + HOT_FOR_MS);
   /** Challenges you sent that were still open: when one settles, its fight opens here straight away. */
@@ -127,6 +128,14 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
       clearInterval(fresh);
     };
   }, [load]);
+
+  // A friend minting their first card doesn't move your counter, so while anyone can't fight yet, look every 15s.
+  const cardless = Boolean(d?.friends?.some((f) => !f.card));
+  useEffect(() => {
+    if (!cardless) return;
+    const t = setInterval(() => !document.hidden && void load(), 15_000);
+    return () => clearInterval(t);
+  }, [cardless, load]);
 
   // Live: poll the one-number change counter while the tab is visible (hot, then cooling); reload only when it moves.
   const seen = useRef<number | null | undefined>(undefined);
@@ -225,6 +234,16 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   const fights = (d.bouts ?? []).filter((b) => b.status === "done" && b.outcome);
   const skipped = (d.bouts ?? []).filter((b) => b.status === "declined" || b.status === "cancelled").length;
   const record = { won: fights.filter((b) => b.outcome === "won").length, lost: fights.filter((b) => b.outcome === "lost").length, tied: fights.filter((b) => b.outcome === "tied").length };
+  // Current run (newest first) and per-rival tallies, so the log reads at a glance instead of growing forever.
+  const streak = { w: fights[0]?.outcome, n: fights.findIndex((b) => b.outcome !== fights[0]?.outcome) };
+  if (streak.n < 0) streak.n = fights.length;
+  const rivals = [...fights.reduce((m, b) => {
+    const r = m.get(b.pc) ?? { pc: b.pc, name: who(b), w: 0, l: 0, n: 0 };
+    r.n++;
+    if (b.outcome === "won") r.w++;
+    else if (b.outcome === "lost") r.l++;
+    return m.set(b.pc, r);
+  }, new Map<string, { pc: string; name: string; w: number; l: number; n: number }>()).values()].sort((x, y) => y.n - x.n);
   const friendPcs = new Set((d.friends ?? []).map((f) => f.pc));
   const fighting = new Set((d.bouts ?? []).filter((b) => b.status === "open").map((b) => b.pc));
 
@@ -473,21 +492,21 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                   const bd = bond(f.days ?? 0);
                   return (
                     <li key={f.pc} id={`fr-${f.pc}`} className="group rounded-2xl px-3 py-3 transition hover:bg-white/[0.03]">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                         <Avatar f={f} tint={tint} />
                         <div className="min-w-0 flex-1">
                           <p className="flex items-center gap-2">
                             <span className="truncate font-serif text-[19px] italic leading-tight">{who(f)}</span>
                             <Presence seen={f.seen} />
                           </p>
-                          <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+                          <p className="mt-0.5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.16em] text-ink-3">
                             <span style={{ color: tint }}>{lvl}</span> · {f.days ?? 0}d fought{f.cards !== undefined ? ` · ${f.cards} card${f.cards === 1 ? "" : "s"}` : ""}
                           </p>
                           <span className="mt-1.5 block h-[2px] w-full max-w-[9rem] overflow-hidden rounded-full bg-white/[0.07]" title={bd.next ? `${bd.left} more day${bd.left === 1 ? "" : "s"} to ${bd.next}` : "As close as it gets"}>
                             <span className="block h-full rounded-full" style={{ width: `${bd.pct * 100}%`, background: tint, boxShadow: `0 0 6px ${tint}` }} />
                           </span>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="flex w-full shrink-0 items-center gap-1.5 pl-[52px] sm:w-auto sm:pl-0">
                           {me.card && f.card ? (
                             <button type="button" disabled={busy !== null} onClick={() => void challenge(f.pc, 0)} className={lime}>
                               Fight
@@ -502,13 +521,13 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                             type="button"
                             aria-label={`Remove ${who(f)}`}
                             onClick={() => confirm(`Remove ${who(f)} from your friends?`) && void run(`rm${f.pc}`, { op: "remove", pc: f.pc })}
-                            className="px-1.5 text-lg leading-none text-ink-3 transition hover:text-ink sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                            className="ml-auto px-1.5 text-lg leading-none text-ink-3 transition hover:text-ink sm:ml-0 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                           >
                             ×
                           </button>
                         </div>
                       </div>
-                      {!(me.card && f.card) && <p className="mt-2 pl-[52px] text-xs text-ink-3">{me.card ? "They need a card to fight." : "Mint a card to fight."}</p>}
+                      {!(me.card && f.card) && <p className="mt-2 pl-[52px] text-xs text-ink-3">{me.card ? "No card yet. This updates the moment they mint." : "Mint a card to fight."}</p>}
                       {betFor === f.pc && (
                         <div className="mt-3 ml-[52px] rounded-xl bg-paper/70 p-3">
                           <p className="text-xs text-ink-2">Blind draw: one random card from each deck. Winner takes both stakes; a tie refunds. They have to accept.</p>
@@ -536,8 +555,30 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                   <span className="text-accent">{record.won}W</span> <span className="text-ink-2">{record.lost}L</span> <span className="text-ink-3">{record.tied}T</span>
                 </p>
               </div>
-              <ul className="mt-3 flex flex-col gap-1.5">
-                {fights.slice(0, 6).map((b) => (
+              {/* Form strip: the last fights as one line of chips, newest on the right, each a replay. */}
+              <div className="mt-3 flex items-center gap-1 overflow-hidden" aria-label="Recent form">
+                {fights
+                  .slice(0, 24)
+                  .reverse()
+                  .map((b) => {
+                    const c = `h-5 w-2.5 shrink-0 rounded-[3px] ${b.outcome === "won" ? "bg-accent shadow-[0_0_8px_rgba(198,255,61,0.5)]" : b.outcome === "lost" ? "bg-white/[0.14]" : "border border-line"}`;
+                    const t = `${b.outcome} vs ${who(b)}`;
+                    return b.a && b.b ? <Link key={b.id} href={`/vs/${b.a}?vs=${b.b}`} title={t} className={`${c} transition hover:scale-y-125`} /> : <span key={b.id} title={t} className={c} />;
+                  })}
+                {streak.n > 1 && <span className={`${mono} ml-2 shrink-0 text-ink-3`}>{streak.n} {streak.w === "won" ? "wins" : streak.w === "lost" ? "losses" : "ties"} in a row</span>}
+              </div>
+              {/* Head to head: one line per rival, so the log stays short however many fights pile up. */}
+              {rivals.length > 1 && (
+                <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+                  {rivals.map((r) => (
+                    <span key={r.pc} className="shrink-0 rounded-full border border-white/[0.08] px-2.5 py-1 font-mono text-[10.5px] tabular-nums text-ink-2">
+                      {r.name} <span className="text-accent">{r.w}</span>–{r.l}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <ul className={`mt-3 flex flex-col gap-1.5 ${logAll ? "max-h-[22rem] overflow-y-auto pr-1 [scrollbar-width:thin]" : ""}`}>
+                {fights.slice(0, logAll ? fights.length : 3).map((b) => (
                   <li key={b.id} className="flex items-center gap-3 rounded-xl px-1 py-1.5 text-sm">
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-semibold ${b.outcome === "won" ? "bg-accent text-paper" : b.outcome === "lost" ? "bg-white/[0.06] text-ink-2" : "border border-line text-ink-3"}`}
@@ -563,6 +604,11 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                   </li>
                 ))}
               </ul>
+              {fights.length > 3 && (
+                <button type="button" onClick={() => setLogAll((v) => !v)} className={`${mono} mt-2 text-ink-3 transition hover:text-ink`}>
+                  {logAll ? "Show less" : `All ${fights.length} fights`}
+                </button>
+              )}
               {skipped > 0 && <p className="mt-3 text-xs text-ink-3">{skipped} challenge{skipped === 1 ? "" : "s"} declined or cancelled</p>}
             </section>
           )}

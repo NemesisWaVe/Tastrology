@@ -202,11 +202,23 @@ export async function listFriends(uid: string): Promise<Friend[] | null> {
   if (!page) return null;
   // Presence and bio: one small read per friend, only when the list loads (not on every ping). Never their gender.
   const live = await Promise.all(page.items.map((it) => (str(it.uid) ? ddbGet(U(str(it.uid)), "PLAYER").catch(() => null) : null)));
+  // The fighter on a friend row is a snapshot from when you met, and minting never touches it. Use their live
+  // fighter, and for anyone still showing none, pick one from their deck now (a first mint lands on the next load).
+  const face = await Promise.all(
+    page.items.map(async (it, i) => {
+      const p = live[i];
+      if (str(p?.card)) return { name: str(p?.name), card: str(p?.card), rarity: str(p?.rarity) || "common" };
+      if (!str(it.uid)) return null;
+      const q = await ensurePlayer(str(it.uid)).catch(() => null);
+      return q?.card ? { name: q.name, card: q.card, rarity: q.rarity } : null;
+    }),
+  );
   return page.items
     .map((it, i) => {
       const p = live[i];
       return {
         ...(toPlayer(it) as Player),
+        ...(face[i] ?? {}),
         at: Number(it.at) || 0,
         days: Number(it.days) || 0,
         seen: Number(p?.seen) || undefined,
