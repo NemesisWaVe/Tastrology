@@ -8,6 +8,36 @@ import { EASE, Magnetic, MaskedWords } from "./primitives";
 import s from "./landing.module.css";
 
 
+const NOPE = [
+  {
+    w: "birth chart",
+    icon: (
+      <>
+        <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" />
+        <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
+      </>
+    ),
+  },
+  {
+    w: "purchase history",
+    icon: (
+      <>
+        <path d="M4 2.5h8v11l-1.6-1-1.2 1-1.2-1-1.2 1-1.2-1L4 13.5z" />
+        <path d="M6 6h4M6 8.5h4" />
+      </>
+    ),
+  },
+  {
+    w: "40-question quiz",
+    icon: (
+      <>
+        <path d="M3 4.5l1 1 1.8-2M3 9.5l1 1 1.8-2" />
+        <path d="M8 4.5h5M8 9.5h5M8 13h5" />
+      </>
+    ),
+  },
+];
+
 export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPick: () => void; onCustom: () => void }) {
   const ref = useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
@@ -114,16 +144,21 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 1.2 }}
-            className="mt-7 flex flex-wrap items-center gap-2 max-[480px]:mt-5"
+            className="mt-8 flex flex-wrap items-center gap-x-3.5 gap-y-3.5 max-[480px]:mt-6"
           >
-            <span className="mr-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Not needed</span>
-            {["birth chart", "purchase history", "40-question quiz"].map((w, i) => (
-              <span key={w} className={s.nope} style={{ "--k": struck ? 1 : 0, "--d": `${i * 0.18}s` } as React.CSSProperties}>
-                {w}
-                {/* a quick marker scribble, drawn on once the line has settled */}
-                <svg viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden>
-                  <path d={i === 1 ? "M2 8 C 22 4, 40 9, 60 5 S 88 4, 98 6" : i === 2 ? "M2 6 C 18 9, 38 3, 58 7 S 84 8, 98 4" : "M2 5 C 20 8, 42 4, 62 7 S 86 5, 98 7"} pathLength={1} />
+            <span className="mr-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Skip the</span>
+            {NOPE.map(({ w, icon }, i) => (
+              <span key={w} className={s.nope} style={{ "--k": struck ? 1 : 0, "--d": `${i * 0.16}s` } as React.CSSProperties}>
+                <svg viewBox="0 0 16 16" className={s.nopeIcon} aria-hidden>
+                  {icon}
                 </svg>
+                {w}
+                {/* what other readings make you fill in, cancelled: a stamped lime cross on the corner */}
+                <i className={s.nopeX} aria-hidden>
+                  <svg viewBox="0 0 10 10">
+                    <path d="M2.5 2.5l5 5M7.5 2.5l-5 5" />
+                  </svg>
+                </i>
               </span>
             ))}
           </motion.div>

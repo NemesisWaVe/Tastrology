@@ -97,9 +97,7 @@ export function Receipts({ result }: { result: StyleResult | null }) {
               <MaskedWords text="never showed its math." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
             </h2>
           </div>
-          <Reveal delay={0.1} className="max-w-sm text-[15px] leading-relaxed text-ink-3">
-            Everything below comes from {v.live ? "the card at the top of this page" : "a real run"}: the actual Qloo scores, the actual picks, nothing typed in by us.
-          </Reveal>
+          <MathReadout v={v} />
         </div>
 
         <div className="mt-16 space-y-20 sm:mt-24 sm:space-y-28">
@@ -382,7 +380,8 @@ function Receipt({ v }: { v: View }) {
 /* Beat 3: two lobes that refuse to merge. */
 function Split({ v }: { v: View }) {
   const ref = useRef<HTMLDivElement>(null);
-  const on = useInView(ref, { once: true, margin: "200px" });
+  // not once: the two sides collide and split again every time the section scrolls back into view
+  const on = useInView(ref, { amount: 0.45 });
   const [a, b] = v.lobes;
   const ta = typeOf(a.tags[0] ?? "Sun");
   const tb = typeOf(b.tags[0] ?? "Moon");
@@ -394,21 +393,21 @@ function Split({ v }: { v: View }) {
           className="absolute grid aspect-square w-[52%] place-items-center rounded-full mix-blend-screen"
           style={{ background: `radial-gradient(circle at 35% 35%, ${ta.a}, ${ta.b} 70%)`, boxShadow: `0 0 80px -10px ${ta.a}` }}
           initial={{ x: "0%", opacity: 0.6 }}
-          animate={on ? { x: "-38%", opacity: 0.9 } : undefined}
-          transition={{ duration: 1.4, ease: EASE, delay: 0.2 }}
+          animate={on ? { x: "-38%", opacity: 0.9 } : { x: "0%", opacity: 0.6 }}
+          transition={on ? { duration: 1.4, ease: EASE, delay: 0.2 } : { duration: 0.6, ease: EASE }}
         />
         <motion.div
           className="absolute grid aspect-square w-[44%] place-items-center rounded-full mix-blend-screen"
           style={{ background: `radial-gradient(circle at 35% 35%, ${tb.a}, ${tb.b} 70%)`, boxShadow: `0 0 80px -10px ${tb.a}` }}
           initial={{ x: "0%", opacity: 0.6 }}
-          animate={on ? { x: "52%", opacity: 0.9 } : undefined}
-          transition={{ duration: 1.4, ease: EASE, delay: 0.2 }}
+          animate={on ? { x: "52%", opacity: 0.9 } : { x: "0%", opacity: 0.6 }}
+          transition={on ? { duration: 1.4, ease: EASE, delay: 0.2 } : { duration: 0.6, ease: EASE }}
         />
         <motion.div
           className="relative z-10 rounded-full border border-white/20 bg-paper/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink backdrop-blur"
           initial={{ opacity: 0, scale: 0.8 }}
-          animate={on ? { opacity: 1, scale: 1 } : undefined}
-          transition={{ duration: 0.6, ease: EASE, delay: 1.2 }}
+          animate={on ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
+          transition={on ? { duration: 0.6, ease: EASE, delay: 1.2 } : { duration: 0.2 }}
         >
           overlap {v.overlap.toFixed(2)}
         </motion.div>
@@ -421,6 +420,48 @@ function Split({ v }: { v: View }) {
       {!v.contraLive && (
         <p className="mt-5 text-center font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-3">Example: The Neon Contradiction</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * The math, printed like a terminal: the real numbers behind the card on show (or the archived run), line by line.
+ * Short on purpose: five lines that say this is a computation, not a paragraph somebody wrote.
+ */
+function MathReadout({ v }: { v: View }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const on = useInView(ref, { once: true, amount: 0.5 });
+  const reduce = useReducedMotion();
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const lines: [string, ReactNode][] = [
+    ["query", <>qloo.insights(picks: {v.seeds.length}) · {v.calls} calls</>],
+    ["affinity", <><b>{v.item.name}</b> = {v.item.aff.toFixed(3)}</>],
+    ["explain", <>{v.earned.slice(0, 2).map((e) => `${e.name} ${pct(e.share)}`).join(" + ")}</>],
+    ["ablate", <>drop 1 pick → re-query ×{v.seeds.length}{v.voided ? <> · <s>{v.voided.name}</s> void</> : null}</>],
+    ["split", <>overlap {v.overlap.toFixed(2)} → ☉ {v.lobes[0].tags[0]} / ☽ {v.lobes[1].tags[0]}</>],
+  ];
+  return (
+    <div ref={ref} className={s.mathBox} aria-label="The math behind the card">
+      <p className={s.mathHead}>
+        <span>{v.live ? "live run" : "archived run"}</span>
+        <span>{v.sign}</span>
+      </p>
+      <ol>
+        {lines.map(([k, val], i) => (
+          <motion.li
+            key={k}
+            initial={reduce ? false : { opacity: 0, x: -6 }}
+            animate={on ? { opacity: 1, x: 0 } : undefined}
+            transition={{ duration: 0.35, ease: EASE, delay: 0.15 + i * 0.22 }}
+          >
+            <i>{k}</i>
+            <span>{val}</span>
+          </motion.li>
+        ))}
+      </ol>
+      <p className={s.mathFoot}>
+        0 purchases read · nothing typed in by us<span className={s.caret} aria-hidden />
+      </p>
     </div>
   );
 }

@@ -76,7 +76,7 @@
 }
 .vs {
   position: relative;
-  font-family: var(--font-display);
+  font-family: var(--nf-display), var(--nf-sans), sans-serif;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--ink);

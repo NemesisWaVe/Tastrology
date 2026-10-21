@@ -375,7 +375,7 @@
   background:
     linear-gradient(180deg, rgb(0 0 0 / 0.12), transparent 18px),
     #f3efe6;
-  font-family: var(--font-mono, ui-monospace), ui-monospace, monospace;
+  font-family: var(--nf-mono), ui-monospace, monospace;
   text-transform: none;
   box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.8);
   /* torn zig-zag bottom edge */
@@ -399,7 +399,7 @@
   border: 2.5px solid #d4243b;
   border-radius: 4px;
   color: #d4243b;
-  font-family: var(--font-display, system-ui), system-ui, sans-serif;
+  font-family: var(--nf-display), var(--nf-sans), system-ui, sans-serif;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.12em;

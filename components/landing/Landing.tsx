@@ -7,11 +7,11 @@ import { Mark } from "@/components/site/Mark";
 import { ReactLenis, useLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { MotionConfig, motion, useMotionValueEvent, useReducedMotion, useScroll } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { buildCard } from "@/lib/card";
 import { PERSONAS, personaRequest } from "@/lib/personas";
-import type { AgentRequest } from "@/lib/types";
+import type { AgentRequest, StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 import { Intro } from "@/components/intro/Intro";
 import { Sky } from "@/components/reveal/Sky";
@@ -62,32 +62,50 @@ function useTouch() {
 }
 
 function LandingBody({ onStart, touch = false }: { onStart: (req: AgentRequest) => void; touch?: boolean }) {
-  const { result, events, running, error, run } = useAgentRun();
+  const { events, running, run } = useAgentRun();
   const [specKey, setSpecKey] = useState(SPECIMEN_DEFAULT);
-  const [retried, setRetried] = useState(false);
   const lenis = useLenis();
   const [introOn, setIntroOn] = useState(true);
 
+  // Every specimen is read once, in the background, and kept: the one on show first, then the rest, so the shuffle
+  // swaps instantly (it used to start a fresh run per tap, which took seconds). A failed read gets one more try.
+  const [specs, setSpecs] = useState<Record<string, StyleResult>>({});
+  const [fails, setFails] = useState<Record<string, number>>({});
+  const want = useRef(specKey);
+  want.current = specKey;
+  const [kick, setKick] = useState(0);
+  useEffect(() => setKick((n) => n + 1), [specKey]);
+  const loading = useRef(false);
+  const alive = useRef(true);
   useEffect(() => {
-    const p = PERSONAS.find((x) => x.key === specKey) ?? PERSONAS[0];
-    setRetried(false);
-    if (p) run(personaRequest(p));
-  }, [specKey, run]);
-
-  // One quiet retry if the specimen run fails (e.g. a cold server); the placeholder covers the wait.
+    alive.current = true;
+    return () => void (alive.current = false);
+  }, []);
   useEffect(() => {
-    if (!error || retried || result) return;
-    const t = setTimeout(() => {
-      setRetried(true);
-      const p = PERSONAS.find((x) => x.key === specKey) ?? PERSONAS[0];
-      if (p) run(personaRequest(p));
-    }, 2500);
-    return () => clearTimeout(t);
-  }, [error, retried, result, specKey, run]);
+    if (loading.current) return;
+    const next = [want.current, ...PERSONAS.map((p) => p.key)].find((k) => !specs[k] && (fails[k] ?? 0) < 2);
+    const p = PERSONAS.find((x) => x.key === next);
+    if (!p) return;
+    loading.current = true;
+    (async () => {
+      const r = await run(personaRequest(p)).catch(() => null);
+      if (!r && (fails[p.key] ?? 0) === 0) await new Promise((ok) => setTimeout(ok, 2500)); // a cold server: one quiet retry
+      loading.current = false;
+      if (!alive.current) return;
+      if (r) {
+        setSpecs((m) => ({ ...m, [p.key]: r }));
+        try {
+          buildCard(r).art.forEach((src) => void (new Image().src = src)); // the art is ready before the swap too
+        } catch {}
+      } else setFails((m) => ({ ...m, [p.key]: (m[p.key] ?? 0) + 1 }));
+      setKick((n) => n + 1); // and on to the next one
+    })();
+  }, [specs, fails, kick, run]);
 
-  // If the live run still fails after the retry (rate limit, Qloo down), fall back to a real archived run.
-  const archived = !result && !!error && retried && !running;
-  const shown = result ?? (archived ? SPECIMEN_SNAPSHOT : null);
+  // If the live read still fails after the retry (rate limit, Qloo down), fall back to a real archived run.
+  const archived = !specs[specKey] && (fails[specKey] ?? 0) >= 2;
+  const shown = specs[specKey] ?? (archived ? SPECIMEN_SNAPSHOT : null);
+  const error = (fails[specKey] ?? 0) > 0 && !specs[specKey] ? "slow" : null;
   const card = useMemo(() => {
     try {
       return shown ? buildCard(shown) : null;
@@ -137,7 +155,7 @@ function LandingBody({ onStart, touch = false }: { onStart: (req: AgentRequest) 
               archived={archived}
               events={events}
               error={error}
-              running={running}
+              running={running && !shown}
               personas={PERSONAS}
               active={specKey}
               onSwap={setSpecKey}

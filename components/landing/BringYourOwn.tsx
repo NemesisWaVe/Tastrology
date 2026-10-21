@@ -4,10 +4,12 @@ import type { EntityKind } from "@/lib/types";
 import { CursorArrow } from "@/components/CursorArrow";
 import { AnimatePresence, motion, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { SeedPicker, type Seed } from "@/components/SeedPicker";
+import { KIND_ICON, KIND_LABEL, SeedPicker, type Seed } from "@/components/SeedPicker";
+import { ROLL_ODDS } from "@/lib/odds";
 import { loadDraft, saveDraft } from "@/lib/authBridge";
 import type { AgentRequest } from "@/lib/types";
 import { EASE, Eyebrow, Magnetic, MaskedWords, Reveal } from "./primitives";
+import s from "./landing.module.css";
 
 const BUDGETS: { v?: 1 | 2 | 3; label: string; hint: string }[] = [
   { v: undefined, label: "Any", hint: "no limit" },
@@ -16,11 +18,6 @@ const BUDGETS: { v?: 1 | 2 | 3; label: string; hint: string }[] = [
   { v: 3, label: "$$$", hint: "designer" },
 ];
 
-const STEPS = [
-  ["Add 3 to 8 favorites", "An album, a film, the book you lend out, a city. The more they differ, the sharper the read."],
-  ["The agent looks them up", "Qloo knows what people who like your picks also like, across music, film, books and brands."],
-  ["You get a card", "Sun, Moon, Rising, a rarity, and brands, each one tagged with the pick that earned it."],
-];
 
 export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void }) {
   const [seeds, setSeeds] = useState<Seed[]>([]);
@@ -70,19 +67,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
             <MaskedWords text="you'd defend at a party." inView delay={0.12} wordClassName="font-serif font-normal italic text-ink-2" />
           </h2>
 
-          <ol className="mt-10 space-y-6">
-            {STEPS.map(([t, d], i) => (
-              <Reveal key={t} delay={0.1 + i * 0.08}>
-                <li className="flex gap-4">
-                  <span className="mt-0.5 font-mono text-[11px] text-accent">{String(i + 1).padStart(2, "0")}</span>
-                  <span>
-                    <span className="block font-display text-lg font-semibold tracking-tight text-ink">{t}</span>
-                    <span className="mt-1 block max-w-sm text-[14px] leading-relaxed text-ink-3">{d}</span>
-                  </span>
-                </li>
-              </Reveal>
-            ))}
-          </ol>
+          <Ledger seeds={seeds} ready={ready} />
         </div>
 
         <Reveal className="relative min-w-0" delay={0.1}>
@@ -224,5 +209,77 @@ function SlotMeter({ n }: { n: number }) {
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * What happens to the picks, live: each step lights as the picker gets there. The pairs count is the real work the
+ * agent does (every pick is cross-read against every other), and the card's slots stay sealed until mint.
+ */
+function Ledger({ seeds, ready }: { seeds: Seed[]; ready: boolean }) {
+  const n = seeds.length;
+  const kinds = [...new Set(seeds.map((x) => x.kind))];
+  const pairs = (n * (n - 1)) / 2;
+  const secret = ROLL_ODDS.find((o) => o.tier === "secret")?.p ?? 0;
+  const steps = [
+    {
+      on: n > 0,
+      done: ready,
+      t: "Your picks",
+      body: n ? (
+        <span className="flex flex-wrap gap-1.5">
+          {kinds.map((k) => (
+            <span key={k} className={s.ledgerTag}>
+              <i>{KIND_ICON[k] ?? "✦"}</i>
+              {k === "vibe" ? "Vibe" : KIND_LABEL[k] ?? k}
+            </span>
+          ))}
+          <span className={s.ledgerNote}>{ready ? `${n} in, ${kinds.length} domain${kinds.length === 1 ? "" : "s"}` : `${n} of 3`}</span>
+        </span>
+      ) : (
+        "An album, a film, a city, a vibe. The more they differ, the sharper the read."
+      ),
+    },
+    {
+      on: n > 1,
+      done: ready,
+      t: "Cross-read on Qloo",
+      body:
+        n > 1 ? (
+          <span className="font-mono text-[12px] tracking-wide text-ink-2">
+            <b className="text-ink">{pairs}</b> pair{pairs === 1 ? "" : "s"} compared · tags, audiences, brand affinity
+          </span>
+        ) : (
+          "Every pick is checked against every other one, across music, film, books, places and brands."
+        ),
+    },
+    {
+      on: ready,
+      done: false,
+      t: "Your card",
+      body: (
+        <span className="flex flex-wrap items-center gap-1.5">
+          {["Sun", "Moon", "Rising"].map((x) => (
+            <span key={x} className={s.ledgerSlot} data-on={ready ? "1" : undefined}>
+              {x} <i>{ready ? "✦" : "?"}</i>
+            </span>
+          ))}
+          <span className={s.ledgerNote}>{Math.round(secret * 1000) / 10}% roll Secret</span>
+        </span>
+      ),
+    },
+  ];
+  return (
+    <ol className={`${s.ledger} mt-10`}>
+      {steps.map((x, i) => (
+        <li key={x.t} data-on={x.on ? "1" : undefined} data-done={x.done ? "1" : undefined}>
+          <span className={s.ledgerDot}>{x.done ? "✓" : String(i + 1).padStart(2, "0")}</span>
+          <span className="min-w-0">
+            <span className="block font-display text-lg font-semibold tracking-tight text-ink">{x.t}</span>
+            <span className="mt-1.5 block max-w-sm text-[14px] leading-relaxed text-ink-3">{x.body}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }

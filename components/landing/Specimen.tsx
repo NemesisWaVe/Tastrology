@@ -23,6 +23,8 @@ function useCardWidth() {
   return w;
 }
 
+const TIER_SHORT = { secret: "Secret", holo: "Holo", rare: "Rare" } as const;
+
 /* Where the "evolves from" seeds orbit the card (desktop only). */
 const ORBIT: React.CSSProperties[] = [
   { right: "calc(100% - 8px)", top: "14%" },
@@ -82,7 +84,7 @@ export function Specimen({
               initial={reduce ? { opacity: 0 } : { opacity: 0, rotateY: -80, scale: 0.92 }}
               animate={{ opacity: 1, rotateY: 0, scale: 1 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, rotateY: 80, scale: 0.92 }}
-              transition={{ duration: 0.75, ease: EASE }}
+              transition={{ duration: 0.38, ease: EASE }}
               style={{ transformPerspective: 1200 }}
             >
               {/* a real card: drag sideways or double-tap to turn it over (the Flip chip says so) */}
@@ -129,26 +131,29 @@ export function Specimen({
 
       {/* Specimen switcher */}
       <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 max-[480px]:mt-5">
-        <div className="flex items-center gap-3 max-[480px]:hidden">
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Shuffle</span>
-        <div className="flex gap-1.5 rounded-full border border-line bg-white/[0.02] p-1">
+        {/* the shuffle: each chip wears its card's finish, so it reads as "see the next card", not a settings toggle */}
+        <div className={s.shuffle} role="group" aria-label="Shuffle the specimen">
           {personas.map((p) => {
             const look = lookOf(p);
             const on = p.key === active;
             return (
               <button
                 key={p.key}
+                type="button"
                 onClick={() => onSwap(p.key)}
                 aria-label={`Show ${p.name}`}
                 aria-pressed={on}
-                className={`grid h-8 w-8 place-items-center rounded-full text-sm transition ${on ? "text-paper" : "text-ink-2 hover:bg-white/5 hover:text-ink"}`}
-                style={on ? { background: `linear-gradient(135deg, ${look.a}, ${look.b})` } : undefined}
+                data-tier={p.showcase}
+                className={s.shuffleChip}
+                style={{ "--ga": look.a, "--gb": look.b } as React.CSSProperties}
               >
-                <PersonaGlyph k={p.key} fallback={look.glyph} className="h-[62%] w-[62%]" />
+                <span className={s.shuffleOrb}>
+                  <PersonaGlyph k={p.key} fallback={look.glyph} className="h-[60%] w-[60%]" />
+                </span>
+                <span className={s.shuffleTier}>{TIER_SHORT[p.showcase]}</span>
               </button>
             );
           })}
-        </div>
         </div>
         {/* the way into the whole set: every finish, the three ready-made cards, add-ons as they land */}
         <Link
