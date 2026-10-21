@@ -352,6 +352,63 @@ body {
     --loves-ang: 360deg;
   }
 }
+/* "Start here": the holo palette as ink and edge (no foil sheen), riding the stage's ring so the two turn together. */
+.startBadge {
+  position: relative;
+  isolation: isolate;
+  background: rgb(10 10 14 / 0.92);
+  box-shadow: 0 0 22px -6px rgb(216 117 255 / 0.55), 0 0 26px -8px rgb(131 255 247 / 0.45);
+  animation: startNudge 4.5s cubic-bezier(0.3, 1.5, 0.5, 1) 1.2s infinite;
+}
+.startBadge::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--loves-ang), #ff7773, #ffed5f, #c6ff3d, #83fff7, #d875ff, #ff7773);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: lovesSpin 6s linear infinite;
+}
+.startInk {
+  background: linear-gradient(90deg, #ff9d9a, #ffed5f, #c6ff3d, #83fff7, #d875ff, #ff9d9a) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: startInk 5s linear infinite;
+}
+.startDot {
+  background: #c6ff3d;
+  box-shadow: 0 0 8px #c6ff3d;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+@keyframes startInk {
+  to {
+    background-position: 200% 0;
+  }
+}
+/* every few seconds the badge hops once, like a tap on the shoulder */
+@keyframes startNudge {
+  0%, 82%, 100% { transform: translateY(0); }
+  88% { transform: translateY(-4px); }
+  94% { transform: translateY(0); }
+}
+/* phones: the ring holds still (a spinning masked layer repaints every frame); the ink drift and the hop carry it */
+@media (max-width: 767px), (pointer: coarse) {
+  .startBadge::before {
+    animation: none;
+  }
+  .startBadge {
+    font-size: 11px;
+    padding: 6px 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .startBadge, .startBadge::before, .startInk, .startDot { animation: none; }
+}
 /* phones: the glow is a static tint (a blurred spinning layer costs a full repaint every frame) */
 @media (max-width: 767px), (pointer: coarse) {
   .lovesStage::after {

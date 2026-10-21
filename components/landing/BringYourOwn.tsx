@@ -93,10 +93,10 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.3, ease: EASE }}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] ${ready ? "bg-accent text-paper" : "bg-ink text-paper"}`}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] ${ready ? "bg-accent text-paper" : "startBadge"}`}
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-paper" : "bg-accent pulse-dot"}`} />
-                {ready ? "Ready · mint it" : seeds.length ? `${seeds.length} of 3 · keep going` : "Start here · 3 taps"}
+                <span className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-paper" : "startDot"}`} />
+                {ready ? "Ready · mint it" : <span className="startInk">{seeds.length ? `${seeds.length} of 3 · keep going` : "Start here · 3 taps"}</span>}
               </motion.span>
             </AnimatePresence>
           </div>
