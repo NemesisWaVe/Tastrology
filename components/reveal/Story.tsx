@@ -295,8 +295,11 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
                   className="aspect-[3/4] rounded-xl shadow-[0_18px_40px_-12px_rgb(0_0_0/0.8)] ring-1 ring-white/15"
                 />
                 {it.word && (
-                  <span className="absolute inset-0 grid place-items-center p-2 text-center font-serif text-[20px] italic leading-none text-ink sm:text-[24px]">
-                    {it.word}
+                  <span
+                    className="absolute inset-0 grid place-items-center p-2 text-center font-serif italic leading-none text-ink [container-type:inline-size]"
+                  >
+                    {/* sized to the tile and the longest word, so "Cryptocurrency" stays one word */}
+                    <span style={{ fontSize: `min(26cqi, calc(165cqi / ${Math.max(4, ...it.word.split(/\s+/).map((w) => w.length))}))` }}>{it.word}</span>
                   </span>
                 )}
               </motion.figure>

@@ -322,7 +322,7 @@ function ArtCollage({ card }: { card: CardData }) {
           <img key={v.name} src={v.image} alt="" crossOrigin="anonymous" />
         ) : (
           <span key={v.name} className={s.vibePlate}>
-            <b>{v.name}</b>
+            <b style={{ ["--n" as string]: longestWord(v.name) }}>{v.name}</b>
             <small>vibe</small>
           </span>
         ),
@@ -330,6 +330,8 @@ function ArtCollage({ card }: { card: CardData }) {
     </div>
   );
 }
+
+const longestWord = (t: string) => Math.max(4, ...t.split(/\s+/).map((w) => w.length));
 
 /** Guilloche rosette (banknote / passport security linework), generated once. */
 const ROSETTE = (() => {

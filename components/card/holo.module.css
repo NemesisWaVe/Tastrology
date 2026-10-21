@@ -304,6 +304,8 @@
 
 /* a vibe with no picture (a bare Qloo tag) prints as a word plate; the duotone below tints it like the photos */
 .vibePlate {
+  /* the plate is its own container, so the word can size to the panel it landed in (cqi below = plate width) */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -322,13 +324,16 @@
   font-family: var(--font-serif), Georgia, serif;
   font-style: italic;
   font-weight: 500;
-  font-size: 6.5cqw;
+  /* --n = the longest word's length: a long word ("Cryptocurrency") shrinks to fit on one line instead of splitting */
+  font-size: min(22cqi, calc(165cqi / var(--n, 6)));
   line-height: 1;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
 }
 .vibePlate small {
   font-family: var(--font-mono), monospace;
-  font-size: 2.2cqw;
+  font-size: 7cqi;
   letter-spacing: 0.3em;
   text-transform: uppercase;
   opacity: 0.6;
