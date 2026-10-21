@@ -14,9 +14,9 @@ import s from "./landing.module.css";
  * under its own spotlight on a lit floor, with an engraved plaque. Secrets hang first. Hidden until there is one.
  */
 export function HallOfRares() {
-  const [d, setD] = useState<{ cards: { code: string; card: CardData }[]; census: { holo: number; secret: number } | null } | null>(null);
+  const [d, setD] = useState<{ cards: { code: string; card: CardData }[]; census: { holo: number; secret: number } | null; total?: number } | null>(null);
   useEffect(() => {
-    fetch("/api/rares")
+    fetch("/api/rares?teaser=1")
       .then((r) => (r.ok ? r.json() : null))
       .then(setD)
       .catch(() => {});
@@ -47,7 +47,15 @@ export function HallOfRares() {
         )}
       </div>
 
-      <Exhibits cards={cards} />
+      <Exhibits cards={cards} door={<HallDoor total={d.total ?? cards.length} c={c} />} />
+      {/* the door again, where nobody has to swipe to find it */}
+      <div className="mt-8 flex justify-center px-4">
+        <Link href="/hall" className={s.hallCta}>
+          Enter the Hall
+          <small>{d.total && d.total > 2 ? `${d.total - 2} more foils inside` : "swipe through every foil"}</small>
+          <i aria-hidden>→</i>
+        </Link>
+      </div>
     </section>
   );
 }
@@ -55,7 +63,7 @@ export function HallOfRares() {
 /** The row decides when the cards rise: a card off to the right is clipped by the row, so on its own it never counts
  * as seen (it stayed shifted down and invisible, and gave the row a vertical scroll). Its own component, so the row
  * exists by the time it is observed. */
-function Exhibits({ cards }: { cards: { code: string; card: CardData }[] }) {
+function Exhibits({ cards, door }: { cards: { code: string; card: CardData }[]; door: React.ReactNode }) {
   const row = useRef<HTMLUListElement>(null);
   const shown = useInView(row, { once: true, margin: "-60px" });
   return (
@@ -84,7 +92,39 @@ function Exhibits({ cards }: { cards: { code: string; card: CardData }[] }) {
           </p>
         </motion.li>
       ))}
+      <motion.li
+        className={s.exhibit}
+        initial={{ opacity: 0, y: 40 }}
+        animate={shown ? { opacity: 1, y: 0 } : undefined}
+        transition={{ duration: 0.9, ease: EASE, delay: cards.length * 0.1 }}
+      >
+        {door}
+      </motion.li>
     </ul>
+  );
+}
+
+/** The way in: a deck of face-down cards with the count, and the whole Hall behind it. */
+function HallDoor({ total, c }: { total: number; c: { holo: number; secret: number } | null }) {
+  const more = Math.max(0, total - 2);
+  return (
+    <Link href="/hall" className={s.door} aria-label="Enter the Hall of Rares">
+      <span className={s.doorStack} aria-hidden>
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className={s.doorText}>
+        <small>{more > 0 ? `+${more} more in the Hall` : "The whole Hall"}</small>
+        <b>Enter the Hall</b>
+        <em>
+          {c ? `${c.secret} Secret · ${c.holo} Holo` : "every foil pulled"} · swipe through them all
+        </em>
+      </span>
+      <span className={s.doorGo} aria-hidden>
+        →
+      </span>
+    </Link>
   );
 }
 
