@@ -4,7 +4,8 @@ import { PersonaGlyph } from "./PersonaGlyph";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
-import type { CardData, CardType } from "@/lib/card";
+import Link from "next/link";
+import type { CardData } from "@/lib/card";
 import type { Persona } from "@/lib/personas";
 import type { TraceEvent } from "@/lib/types";
 import { EASE } from "./primitives";
@@ -95,7 +96,7 @@ export function Specimen({
 
         {/* Orbiting seeds: what this card evolved from. */}
         {card && (
-          <div className="pointer-events-none absolute inset-0 hidden lg:block" aria-hidden>
+          <div className="pointer-events-none absolute inset-0 hidden xl:block" aria-hidden>
             {card.evolvesFrom.slice(0, ORBIT.length).map((e, i) => (
               <motion.div
                 key={`${runId}-${e.name}`}
@@ -125,15 +126,9 @@ export function Specimen({
         )}
       </div>
 
-      {/* Big Three */}
-      <div className="mt-8 grid w-full max-w-[420px] grid-cols-3 gap-2 max-[480px]:hidden">
-        <BigThreeCell label="Sun" sym="☉" t={sun} hint="main aesthetic" />
-        <BigThreeCell label="Moon" sym="☽" t={moon} hint={card?.bigThree.moonIsContradiction ? "contradiction" : "hidden side"} flag={card?.bigThree.moonIsContradiction} />
-        <BigThreeCell label="Rising" sym="↑" t={rising} hint="how you read" />
-      </div>
-
       {/* Specimen switcher */}
-      <div className="mt-5 flex items-center gap-3 max-[480px]:hidden">
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 max-[480px]:mt-5">
+        <div className="flex items-center gap-3 max-[480px]:hidden">
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Shuffle</span>
         <div className="flex gap-1.5 rounded-full border border-line bg-white/[0.02] p-1">
           {personas.map((p) => {
@@ -153,36 +148,21 @@ export function Specimen({
             );
           })}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function BigThreeCell({ label, sym, t, hint, flag }: { label: string; sym: string; t?: CardType; hint: string; flag?: boolean }) {
-  return (
-    <div className="relative min-w-0 rounded-2xl border border-line bg-white/[0.02] px-2.5 py-2.5 sm:px-3">
-      <div className="flex items-center gap-1.5">
-        <span
-          className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] text-paper"
-          style={{ background: t ? `linear-gradient(135deg, ${t.a}, ${t.b})` : "var(--line)" }}
+        </div>
+        {/* the way into the whole set: every finish, the three ready-made cards, add-ons as they land */}
+        <Link
+          href="/cards"
+          className="group inline-flex items-center gap-2.5 rounded-full border border-line bg-white/[0.03] py-1.5 pl-2 pr-4 text-[13px] text-ink-2 transition hover:border-ink-3 hover:text-ink"
         >
-          {sym}
-        </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-3">{label}</span>
+          <span className="relative h-6 w-7" aria-hidden>
+            <i className="absolute left-0 top-1 h-5 w-3.5 rotate-[-12deg] rounded-[3px] bg-gradient-to-br from-[#c7ccd4] to-[#6b7280]" />
+            <i className="absolute left-1.5 top-0.5 h-5 w-3.5 rounded-[3px] bg-[linear-gradient(115deg,#ff7773,#ffed5f,#a8ff5f,#83fff7,#7894ff,#d875ff)]" />
+            <i className="absolute left-3 top-1 h-5 w-3.5 rotate-[12deg] rounded-[3px] bg-gradient-to-br from-[#fff1b8] via-[#d9a73a] to-[#6e4a0c]" />
+          </span>
+          See every card
+          <span className="transition-transform group-hover:translate-x-0.5">→</span>
+        </Link>
       </div>
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={t?.name ?? "none"}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          className="mt-1.5 truncate font-serif text-[17px] italic leading-none text-ink"
-          title={t?.name}
-        >
-          {t ? t.name : <span className="inline-block h-3.5 w-16 rounded shimmer align-middle" />}
-        </motion.p>
-      </AnimatePresence>
-      <p className={`mt-1 truncate font-mono text-[8px] uppercase tracking-[0.08em] sm:text-[9px] sm:tracking-[0.14em] ${flag ? "text-accent" : "text-ink-3"}`}>{hint}</p>
     </div>
   );
 }

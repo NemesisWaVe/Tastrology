@@ -11,6 +11,18 @@ import { EASE, MaskedWords, Reveal } from "./primitives";
 import { lookOf } from "./personaStyle";
 import s from "./landing.module.css";
 
+/** Each ready-made card shows its persona's showcase finish (lib/personas.ts), best first, so the set reads as a ladder. */
+const TIER = {
+  secret: { label: "Secret Rare", gems: "◆◆◆", hint: "the chase card" },
+  holo: { label: "Holo Rare", gems: "◆◆", hint: "foil all over" },
+  rare: { label: "Rare", gems: "◆", hint: "foil frame" },
+} as const;
+type Tier = { tier: keyof typeof TIER } & (typeof TIER)[keyof typeof TIER];
+const ORDER = ["secret", "holo", "rare"] as const;
+const DECK = [...PERSONAS]
+  .sort((a, b) => ORDER.indexOf(a.showcase) - ORDER.indexOf(b.showcase))
+  .map((p) => ({ p, t: { tier: p.showcase, ...TIER[p.showcase] } as Tier }));
+
 export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void }) {
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -35,7 +47,7 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
             </h2>
           </div>
           <Reveal delay={0.1} className="max-w-sm text-[15px] leading-relaxed text-ink-3">
-            Three made-up people with very real favorites. Tap one and the agent builds their card from scratch, live, so you can see how it works before you hand over your own.
+            Three made-up people with very real favourites, each in its showcase finish. Tap one and the agent reads it live from Qloo. Your copy rolls its own rarity.
           </Reveal>
         </div>
 
@@ -43,8 +55,8 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
           className={`${s.snap} -mx-4 mt-12 flex gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:gap-6`}
           role="list"
         >
-          {PERSONAS.map((p, i) => (
-            <PersonaCard key={p.key} p={p} i={i} total={PERSONAS.length} onPick={() => pick(p)} picked={picked === p.key} dim={!!picked && picked !== p.key} />
+          {DECK.map(({ p, t }, i) => (
+            <PersonaCard key={p.key} p={p} tier={t} i={i} total={DECK.length} onPick={() => pick(p)} picked={picked === p.key} dim={!!picked && picked !== p.key} />
           ))}
         </div>
         <p className="mt-4 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3 sm:hidden">← swipe the deck →</p>
@@ -53,7 +65,7 @@ export function PersonaDeck({ onStart }: { onStart: (req: AgentRequest) => void 
   );
 }
 
-function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: number; total: number; onPick: () => void; picked: boolean; dim: boolean }) {
+function PersonaCard({ p, tier, i, total, onPick, picked, dim }: { p: Persona; tier: Tier; i: number; total: number; onPick: () => void; picked: boolean; dim: boolean }) {
   const look = lookOf(p);
   const [first, ...rest] = p.name.split(" ");
   const hasArticle = first.toLowerCase() === "the";
@@ -83,25 +95,26 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
       viewport={{ once: true, margin: "200px" }}
       transition={{ duration: 1, ease: EASE, delay: i * 0.12 }}
     >
-      <motion.div className="h-full" animate={{ opacity: dim ? 0.35 : 1, scale: picked ? 0.97 : 1 }} transition={{ duration: 0.35, ease: EASE }}>
+      <motion.div className={`${s.rim} h-full`} data-tier={tier.tier} animate={{ opacity: dim ? 0.35 : 1, scale: picked ? 0.97 : 1 }} transition={{ duration: 0.35, ease: EASE }}>
+      {tier.tier === "secret" && <span className={s.rimFx} aria-hidden />}
       <button
         onClick={onPick}
         onPointerMove={move}
         onPointerLeave={leave}
         aria-label={`Mint ${p.name}: ${p.blurb}`}
-        className={`${s.persona} group flex h-full w-full flex-col overflow-hidden rounded-[28px] border border-line bg-card p-6 text-left outline-none sm:min-h-[500px] sm:p-7`}
+        className={`${s.persona} group flex h-full w-full flex-col overflow-hidden rounded-[27px] bg-card p-6 text-left outline-none sm:min-h-[500px] sm:p-7`}
         style={{
           backgroundImage: `radial-gradient(120% 70% at 100% 0%, ${look.a}33 0%, transparent 55%), radial-gradient(90% 60% at 0% 100%, ${look.b}26 0%, transparent 60%)`,
         }}
       >
         <span className={s.personaSheen} aria-hidden />
 
-        <span className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-          <span>
-            No. {String(i + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
+        <span className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+          <span className={s.tierBadge} data-tier={tier.tier}>
+            <i>{tier.gems}</i> {tier.label}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" /> pre-read
+          <span className="whitespace-nowrap">
+            {String(i + 1).padStart(2, "0")}/{String(total).padStart(2, "0")}
           </span>
         </span>
 
@@ -123,6 +136,7 @@ function PersonaCard({ p, i, total, onPick, picked, dim }: { p: Persona; i: numb
           {hasArticle ? rest.join(" ") : p.name}
         </span>
         <span className="mt-3 block font-serif text-lg italic leading-snug text-ink-2">&ldquo;{look.sign}&rdquo;</span>
+        <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">✦ {tier.hint}</span>
 
         <span className="mt-6 flex flex-wrap gap-1.5">
           {p.seeds.map((sd) => (

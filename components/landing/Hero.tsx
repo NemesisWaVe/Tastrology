@@ -70,7 +70,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             transition={{ duration: 0.9, ease: EASE, delay: 0.88 }}
             className="mt-5 max-w-[34rem] text-[15px] leading-relaxed text-ink-3 max-[480px]:hidden sm:text-base"
           >
-            Shopping by vibe shouldn&apos;t mean guessing. Bring your favourite music, films and books; find brands through the things you already love. Your first reading needs no account. Your taste sign comes wrapped in a collectible card.
+            Name three things you love. Get the brands that fit, a receipt for each, and a card nobody else has. First one needs no account.
           </motion.p>
 
           <motion.div
@@ -79,19 +79,31 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
             transition={{ duration: 0.9, ease: EASE, delay: 1 }}
             className="mt-9 flex flex-wrap items-center gap-3 max-[480px]:mt-6"
           >
-            <Magnetic
-              onClick={onPick}
-              className="group relative inline-flex h-14 items-center gap-3 overflow-hidden rounded-full bg-accent pl-6 pr-2 text-[15px] font-semibold text-paper shadow-[0_0_0_1px_rgba(198,255,61,0.4),0_18px_50px_-12px_rgba(198,255,61,0.55)]"
-            >
-              Try a ready-made one
-              <CursorArrow className="h-10 w-10 bg-paper text-accent" />
-            </Magnetic>
+            {/* two equal doors: make your own (the point of the site) or watch one get made */}
             <Magnetic
               onClick={onCustom}
-              strength={0.2}
-              className="inline-flex h-14 items-center gap-2 rounded-full border border-line px-6 text-[15px] font-medium text-ink transition-colors hover:border-ink-3 hover:bg-white/[0.03]"
+              className="group relative inline-flex h-16 items-center gap-3 overflow-hidden rounded-full bg-accent pl-6 pr-2 text-left text-paper shadow-[0_0_0_1px_rgba(198,255,61,0.4),0_18px_50px_-12px_rgba(198,255,61,0.55)] max-[480px]:w-full"
             >
-              Use my own favorites
+              <span className="flex flex-col leading-none max-[480px]:flex-1">
+                <span className="text-[16px] font-semibold">Make my card</span>
+                <span className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] opacity-70">3 favourites · 30 sec</span>
+              </span>
+              <CursorArrow className="h-12 w-12 bg-paper text-accent" />
+            </Magnetic>
+            <Magnetic
+              onClick={onPick}
+              strength={0.25}
+              className={`${s.altCta} group relative inline-flex h-16 items-center gap-3 rounded-full pl-3 pr-6 text-left text-ink max-[480px]:w-full`}
+            >
+              <span className="relative h-10 w-11 shrink-0" aria-hidden>
+                <i className="absolute left-0 top-1.5 h-8 w-6 rotate-[-14deg] rounded-[4px] bg-gradient-to-br from-[#bfe3ff] to-[#3b82f6] shadow-md transition-transform duration-500 group-hover:-rotate-[22deg]" />
+                <i className="absolute left-2.5 top-0.5 h-8 w-6 rounded-[4px] bg-[linear-gradient(115deg,#ff7773,#ffed5f,#a8ff5f,#83fff7,#7894ff,#d875ff)] shadow-md" />
+                <i className="absolute left-5 top-1.5 h-8 w-6 rotate-[14deg] rounded-[4px] bg-gradient-to-br from-[#fff1b8] via-[#d9a73a] to-[#6e4a0c] shadow-md transition-transform duration-500 group-hover:rotate-[22deg]" />
+              </span>
+              <span className="flex flex-col leading-none">
+                <span className="text-[16px] font-semibold">Try a ready-made card</span>
+                <span className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">secret · holo · rare</span>
+              </span>
             </Magnetic>
           </motion.div>
 

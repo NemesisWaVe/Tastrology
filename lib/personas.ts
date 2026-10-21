@@ -31,7 +31,7 @@ export const PERSONAS: Persona[] = [
     key: "neon",
     name: "The Neon Contradiction",
     emoji: "⚡",
-    showcase: "secret",
+    showcase: "holo",
     blurb: "Cyberpunk nights… and a soft spot for baking shows",
     seeds: [
       { name: "Blade Runner 2049", kind: "movie" },
@@ -45,7 +45,7 @@ export const PERSONAS: Persona[] = [
     key: "mumbai",
     name: "The Golden Storyteller",
     emoji: "🪔",
-    showcase: "holo",
+    showcase: "secret",
     blurb: "Prateek Kuhad, The Lunchbox, Made in Heaven, Ghibli",
     seeds: [
       { name: "Prateek Kuhad", kind: "artist" },
