@@ -10,7 +10,7 @@ import { PhoneMenu } from "./PhoneMenu";
 /** Nav + footer for the quiet pages (shop, account, legal, sign-in). Same look as /deck. */
 export function SiteShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative isolate flex min-h-screen flex-col">
+    <div className="relative isolate flex min-h-screen flex-col overflow-x-clip">
       <SiteNav />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-10 sm:px-6 sm:pt-14">{children}</main>
       <footer className="border-t border-line/60">

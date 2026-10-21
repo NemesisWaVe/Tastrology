@@ -1,16 +1,26 @@
 /* "Your sky": the friends constellation. Every animation stops under prefers-reduced-motion. */
 
+/* No frame: the band runs edge to edge over the page's night sky and fades into it top and bottom. */
 .sky {
   position: relative;
   overflow: hidden;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  --gutter: max(16px, calc((100vw - 72rem) / 2 + 24px));
+  height: 380px;
+}
+/* The nebula wash only (stars and the focus card stay crisp), faded so the band has no edge. */
+.sky::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background:
-    radial-gradient(60% 70% at 50% 50%, rgba(198, 255, 61, 0.07) 0%, transparent 60%),
-    radial-gradient(70% 90% at 100% 0%, #2a1f4a 0%, transparent 55%),
-    radial-gradient(60% 80% at 0% 100%, #0f3a3a 0%, transparent 55%),
-    #07070a;
-  height: 360px;
+    radial-gradient(30% 50% at 50% 50%, rgba(198, 255, 61, 0.06) 0%, transparent 70%),
+    radial-gradient(35% 70% at 85% 10%, rgba(80, 55, 150, 0.35) 0%, transparent 70%),
+    radial-gradient(35% 70% at 12% 90%, rgba(15, 80, 80, 0.35) 0%, transparent 70%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%);
 }
 @media (min-width: 640px) {
   .sky {

@@ -6,6 +6,9 @@ import { qr, qrPath } from "@/components/card/qr";
 import { whenAuthReady } from "@/lib/authBridge";
 import { loadDeck, type DeckEntry } from "@/lib/deck";
 import { LEVELS, levelOf } from "@/lib/friendLevels";
+import { useReducedMotion } from "motion/react";
+import { Sky } from "@/components/reveal/Sky";
+import { skyState } from "@/components/reveal/traceModel";
 import { FriendSky, SKY_TINT } from "./FriendSky";
 import type { Bout, Friend, Player } from "@/lib/friends";
 import { rememberPlayerCode } from "@/lib/player";
@@ -49,8 +52,10 @@ const lime = "rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-pape
 const ADDED = { sent: "Request sent. You're friends once they accept.", added: "You're friends now.", pending: "Already asked. Waiting on them.", exists: "Already friends." } as const;
 const who = (b: { user?: string; name: string; pc: string }) => (b.user ? `@${b.user}` : b.name || b.pc);
 /** Panels: a faint glass sheet over the sky, and a lime-washed one for what needs you. */
-const glass = "rounded-[22px] border border-white/[0.07] bg-[linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.012)_60%)] backdrop-blur-sm";
-const lit = "rounded-[22px] border border-accent/35 bg-[linear-gradient(160deg,rgba(198,255,61,0.10),rgba(198,255,61,0.02)_60%)] backdrop-blur-sm";
+const glass = "rounded-[22px] border border-white/[0.07] bg-paper/70 bg-[linear-gradient(160deg,rgba(255,255,255,0.05),rgba(255,255,255,0.012)_60%)] backdrop-blur-sm";
+const lit = "rounded-[22px] border border-accent/35 bg-paper/70 bg-[linear-gradient(160deg,rgba(198,255,61,0.10),rgba(198,255,61,0.02)_60%)] backdrop-blur-sm";
+/** The page's night sky, the same calm one the Hall and battles sit on. */
+const OPEN_SKY = skyState([], "");
 /** Scrolls to a friend or request row and makes it glow, from a tap on the sky. */
 function pick(pc: string) {
   const el = document.getElementById(`fr-${pc}`);
@@ -79,6 +84,7 @@ function InviteQr({ url }: { url: string }) {
 }
 
 export function FriendsView({ prefill = "" }: { prefill?: string }) {
+  const reduce = useReducedMotion() ?? false;
   const [d, setD] = useState<Data | null>(null);
   const [deck, setDeck] = useState<DeckEntry[]>([]);
   const [code, setCode] = useState(prefill);
@@ -249,8 +255,8 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
 
   return (
     <div className="relative isolate flex flex-col gap-6">
-      {/* Nebula light behind the page, so the panels sit in space rather than on black. */}
-      <div aria-hidden className="pointer-events-none absolute -inset-x-[30vw] -top-60 bottom-0 -z-10 bg-[radial-gradient(40%_30%_at_80%_10%,rgba(120,80,220,0.16),transparent_70%),radial-gradient(35%_30%_at_10%_45%,rgba(20,120,120,0.14),transparent_70%),radial-gradient(30%_25%_at_70%_80%,rgba(198,255,61,0.05),transparent_70%)]" />
+      {/* The whole page is night sky; the friend stars below are its bright band. */}
+      <Sky f={OPEN_SKY} reduce={reduce} fixed quiet drawn dim={0.5} />
       <FriendSky me={me} friends={d.friends ?? []} incoming={incoming} sent={sent} fighting={fighting} onPick={pick} />
       {(incoming.length > 0 || open.length > 0) && (
         <section className={`${lit} p-5 sm:p-6`}>

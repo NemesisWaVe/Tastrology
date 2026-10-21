@@ -212,7 +212,8 @@ export function FriendSky({
   ].sort((a, b) => hash(a.pc) - hash(b.pc));
 
   const n = Math.max(bodies.length, 1);
-  const rx = Math.max(60, w / 2 - (compact ? 42 : 74));
+  // Edge to edge on wide screens, so the orbit is capped rather than flung to the far corners.
+  const rx = Math.min(560, Math.max(60, w / 2 - (compact ? 42 : 74)));
   const ry = Math.max(60, h / 2 - (compact ? 66 : 52));
   const placed = (mounted ? bodies : []).map((b, i) => {
     const jitter = ((hash(b.pc) % 1000) / 1000 - 0.5) * (Math.PI / n) * 0.7;
@@ -548,14 +549,14 @@ export function FriendSky({
         )}
       </AnimatePresence>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 sm:p-6">
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between px-[var(--gutter)] py-6">
         <p className="font-mono text-[10.5px] uppercase tracking-[0.24em] text-accent">Your sky</p>
         <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">
           {stars} star{stars === 1 ? "" : "s"}
           {forming ? ` · ${forming} forming` : ""}
         </p>
       </div>
-      <div className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-5 transition-opacity sm:p-6 ${target ? "opacity-0" : ""}`}>
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 px-[var(--gutter)] py-6 transition-opacity ${target ? "opacity-0" : ""}`}>
         <p className="hidden max-w-[16rem] text-xs text-ink-3 sm:block">
           {stars ? "Hold a star to hear it. Tap to fly in. Fight more, orbit closer." : "Every friend you add is born here."}
         </p>
