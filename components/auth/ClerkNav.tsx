@@ -15,7 +15,9 @@ export default function ClerkNav() {
         </button>
       </SignedOut>
       <SignedIn>
-        <UserButton appearance={{ elements: { avatarBox: "h-7 w-7" } }}>
+        {/* No "Manage account": email, username and deletion go through /account, which keeps the deck, friends,
+            Stardust and card registry in step. Clerk's own panel would change them behind the app's back. */}
+        <UserButton appearance={{ elements: { avatarBox: "h-7 w-7", userButtonPopoverActionButton__manageAccount: { display: "none" } } }}>
           <UserButton.MenuItems>
             <UserButton.Link label="Account" labelIcon={<Dot />} href="/account" />
           </UserButton.MenuItems>
