@@ -3,7 +3,7 @@
 .page {
   position: fixed;
   inset: 0;
-  background: #050506;
+  background: transparent; /* the night sky (a fixed canvas) shows through */
   color: #f3f1ec;
 }
 
@@ -102,7 +102,8 @@
     radial-gradient(55% 40% at 50% 42%, rgb(198 255 61 / 0.16), transparent 70%),
     radial-gradient(60% 40% at 50% 100%, rgb(131 255 247 / 0.08), transparent 70%);
 }
-.slide[data-current] .aura {
+.turn[data-current] .aura,
+.slide[data-current][data-phase="open"] .aura {
   opacity: 1;
 }
 
@@ -111,18 +112,24 @@
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  padding: 64px 16px 24px;
+  padding: 84px 16px 24px;
 }
-/* each card arrives: a small lift and settle when it becomes the one on screen */
+/* the opened card bursts up out of the pack: overshoot and settle */
+.cardWrap {
+  position: relative;
+  aspect-ratio: 63 / 88;
+}
 .cardLink {
   display: block;
-  transform: scale(0.94);
-  opacity: 0.6;
-  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s ease;
+  animation: cardOut 0.75s cubic-bezier(0.2, 1.4, 0.3, 1) both;
 }
-.slide[data-current] .cardLink {
-  transform: scale(1);
-  opacity: 1;
+.slide[data-quick] .cardLink {
+  animation-duration: 0.45s;
+}
+@keyframes cardOut {
+  0% { transform: scale(0.7) rotateZ(-4deg); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: none; opacity: 1; }
 }
 .ghost {
   display: block;
@@ -348,5 +355,468 @@
   }
   .cardLink {
     transition: none;
+  }
+}
+
+/* ---------- the tier, written huge behind the card: outlined, drifting while it's the one on screen ---------- */
+.tierWord {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  font-family: var(--nf-display), var(--nf-sans), sans-serif;
+  font-size: min(34vw, 300px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 1px rgb(185 195 255 / 0.3);
+  transform: translate(-50%, -62%) scale(0.92);
+  opacity: 0;
+  transition: opacity 0.9s ease, transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+.slide[data-tier="secret"] .tierWord {
+  -webkit-text-stroke-color: rgb(240 201 94 / 0.4);
+}
+.slide[data-current][data-phase="open"] .tierWord {
+  opacity: 1;
+  transform: translate(-50%, -62%) scale(1);
+}
+
+/* ---------- dust rising through the light: gold flecks for a Secret, prism flecks for a Holo ---------- */
+.dust {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.dust i {
+  position: absolute;
+  bottom: -10px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: hsl(var(--h) 90% 78%);
+  box-shadow: 0 0 8px hsl(var(--h) 90% 70%);
+  opacity: 0;
+  animation: dustRise linear infinite;
+}
+.slide[data-tier="secret"] .dust i {
+  background: #ffe7a3;
+  box-shadow: 0 0 10px #f5c451;
+}
+@keyframes dustRise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  12% { opacity: 0.9; }
+  70% { opacity: 0.6; }
+  100% { transform: translate3d(14px, -88vh, 0); opacity: 0; }
+}
+
+/* ---------- the sealed pack: same for every tier, so the tier is a surprise until it charges ---------- */
+.pack {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 4.8% / 3.4%;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background:
+    radial-gradient(1px 1px at 18% 22%, #fff8 50%, transparent 51%),
+    radial-gradient(1px 1px at 72% 14%, #fff6 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 84% 64%, #fff7 50%, transparent 51%),
+    radial-gradient(1px 1px at 30% 78%, #fff5 50%, transparent 51%),
+    radial-gradient(1px 1px at 56% 90%, #fff6 50%, transparent 51%),
+    radial-gradient(70% 50% at 50% 40%, rgb(120 120 160 / 0.18), transparent 70%),
+    linear-gradient(160deg, #16161f, #07070b);
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.9);
+  overflow: hidden;
+  cursor: pointer;
+  isolation: isolate;
+}
+/* a light sweep while it waits */
+.pack::after {
+  content: "";
+  position: absolute;
+  inset: -20% -60%;
+  z-index: 1;
+  background: linear-gradient(105deg, transparent 42%, rgb(255 255 255 / 0.14) 50%, transparent 58%);
+  transform: translateX(-60%);
+  animation: sealedSweep 3s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+.packFace {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.packFace b {
+  font-family: var(--nf-serif), Georgia, serif;
+  font-size: 26px;
+  font-style: italic;
+  font-weight: 400;
+  color: #f3f1ec;
+}
+.packFace small,
+.packTap {
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #8d8b85;
+}
+.packTap {
+  position: absolute;
+  z-index: 2;
+  bottom: 7%;
+  font-style: normal;
+  color: #c6ff3d;
+}
+/* the glow inside: white at first, then the tier's colour bleeds in at the end of the charge */
+.packGlow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(60% 45% at 50% 50%, var(--tc), transparent 70%);
+  opacity: 0;
+}
+.packGlow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(55% 40% at 50% 50%, rgb(255 255 255 / 0.5), transparent 70%);
+  opacity: 0;
+}
+.slide[data-phase="charge"] .pack {
+  animation: packShake 0.5s ease-in-out infinite;
+  border-color: rgb(255 255 255 / 0.4);
+}
+.slide[data-phase="charge"] .packGlow {
+  animation: tierBleed 1.4s cubic-bezier(0.6, 0, 0.9, 0.4) forwards;
+}
+.slide[data-phase="charge"] .packGlow::before {
+  animation: whiteIn 0.7s ease-out forwards;
+}
+.slide[data-phase="charge"][data-quick] .packGlow {
+  animation-duration: 0.4s;
+}
+/* a Secret's charge has a heartbeat: the card pounds twice before it goes */
+.slide[data-phase="charge"][data-tier="secret"]:not([data-quick]) .pack {
+  animation: packShake 0.5s ease-in-out infinite, heartbeat 0.8s ease-in-out 0.3s 2;
+  box-shadow: 0 0 0 1px rgb(252 211 77 / 0.4), 0 30px 60px -30px rgb(0 0 0 / 0.9);
+}
+@keyframes packShake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(-1.5px, 0.5px) rotate(-0.6deg); }
+  40% { transform: translate(1.5px, -0.5px) rotate(0.6deg); }
+  60% { transform: translate(-1px, -0.5px) rotate(-0.3deg); }
+  80% { transform: translate(1px, 0.5px) rotate(0.3deg); }
+}
+@keyframes heartbeat {
+  0%, 100% { scale: 1; }
+  15% { scale: 1.045; }
+  30% { scale: 0.99; }
+  45% { scale: 1.06; }
+}
+@keyframes tierBleed {
+  0%, 45% { opacity: 0; }
+  100% { opacity: 0.95; }
+}
+@keyframes whiteIn {
+  to { opacity: 1; }
+}
+
+/* ---------- the burst as it opens: a flash, a ring, sparks flung out ---------- */
+.burst {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.burst::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  aspect-ratio: 1;
+  margin: -50% 0 0 -50%;
+  border-radius: 50%;
+  border: 2px solid var(--tc);
+  box-shadow: 0 0 30px var(--tc), inset 0 0 30px var(--tc);
+  animation: ring 0.9s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+.burst::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.85), color-mix(in srgb, var(--tc) 70%, transparent) 35%, transparent 72%);
+  animation: flash 0.7s ease-out forwards;
+}
+.burst i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 14px;
+  margin: -7px 0 0 -3px;
+  border-radius: 3px;
+  background: var(--tc);
+  box-shadow: 0 0 10px var(--tc);
+  opacity: 0;
+  animation: spark calc(0.9s * var(--d)) cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+.slide[data-tier="holo"] .burst i:nth-child(3n + 1) { background: #83fff7; box-shadow: 0 0 10px #83fff7; }
+.slide[data-tier="holo"] .burst i:nth-child(3n + 2) { background: #ff9de2; box-shadow: 0 0 10px #ff9de2; }
+.slide[data-tier="secret"] .burst i { background: #ffe7a3; }
+.slide[data-quick] .burst {
+  display: none;
+}
+@keyframes ring {
+  0% { transform: scale(0.2); opacity: 1; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes flash {
+  0% { opacity: 0.9; transform: scale(0.5); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+@keyframes spark {
+  0% { transform: rotate(var(--a)) translateY(0) scaleY(1.6); opacity: 1; }
+  100% { transform: rotate(var(--a)) translateY(-220px) scaleY(0.4); opacity: 0; }
+}
+
+/* ---------- the stamp: tier and odds slammed onto the top edge of the card ---------- */
+.stamp {
+  position: absolute;
+  z-index: 4;
+  top: -14px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0b0b10;
+  background: linear-gradient(100deg, #b9c3ff, #f3b8ff 30%, #b0f7ff 60%, #fff0a0);
+  box-shadow: 0 8px 26px -8px var(--tc), 0 0 0 1px rgb(255 255 255 / 0.5) inset;
+  transform: translateX(-50%);
+  animation: stampIn 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) 0.25s both;
+}
+.slide[data-tier="secret"] .stamp {
+  background: linear-gradient(180deg, #fff1c2, #e9b949 55%, #b9822a);
+}
+.stamp b {
+  font-size: 9px;
+  letter-spacing: 0;
+}
+.stamp span {
+  padding-left: 7px;
+  border-left: 1px solid rgb(11 11 16 / 0.3);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+.slide[data-quick] .stamp {
+  animation-delay: 0s;
+}
+@keyframes stampIn {
+  0% { transform: translateX(-50%) scale(2.6); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+.plaque em {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 300px;
+  margin-top: 3px;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.3;
+  color: #c9c6be;
+}
+.new {
+  margin-right: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #c6ff3d;
+  color: #0b0b10;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.rail[data-hidden] {
+  visibility: hidden;
+}
+
+.lapNote {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(10 10 14 / 0.6);
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #b9b7b0;
+  white-space: nowrap;
+}
+.turn .stage {
+  padding-top: 96px;
+}
+
+/* ---------- practice roll: a slot window that slows down and lands where a mint would ---------- */
+.reel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  aspect-ratio: 63 / 70;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--tc) 55%, transparent);
+  background:
+    radial-gradient(70% 55% at 50% 45%, color-mix(in srgb, var(--tc) 22%, transparent), transparent 70%),
+    linear-gradient(160deg, #15151d, #07070b);
+  box-shadow: 0 0 60px -22px var(--tc);
+  transition: border-color 0.2s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+}
+.reel:active {
+  scale: 0.97;
+}
+.reelWindow {
+  display: grid;
+  place-items: center;
+  width: 86%;
+  height: 34%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.5);
+  box-shadow: inset 0 10px 18px -8px #000, inset 0 -10px 18px -8px #000;
+}
+.reelWindow b {
+  font-family: var(--nf-serif), Georgia, serif;
+  font-size: clamp(24px, 7vw, 34px);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--tc);
+  animation: reelFlick 0.12s ease-out;
+}
+.reel[data-landed] .reelWindow b {
+  animation: reelLand 0.5s cubic-bezier(0.3, 1.7, 0.5, 1);
+}
+.reel[data-landed][data-face="secret"] {
+  box-shadow: 0 0 90px -10px var(--tc), 0 0 0 2px var(--tc);
+}
+.reel small {
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #8d8b85;
+}
+@keyframes reelFlick {
+  from { transform: translateY(-60%); opacity: 0.3; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes reelLand {
+  0% { transform: scale(1.6); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- the dare: the card you just saw against yours ---------- */
+.duel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.duelSide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 63 / 88;
+  padding: 12px 10px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--tc) 60%, transparent);
+  background:
+    radial-gradient(80% 60% at 50% 30%, color-mix(in srgb, var(--tc) 22%, transparent), transparent 70%),
+    linear-gradient(160deg, #15151d, #07070b);
+  box-shadow: 0 0 40px -16px var(--tc);
+}
+.duelSide small {
+  font-family: var(--nf-mono), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tc);
+}
+.duelSide b {
+  font-family: var(--nf-serif), Georgia, serif;
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.duelSide span {
+  font-size: 11px;
+  color: #8d8b85;
+}
+.duelSide em {
+  display: block;
+  font-family: var(--nf-display), var(--nf-sans), sans-serif;
+  font-size: 30px;
+  font-style: normal;
+  font-weight: 700;
+  color: #f3f1ec;
+}
+.duelYou {
+  --tc: #c6ff3d;
+  border-style: dashed;
+}
+.duelYou b {
+  font-size: 44px;
+  color: #c6ff3d;
+}
+.duelVs {
+  font-family: var(--nf-serif), Georgia, serif;
+  font-size: 22px;
+  font-style: italic;
+  color: #ff6b6b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack::after,
+  .dust i,
+  .slide[data-phase="charge"] .pack,
+  .slide[data-phase="charge"] .packGlow,
+  .slide[data-phase="charge"] .packGlow::before {
+    animation: none;
+  }
+  .cardLink,
+  .stamp,
+  .reelWindow b {
+    animation: none;
   }
 }
