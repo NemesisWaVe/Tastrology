@@ -84,21 +84,25 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
             data-live={seen && !ready ? "1" : undefined}
             data-ready={ready ? "1" : undefined}
           >
-          {/* where to begin, and how far along you are */}
-          <div className="absolute -top-3.5 left-5 z-10 sm:left-7">
+          {/* where to begin, and how far along you are: a tab grown out of the panel's top edge, one pip per pick */}
+          <div className={`startTab absolute bottom-full left-5 z-10 flex items-center gap-3 px-4 pb-2 pt-2.5 sm:left-7 ${ready ? "startTabReady" : ""}`}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={ready ? "ready" : seeds.length ? "going" : "start"}
-                initial={{ opacity: 0, y: 6 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.3, ease: EASE }}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] ${ready ? "bg-accent text-paper" : "startBadge"}`}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.25, ease: EASE }}
+                className={`font-mono text-[10.5px] font-semibold uppercase tracking-[0.2em] ${ready ? "text-paper" : "startInk"}`}
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-paper" : "startDot"}`} />
-                {ready ? "Ready · mint it" : <span className="startInk">{seeds.length ? `${seeds.length} of 3 · keep going` : "Start here · 3 taps"}</span>}
+                {ready ? "Ready · mint it" : seeds.length ? "Keep going" : "Start here"}
               </motion.span>
             </AnimatePresence>
+            <span className="flex items-center gap-1.5" aria-label={`${Math.min(seeds.length, 3)} of 3 picks`}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="startPip" data-on={seeds.length > i ? "1" : undefined} style={{ ["--pip" as string]: ["#ffed5f", "#83fff7", "#d875ff"][i] }} />
+              ))}
+            </span>
           </div>
           <div className="relative rounded-[28px] border border-line bg-[linear-gradient(160deg,rgba(24,24,32,0.97),rgba(10,10,14,0.97))] p-4 pt-7 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] sm:p-7">
             <div className="mb-5 flex items-center justify-between">
