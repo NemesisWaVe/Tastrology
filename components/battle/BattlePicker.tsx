@@ -81,7 +81,7 @@ export function BattlePicker({ initialA, initialB }: { initialA?: string | null;
           Four rounds judged on Qloo data, a compatibility score with receipts, and a sign plus a crossover brand you both get to post. We roast the taste, never the person.
         </p>
       </header>
-      <div className="relative grid gap-6 sm:grid-cols-2 sm:gap-16">
+      <div className="relative grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-16">
         {col("Player one", a, setA, b, COL.a)}
         <div aria-hidden className={`${g.pickLens} pointer-events-none relative mx-auto -my-2 h-16 w-16 sm:absolute sm:left-1/2 sm:top-1/2 sm:my-0 sm:-translate-x-1/2 sm:-translate-y-1/2`} data-on={ready}>
           <VsLens size={64} label="VS" />

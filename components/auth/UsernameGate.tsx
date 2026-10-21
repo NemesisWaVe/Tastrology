@@ -207,12 +207,12 @@ export function UsernameGate({ signedIn }: { signedIn: boolean }) {
               ? "Letters, numbers and _ only, and nothing rude."
               : "Couldn't check right now. You can still try.";
   const terms = needTerms ? (
-    <p className="mt-3 text-center text-xs text-ink-3">
+    <p className="mt-3 text-center text-xs text-ink-2">
       By continuing you agree to the{" "}
       <Link
         href="/terms"
         target="_blank"
-        className="text-ink-2 underline underline-offset-2"
+        className="text-ink underline underline-offset-2"
       >
         Terms
       </Link>{" "}
@@ -220,7 +220,7 @@ export function UsernameGate({ signedIn }: { signedIn: boolean }) {
       <Link
         href="/privacy"
         target="_blank"
-        className="text-ink-2 underline underline-offset-2"
+        className="text-ink underline underline-offset-2"
       >
         Privacy Policy
       </Link>

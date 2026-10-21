@@ -59,7 +59,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
 
   return (
     <section id="byo" className="relative scroll-mt-10 py-20 sm:py-28">
-      <div className="relative mx-auto grid max-w-[1320px] gap-12 px-4 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:px-12">
+      <div className="relative mx-auto grid grid-cols-1 max-w-[1320px] gap-12 px-4 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:px-12">
         <div className="min-w-0">
           <Eyebrow>Bring your own taste</Eyebrow>
           <h2 className="mt-5 font-display text-[clamp(2.6rem,9vw,5.6rem)] font-bold leading-[0.9] tracking-[-0.045em]">
@@ -126,7 +126,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
               </span>
             </button>
             {tune && (
-            <div className="mt-5 grid gap-5 sm:grid-cols-[auto_1fr]">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-[auto_1fr]">
               <div>
                 <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Budget</p>
                 <div className="inline-flex rounded-full border border-line bg-black/30 p-1" role="radiogroup" aria-label="Budget">

@@ -49,7 +49,7 @@ export default function ShopPage() {
           <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">Stardust</p>
           <h2 className="mt-2 font-serif text-4xl italic leading-tight">Top up your dust.</h2>
           <p className="mt-3 max-w-xl text-ink-2">For packs, recasts and living sigils. You can also earn it by retiring cards.</p>
-          <ul className="mt-6 grid gap-4 sm:grid-cols-3">
+          <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {DUST_BUNDLES.map((b) => (
               <li key={b.id} className={`${c.panel} flex flex-col gap-4 p-6`}>
                 <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">{b.name}</p>

@@ -87,7 +87,7 @@ export default function AccountPage() {
       {authOn && signedIn === false && (
         <div className="mt-8 max-w-xl rounded-[22px] border border-white/[0.07] bg-paper/70 p-6 backdrop-blur-sm">
           <p className="text-ink-2">Sign in to keep every card you mint, on any device. What an account holds:</p>
-          <ul className="mt-5 grid gap-3 sm:grid-cols-3">
+          <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
               ["Your deck", "Every card you mint, on every device."],
               ["Friends", "A code to add rivals and fight them."],

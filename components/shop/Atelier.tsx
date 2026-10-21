@@ -134,7 +134,7 @@ export function Atelier() {
           first.
         </p>
       ) : (
-        <div className="mt-8 grid gap-8 lg:grid-cols-[auto_1fr]">
+        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr]">
           <div className="flex flex-col items-center gap-4">
             {entry && <HoloCard card={entry.card} width={240} idle />}
             {cards.length > 1 && (

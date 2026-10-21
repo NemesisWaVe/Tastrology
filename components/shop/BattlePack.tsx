@@ -96,7 +96,7 @@ export function BattlePack() {
         </>
       ) : (
         <>
-          <ul className="mt-8 grid gap-4 md:grid-cols-3">
+          <ul className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
             {packs.map((p) => {
               const afford = typeof info?.dust === "number" && info.dust >= p.cost;
               return (

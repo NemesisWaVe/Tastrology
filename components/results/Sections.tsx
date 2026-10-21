@@ -257,7 +257,7 @@ export function CapsuleAndBridges({ result }: { result: StyleResult }) {
   const brandOf = (id: string) => result.brands.find((b) => b.entity.id === id);
   const seedName = (id: string) => displayName(result.seeds.find((s) => s.id === id)?.name ?? "");
   return (
-    <div className="grid gap-14 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-10">
+    <div className="grid grid-cols-1 gap-14 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-10">
       <section id="capsule" className="scroll-mt-20">
         <SectionHead kicker="Your first haul" title="Start here" note="One brand per piece, in the order they fit you." />
         <ReceiptPaper curl className="mx-auto max-w-[420px]">
@@ -291,7 +291,7 @@ export function CapsuleAndBridges({ result }: { result: StyleResult }) {
       </section>
       <section id="bridges" className="scroll-mt-20">
         <SectionHead kicker="Other constellations" title="Same taste, other shelves" note="Places, films, music and books Qloo links to the same loves." />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
           {result.bridges.map((b) => (
             <BridgePlate key={b.entity.id} b={b} />
           ))}

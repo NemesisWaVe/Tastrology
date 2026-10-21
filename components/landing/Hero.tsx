@@ -29,7 +29,7 @@ export function Hero({ specimen, onPick, onCustom }: { specimen: ReactNode; onPi
 
   return (
     <section ref={ref} className={`${s.hero} relative min-h-[100svh] pt-24 max-[480px]:pt-20 sm:pt-28`}>
-      <div className="mx-auto grid max-w-[1320px] items-center gap-10 px-4 max-[480px]:gap-0 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:gap-8 lg:px-12">
+      <div className="mx-auto grid grid-cols-1 max-w-[1320px] items-center gap-10 px-4 max-[480px]:gap-0 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:gap-8 lg:px-12">
         <motion.div style={{ y: textY, opacity: textO }} className="relative z-20 min-w-0 max-[480px]:mt-6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}

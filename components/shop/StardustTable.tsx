@@ -14,7 +14,7 @@ export function StardustTable({ e, dust, weekLeft }: { e: Economy; dust?: number
   );
   const max = Math.max(...e.retire.map((r) => r.dust));
   return (
-    <div className="grid gap-8 sm:grid-cols-[1.4fr_1fr]">
+    <div className="grid grid-cols-1 gap-8 sm:grid-cols-[1.4fr_1fr]">
       <div>
         <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Retire a card, get</p>
         <ul className="mt-3 divide-y divide-line border-y border-line">

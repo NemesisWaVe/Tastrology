@@ -30,7 +30,7 @@ export function QlooComparison({ result }: { result: StyleResult }) {
       </button>
       {open && <div id="qloo-comparison" className="mt-5 space-y-5">
         <p className="max-w-3xl text-sm leading-relaxed text-ink-2">Same loves, two approaches. One asks a language model to suggest brands from memory; the other queries Qloo and measures which loves moved each match. This is one illustrative run, not a benchmark or a claim that the model&apos;s brands are wrong.</p>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="border-l border-line pl-4">
             <h3 className="font-mono text-xs uppercase tracking-widest">Without Qloo · unverified LLM output</h3>
             {!baseline && <button onClick={() => void compare()} disabled={busy} className="mt-4 rounded-full border border-line px-4 py-2 text-sm disabled:opacity-50">{busy ? "Asking the model…" : "Show the LLM comparison"}</button>}

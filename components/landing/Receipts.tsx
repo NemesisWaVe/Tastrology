@@ -161,7 +161,7 @@ export function Receipts({ result }: { result: StyleResult | null }) {
 
 function Beat({ tag, title, body, children, flip }: { tag: string; title: string; body: ReactNode; children: ReactNode; flip?: boolean }) {
   return (
-    <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-20">
+    <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-20">
       <div className={`min-w-0 ${flip ? "lg:order-2" : ""}`}>
         <Reveal>
           <span className="inline-block rounded-full border border-line px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-2">{tag}</span>

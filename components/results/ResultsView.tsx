@@ -89,7 +89,7 @@ export function ResultsView({
         />
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-60 [background-image:radial-gradient(1px_1px_at_10%_20%,#fff6,transparent),radial-gradient(1px_1px_at_30%_80%,#fff4,transparent),radial-gradient(1px_1px_at_60%_30%,#fff5,transparent),radial-gradient(1px_1px_at_85%_65%,#fff4,transparent),radial-gradient(1.5px_1.5px_at_45%_55%,#fff6,transparent)] [background-size:220px_220px]" />
 
-        <div className="grid gap-8 px-4 pb-6 pt-6 sm:px-8 sm:pb-10 sm:pt-10 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:gap-14 lg:px-12 lg:py-12">
+        <div className="grid grid-cols-1 gap-8 px-4 pb-6 pt-6 sm:px-8 sm:pb-10 sm:pt-10 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)] lg:gap-14 lg:px-12 lg:py-12">
           {/* card column */}
           <div className="mx-auto w-full max-w-[380px] lg:sticky lg:top-6 lg:self-start">
             {/* layoutId: the same card the pack revealed, carried here instead of cut to */}
@@ -306,7 +306,7 @@ export function ResultsView({
           }
           right={nVotes > 0 ? <span className="rounded-full border border-line px-3 py-1.5 font-mono text-[11px] text-ink-2">{nVotes} vote{nVotes === 1 ? "" : "s"}</span> : undefined}
         />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {main.map((b, i) => (
             <BrandCard key={b.entity.id} b={b} i={i} seeds={result.seeds} vote={votes[b.entity.id]} onVote={onVote} hero={i === 0} />
           ))}
@@ -322,7 +322,7 @@ export function ResultsView({
                 Picked by a separate Qloo query for the part of you that doesn&apos;t match the rest ({card.bigThree.moon.name}).
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {sideB.map((b, i) => (
                 <BrandCard key={b.entity.id} b={b} i={i} seeds={result.seeds} vote={votes[b.entity.id]} onVote={onVote} />
               ))}

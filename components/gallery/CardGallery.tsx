@@ -94,7 +94,7 @@ export function CardGallery() {
         </ul>
       </section>
 
-      <section className="mt-16 grid gap-6 rounded-[28px] border border-line bg-white/[0.02] p-6 sm:grid-cols-[1fr_auto] sm:items-center sm:p-8">
+      <section className="mt-16 grid grid-cols-1 gap-6 rounded-[28px] border border-line bg-white/[0.02] p-6 sm:grid-cols-[1fr_auto] sm:items-center sm:p-8">
         <div>
           <h2 className="font-mono text-[11px] uppercase tracking-[0.24em] text-ink-3">Add-ons</h2>
           <p className="mt-3 font-display text-2xl font-semibold">Living sigils</p>

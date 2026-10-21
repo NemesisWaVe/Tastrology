@@ -262,7 +262,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
   const live = new Map(open.map((b) => [b.pc, b.ends]));
 
   return (
-    <div className="relative isolate flex flex-col gap-6">
+    <div className="relative flex flex-col gap-6">
       {/* The whole page is night sky; the friend stars below are its bright band. */}
       <Sky f={OPEN_SKY} reduce={reduce} fixed quiet drawn dim={0.5} />
       <FriendSky me={me} friends={d.friends ?? []} incoming={incoming} sent={sent} fighting={fighting} onPick={pick} />
@@ -322,7 +322,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
         </section>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
         <div className="flex flex-col gap-6">
           {naming && (
             <section className={`${lit} p-5 sm:p-6`}>

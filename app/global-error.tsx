@@ -27,7 +27,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
               Clear saved sign
             </button>
           </div>
-          {error.digest && <p style={{ margin: 0, fontFamily: "ui-monospace, monospace", fontSize: 10, color: "#77736c" }}>ref {error.digest}</p>}
+          {error.digest && <p style={{ margin: 0, fontFamily: "ui-monospace, monospace", fontSize: 10, color: "#8c877f" }}>ref {error.digest}</p>}
         </main>
       </body>
     </html>
