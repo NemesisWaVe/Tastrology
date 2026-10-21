@@ -95,7 +95,10 @@ describe("pack cards are copies, and an original has a holder limit", () => {
     expect(r.status).toBe("opened");
     const [code] = (r as { codes: string[] }).codes;
     expect(Number(db.items.get(`CARD#${code}|HOLDERS`)?.n?.N)).toBe(PACK_HOLDERS);
-    expect([...db.items.keys()].some((k) => k.startsWith("POOL#") && k.endsWith(`CARD#${code}`))).toBe(false);
+    // flagged, not removed: packs pass over it, the Hall of Rares (which lists the pool) still shows it
+    const row = [...db.items.entries()].find(([k]) => k.startsWith("POOL#") && k.endsWith(`CARD#${code}`))?.[1];
+    expect(row?.full?.N).toBe("1");
+    for (let u = 0; u < 20; u++) expect(await drawPack(`y${u}`, "2026-10-18")).not.toContain(code);
   });
 
   it("when every original is full, nothing is charged", async () => {

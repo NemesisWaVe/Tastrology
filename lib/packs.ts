@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { CardData, Rarity } from "./card";
-import { ddbDelete, ddbGet, ddbPutIfAbsent, ddbQuery, ddbTransact } from "./ddb";
+import { ddbGet, ddbPutIfAbsent, ddbQuery, ddbTransact, ddbUpdate } from "./ddb";
 import { PACK_HOLDERS } from "./packRules";
 import { dustOn } from "./stardust";
 import { burnedAt, getTwin } from "./twins";
@@ -14,7 +14,8 @@ import { burnedAt, getTwin } from "./twins";
  *   USER#<id>        LEDGER#pack#<day>   -PACK_DUST
  *   CARD#<code>      HOLDERS         n: how many collections hold a copy of this card (at most PACK_HOLDERS)
  * A pack card is a collected copy of someone else's mint, never a new card: it adds nothing to any tier's supply, and
- * an original can be collected by PACK_HOLDERS people at most, so one Secret never turns into a thousand.
+ * an original can be collected by PACK_HOLDERS people at most, so one Secret never turns into a thousand. A full one
+ * stays in its pool flagged `full` (the Hall of Rares lists the pool), and draws pass over it.
  * Contents are fixed per account per UTC day, so there is nothing to re-roll. Stardust is never sold (legal review).
  */
 export const PACK_SIZE = 1;
@@ -98,9 +99,9 @@ export async function drawPack(userId: string, day: string, kind: PackKind = "st
     if (!pools.has(t)) {
       const from = String(Math.floor(rand() * 10000)).padStart(4, "0");
       const at = Buffer.from(JSON.stringify({ PK: { S: `POOL#${t}` }, SK: { S: `CARD#${from}` } })).toString("base64url");
-      const a = (await ddbQuery(`POOL#${t}`, "CARD#", WINDOW, at, ["code"]))?.items ?? [];
-      const b = a.length < WINDOW ? ((await ddbQuery(`POOL#${t}`, "CARD#", WINDOW - a.length, undefined, ["code"]))?.items ?? []) : [];
-      pools.set(t, [...new Set([...a, ...b].map((i) => String(i.code)))].sort());
+      const a = (await ddbQuery(`POOL#${t}`, "CARD#", WINDOW, at, ["code", "full"]))?.items ?? [];
+      const b = a.length < WINDOW ? ((await ddbQuery(`POOL#${t}`, "CARD#", WINDOW - a.length, undefined, ["code", "full"]))?.items ?? []) : [];
+      pools.set(t, [...new Set([...a, ...b].filter((i) => !i.full).map((i) => String(i.code)))].sort());
     }
     return pools.get(t)!;
   };
@@ -158,11 +159,11 @@ export async function openPack(userId: string, now = Date.now(), kind: PackKind 
   return r.reasons[0] === CCF ? { status: "poor" } : { status: "error" };
 }
 
-/** Takes an original out of every tier's pool once PACK_HOLDERS collections hold it. */
+/** Flags an original `full` in its pool once PACK_HOLDERS collections hold it: packs pass over it, the Hall keeps it. */
 async function retireIfFull(code: string): Promise<void> {
   const h = await ddbGet(`CARD#${code}`, "HOLDERS").catch(() => null);
   if (Number(h?.n) < PACK_HOLDERS) return;
-  await Promise.all(TIERS.map((t) => ddbDelete(`POOL#${t}`, `CARD#${code}`).catch(() => null)));
+  await Promise.all(TIERS.map((t) => ddbUpdate(`POOL#${t}`, `CARD#${code}`, "SET full = :one", { condition: "attribute_exists(PK)", values: { ":one": 1 } }).catch(() => null)));
 }
 
 /** The account's collection, newest pack first, with each card (burned or missing cards drop out). */
