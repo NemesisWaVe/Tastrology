@@ -27,6 +27,7 @@ import { claimPrint } from "@/lib/print";
 import { countEvent } from "@/lib/metrics";
 import type { AgentRequest, StyleResult, TraceEvent } from "@/lib/types";
 import { BODY_MAX_BYTES, cacheKey, normalizeRequest } from "./key";
+import { moderate } from "@/lib/moderate";
 
 export const runtime = "nodejs";
 // Hobby allows 300s; readings take 20–60s, and Qloo backoff can stretch one.
@@ -247,6 +248,11 @@ export async function POST(request: Request) {
     const uid = await currentUserId();
     const au = uid ? await audienceOf(uid).catch(() => "" as const) : "";
     if (au) body.audience = au;
+  }
+  // The word list ran in normalizeRequest; a model reads what people typed about themselves too (personas are ours).
+  if (!isPersonaRequest(body)) {
+    const said = [...body.seeds.map((s) => s.name), ...(body.vibes ?? []).map((v) => v.name), body.goal ?? ""].filter(Boolean).join("\n");
+    if ((await moderate(said, "picks")) === "block") return Response.json({ error: "The stars won't read that one. Swap the rude pick for something you'd show a friend." }, { status: 400 });
   }
   const key = cacheKey(body);
   const fallbackKey = cacheKey(body, "*");

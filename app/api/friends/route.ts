@@ -3,7 +3,7 @@ import { ddbConfigured } from "@/lib/ddb";
 import { acceptBout, acceptFriend, addFriend, BOUT_SK, chargeRename, stampImage, refundRename, closeBout, GENDERS, setProfile, FREE_RENAMES, nameFree, normUser, renameFee, RENAME_DUST, type Player, dropRequest, alerts, ensurePlayer, inboxCount, markSeen, indexCards, playerForCard, listBouts, listFriends, listRequests, lookupPlayer, lookupUser, openBout, setUsername, PLAYER_CODE, removeFriend, setFighter, STAKES } from "@/lib/friends";
 import { allow, clientId } from "@/lib/ratelimit";
 import { dustOn, dustStatus } from "@/lib/stardust";
-import { blocked } from "@/lib/guard";
+import { moderate } from "@/lib/moderate";
 import { cleanBio, tagline } from "@/lib/tagline";
 import { TWIN_CODE } from "@/lib/twins";
 import type { Audience } from "@/lib/types";
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     case "username": {
       // Clerk first (it guards uniqueness across every account), then our copy; the fee is taken last, once it worked.
       const u = normUser(String(b.user ?? ""));
-      const msg = { bad: "3 to 20 letters, numbers or _, and nothing rude.", taken: "That username is taken.", error: "Couldn't reach the server." } as const;
+      const msg = { bad: "3 to 20 letters, numbers or _. Nothing rude: the stars can read.", taken: "That username is taken.", error: "Couldn't reach the server." } as const;
       if (u === me.user) return json({ ok: true, me });
       const fee = renameFee(me);
       if (fee) {
@@ -117,6 +117,7 @@ export async function POST(request: Request) {
         if (((await dustStatus(uid).catch(() => null))?.dust ?? 0) < fee) return json({ error: `Changing again costs ${fee} Stardust.` }, 400);
       }
       const free = await nameFree(uid, u);
+      if (free === "ok" && (await moderate(u, "username")) === "block") return json({ error: "Nice try. The stars said no. Pick a name you'd put on a public card." }, 400);
       if (free !== "ok") return json({ error: msg[free] }, free === "error" ? 503 : 400);
       // A rename is paid (and counted) before anything changes, so two at once can't both ride the free one, and
       // a failed change gives it back.
@@ -153,7 +154,7 @@ export async function POST(request: Request) {
       }
       if (b.bio !== undefined) {
         const bio = cleanBio(String(b.bio));
-        if (bio && blocked(bio)) return json({ error: "Keep the bio friendly." }, 400);
+        if (bio && (await moderate(bio, "bio")) === "block") return json({ error: "Too spicy for a public card. Keep it friendly." }, 400);
         if (bio !== (me.bio ?? "")) {
           if (!(await allow(`bio:${uid}`, 8, 60 * 60 * 1000))) return json({ error: "That's a lot of bios. Try again in a bit." }, 429);
           p.bio = bio;

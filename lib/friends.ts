@@ -240,8 +240,9 @@ export async function listFriends(uid: string): Promise<Friend[] | null> {
         at: Number(it.at) || 0,
         days: Number(it.days) || 0,
         seen: Number(p?.seen) || undefined,
-        ...(str(p?.bio) ? { bio: str(p?.bio) } : {}),
-        ...(str(p?.tag) ? { tag: str(p?.tag) } : {}),
+        // Bios saved before the guard caught them stay hidden from friends until rewritten.
+        ...(str(p?.bio) && !blocked(str(p?.bio)) ? { bio: str(p?.bio) } : {}),
+        ...(str(p?.tag) && !blocked(str(p?.bio)) && !blocked(str(p?.tag)) ? { tag: str(p?.tag) } : {}),
         ...(str(p?.img) ? { img: str(p?.img) } : {}),
         ...(p?.cards !== undefined ? { cards: Number(p?.cards) || 0 } : {}),
       };

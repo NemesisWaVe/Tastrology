@@ -204,7 +204,7 @@ export function UsernameGate({ signedIn }: { signedIn: boolean }) {
           : check.status === "taken"
             ? "Taken. Try another, or add a number."
             : check.status === "bad"
-              ? "Letters, numbers and _ only, and nothing rude."
+              ? "Letters, numbers and _ only. Nothing rude: the stars can read."
               : "Couldn't check right now. You can still try.";
   const terms = needTerms ? (
     <p className="mt-3 text-center text-xs text-ink-2">

@@ -3,8 +3,11 @@
  * back. Qloo's catalogue includes adult studios, performers and tags; a taste card is shareable and meant for 13+, so
  * those never reach the picker, the agent or the LLM prompt.
  *
- * Word-boundary match on a normalised string, with an allowlist for real titles that contain a flagged word
- * ("Sex and the City", "Sex on the Beach", "Sex Education", "Sex Pistols").
+ * Two passes on a normalised string (leetspeak undone, s p a c e d letters joined):
+ * - whole words from BLOCK, with an allowlist for real titles that contain one ("Sex and the City", "Moby Dick");
+ * - STEMS anywhere inside a word, so "hentaides", "xxcuckxx" or "fuuuck" don't slip through a username. Stems are
+ *   only strings that are rude wherever they appear; SAFE_INSIDE lists the real words that hide one ("therapist").
+ * lib/moderate.ts adds a model's read on top for what people type about themselves (names, bios, picks).
  */
 const BLOCK = [
   "porn", "porno", "pornhub", "xxx", "xvideos", "xhamster", "redtube", "youporn", "brazzers", "onlyfans", "fansly", "chaturbate",
@@ -15,7 +18,20 @@ const BLOCK = [
   "shota", "incest", "rape", "pedo", "child porn", "cp",
   // hate and violence that has no place on a card
   "nazi", "kkk", "white power", "isis", "jihad", "terrorist", "school shooting",
+  // slurs and insults aimed at people: names and bios are public on friends' lists
+  "cuck", "cuckold", "cucked", "incel", "slut", "sluts", "whore", "whores", "thot", "bitch", "bitches",
+  "cunt", "fuck", "fucker", "fucking", "motherfucker", "stfu", "gtfo", "wanker", "twat", "bastard", "retard", "retarded",
+  "nigger", "nigga", "niggas", "faggot", "fag", "fags", "tranny", "dyke", "chink", "gook", "spic", "kike", "paki", "coon",
+  "wetback", "beaner", "raghead", "towelhead", "kys", "kill yourself", "go die", "heil hitler", "hitler", "1488",
 ];
+/** Rude anywhere inside a word. Kept to strings that no ordinary word contains (see SAFE_INSIDE for the few that do). */
+const STEMS = [
+  "porn", "hentai", "nsfw", "onlyfans", "fansly", "xvideo", "xhamster", "brazzers", "chaturbate", "rule34", "milf", "blowjob",
+  "handjob", "cumshot", "sexy", "nude", "boob", "titty", "titties", "pussy", "dildo", "horny", "erotic", "fetish", "lolicon",
+  "cuck", "slut", "whore", "bitch", "cunt", "fuck", "wank", "retard", "rapist", "pedo", "paedo", "nigg", "faggot",
+  "tranny", "nazi", "hitler",
+];
+const SAFE_INSIDE = ["therapist", "torpedo", "cuckoo", "scunthorpe", "snigger", "niggle", "niggling", "niggard", "pedometer", "swank", "thorny", "retardant", "ignazio", "nazionale"];
 /** Not blocked as "bad": someone may be having a hard time. The picker answers with a help line instead. */
 const CARE = ["suicide", "suicidal", "self harm", "selfharm", "kill myself", "want to die", "cutting myself"];
 const ALLOW = [
@@ -30,12 +46,34 @@ const norm = (s: string) =>
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
-    .replace(/[0@]/g, "o")
-    .replace(/[1!]/g, "i")
+    .replace(/0/g, "o")
+    .replace(/[1!|]/g, "i")
     .replace(/3/g, "e")
-    .replace(/\$/g, "s")
+    .replace(/[4@]/g, "a")
+    .replace(/[5$]/g, "s")
+    .replace(/7/g, "t")
+    .replace(/8/g, "b")
     .replace(/[^a-z0-9]+/g, " ")
+    // "c u c k" or "c.u.c.k": runs of lone letters read as one word
+    .replace(/(?<![a-z])(?:[a-z] ){2,}[a-z](?![a-z])/g, (m) => m.replace(/ /g, ""))
     .trim();
+
+/** "fuuuck" → "fuck": every run of a letter counts once. */
+const squeeze = (s: string) => s.replace(/(.)\1+/g, "$1");
+const STEMS_N = STEMS.map(norm);
+const STEMS_SQ = STEMS_N.map(squeeze).filter((x) => x.length >= 4);
+
+/** A stem hiding inside any word, after the real words that innocently contain one are taken out. */
+function hidden(t: string): boolean {
+  for (let w of t.split(" ")) {
+    if (w.length < 4) continue;
+    for (const a of SAFE_INSIDE) w = w.split(a).join(" ");
+    if (STEMS_N.some((x) => w.includes(x))) return true;
+    const sq = squeeze(w);
+    if (STEMS_SQ.some((x) => sq.includes(x))) return true;
+  }
+  return false;
+}
 
 const wordsRe = (ws: string[]) => new RegExp(`(?:^| )(?:${ws.map((w) => norm(w).replace(/ /g, " ?")).join("|")})(?: |$)`);
 const BLOCK_RE = wordsRe(BLOCK);
@@ -56,7 +94,7 @@ export function care(text: string | undefined | null): boolean {
 export function blocked(text: string | undefined | null): boolean {
   if (!text) return false;
   const t = stripAllowed(text);
-  return BLOCK_RE.test(t) || CARE_RE.test(t);
+  return BLOCK_RE.test(t) || CARE_RE.test(t) || hidden(t);
 }
 
 /**
