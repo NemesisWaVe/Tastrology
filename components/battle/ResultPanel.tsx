@@ -74,10 +74,7 @@ export const ResultPanel = forwardRef<HTMLDivElement, { res: BattleResult }>(fun
         )}
 
         <div className="flex items-end justify-between gap-3 border-t border-white/10 pt-3">
-          <div>
-            <p className="font-display text-[15px] font-semibold text-ink">{res.verdict.label}</p>
-            <p className="text-[12px] text-ink-3">{res.verdict.line}</p>
-          </div>
+          <p className="text-[12.5px] leading-snug text-ink-2">{res.verdict.line}</p>
           <p className="shrink-0 text-right font-serif text-[13px] italic text-ink-3">{BRAND.tagline}</p>
         </div>
       </div>

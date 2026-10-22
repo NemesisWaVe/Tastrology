@@ -478,6 +478,10 @@ function Sequence({
                 </motion.div>
               </motion.div>
               <div className="flex w-full flex-col items-center gap-1 text-center">
+                <p className="font-mono text-[9.5px] uppercase tracking-[0.2em]" style={{ color: COL[side] }}>
+                  {side === "a" ? "P1" : "P2"}
+                  {final && out.winner === side && " · wins"}
+                </p>
                 <p className="line-clamp-2 px-1 font-display text-[13px] font-semibold leading-snug text-ink sm:text-[14px]">
                   {out.names[side]}
                 </p>
@@ -597,6 +601,7 @@ function Sequence({
       {phase === PH_REVEAL && (
         <div ref={revealRef} className="scroll-mt-4">
           <Slam out={out} reduce={true} compact />
+          <BestLine out={out} reduce={reduce} />
           <motion.div
             initial={reduce ? false : { opacity: 0, y: 40, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -781,6 +786,27 @@ function RoundBody({
   );
 }
 
+/** The judge's sharpest line of the fight, so a skipped fight still lands a roast. */
+function BestLine({ out, reduce }: { out: BattleResult; reduce: boolean }) {
+  const r = [...out.rounds].reverse().find((x) => x.winner !== "tie");
+  if (!r || r.winner === "tie") return null;
+  return (
+    <motion.figure
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: reduce ? 0 : 0.35, duration: 0.5 }}
+      className="mx-auto mt-6 max-w-md border-l-2 pl-4 text-left"
+      style={{ borderColor: COL[r.winner] }}
+    >
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em]" style={{ color: COL[r.winner] }}>
+        The judge on {r.stat.toLowerCase()}
+      </p>
+      <blockquote className="mt-1 font-serif text-[19px] italic leading-snug text-ink">&ldquo;{r.roast}&rdquo;</blockquote>
+      <figcaption className="mt-1 font-mono text-[10.5px] text-ink-3">receipt: {r.receipt}</figcaption>
+    </motion.figure>
+  );
+}
+
 function Slam({
   out,
   reduce,
@@ -791,6 +817,7 @@ function Slam({
   compact?: boolean;
 }) {
   const v = useCountUp(out.compatibility, true, reduce, 700);
+  const draws = out.rounds.filter((r) => r.winner === "tie").length;
   return (
     <motion.div
       initial={reduce ? false : { scale: 2.4, opacity: 0, rotate: -4 }}
@@ -801,21 +828,25 @@ function Slam({
     >
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
         Final · {out.score.a}–{out.score.b}
+        {draws > 0 && ` · ${draws} draw${draws === 1 ? "" : "s"}`}
       </p>
-      <p className={`mt-1 max-w-md font-display font-bold leading-tight tracking-tight text-ink ${compact ? "text-[22px] sm:text-[24px]" : "text-[22px] sm:text-[28px]"}`}>
-        {out.winner === "tie" ? (
-          <>
-            Dead even. <span className="font-serif font-normal italic text-ink-2">The two skies merge.</span>
-          </>
-        ) : (
-          <>
-            <span style={{ color: COL[out.winner] }}>{out.names[out.winner]}</span>{" "}
-            <span className="font-serif font-normal italic text-ink-2">pulls</span>{" "}
-            {out.names[out.winner === "a" ? "b" : "a"]}{" "}
-            <span className="font-serif font-normal italic text-ink-2">in.</span>
-          </>
-        )}
-      </p>
+      {out.winner === "tie" ? (
+        <p className={`mt-1 max-w-md font-display font-bold leading-tight tracking-tight text-ink ${compact ? "text-[22px] sm:text-[24px]" : "text-[22px] sm:text-[28px]"}`}>
+          Dead even. <span className="font-serif font-normal italic text-ink-2">The two skies merge.</span>
+        </p>
+      ) : (
+        <>
+          <p
+            className={`mt-1 max-w-md font-display font-bold leading-tight tracking-tight ${compact ? "text-[22px] sm:text-[24px]" : "text-[24px] sm:text-[30px]"}`}
+            style={{ color: COL[out.winner] }}
+          >
+            {out.names[out.winner]}
+          </p>
+          <p className="mt-1 max-w-md font-serif text-[16px] italic leading-snug text-ink-2">
+            pulls {out.names[out.winner === "a" ? "b" : "a"]} in.
+          </p>
+        </>
+      )}
       <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
         Compatibility
       </p>
