@@ -7,6 +7,7 @@ import { recordBattle } from "./stamps";
 import { blocked } from "./guard";
 import { burnedAt, getTwin } from "./twins";
 import type { Audience } from "./types";
+import { earnedThisWeek, isoWeek as dustWeek, WEEKLY_DUST_CAP } from "./stardust";
 export { levelOf } from "./friendLevels";
 
 /**
@@ -24,7 +25,18 @@ export const PLAYER_CODE = /^[0-9A-HJKMNP-TV-Z]{6}$/;
 const ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const FRIENDS_MAX = 200;
 export const STAKES = [10, 25, 50] as const;
+/** Stardust bouts a player can send or accept in a day (both count). */
 export const BOUTS_PER_DAY = 5;
+/*
+ * Anti-farming levers for Stardust bouts (NOTES ★ North star: one account must not be fed by others). A bout can't move
+ * Stardust between accounts beyond what one honest player could earn anyway:
+ *   - the winner's take from the other stake counts toward WEEKLY_DUST_CAP; past it, the rest is burned, not refunded
+ *   - one Stardust bout per pair of friends per day, and accepting one counts toward your BOUTS_PER_DAY
+ *   - betting needs a friendship a day old and two accounts a few days old (friendly fights need neither)
+ */
+export const PAIR_BETS_PER_DAY = 1;
+export const BET_FRIEND_AGE_MS = 24 * 60 * 60 * 1000;
+export const BET_ACCOUNT_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 /** A challenge is live: unanswered for five minutes, it lapses (both sides see the clock) and any stake goes back. */
 export const BOUT_TTL_MS = 5 * 60 * 1000;
 const DAY_MS = 86_400_000;
@@ -549,12 +561,18 @@ export async function listBouts(uid: string): Promise<Bout[] | null> {
  * Opens a bout: a challenge on both lists that the friend has to accept before anything is fought.
  * Stardust bouts also take the stake from you now (escrow) and count toward the daily cap.
  */
-export async function openBout(uid: string, me: Player, pc: string, stake: number): Promise<"open" | "friends-only" | "stake" | "empty" | "daily" | "already" | "theirs" | "error"> {
+export async function openBout(uid: string, me: Player, pc: string, stake: number): Promise<"open" | "friends-only" | "stake" | "empty" | "daily" | "pair-daily" | "new-friend" | "new-account" | "already" | "theirs" | "error"> {
   if (stake !== 0 && !(STAKES as readonly number[]).includes(stake)) return "stake";
   const f = await ddbGet(U(uid), `FRIEND#${pc}`);
   const other = str(f?.uid);
   if (!other) return "friends-only";
   const now = Date.now();
+  if (stake) {
+    if ((Number(f?.at) || 0) > now - BET_FRIEND_AGE_MS) return "new-friend";
+    // Players made before `at` was stored count as old enough.
+    const ages = await Promise.all([ddbGet(U(uid), "PLAYER"), ddbGet(U(other), "PLAYER")]);
+    if (ages.some((row) => (Number(row?.at) || 0) > now - BET_ACCOUNT_AGE_MS)) return "new-account";
+  }
   // One live challenge per pair, friendly or bet, from either side: repeat taps would otherwise stack copies on
   // their list and push older challenges out of the recent window.
   const recent = await ddbQuery(U(uid), "BOUT#", BOUTS_SEEN, undefined, ["pc", "role", "status", "at"], true);
@@ -578,6 +596,7 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
     { update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust - :s, v = v + :one", condition: "dust >= :s", values: { ":s": stake, ":one": 1 } },
     { put: { PK: U(uid), SK: `LEDGER#dust#bout#${SK}`, delta: -stake, unit: "dust", reason: "bout", ref: SK, at: now }, condition: "attribute_not_exists(PK)" },
     { update: { PK: U(uid), SK: `BOUTDAY#${day}` }, set: "ADD n :one", condition: "attribute_not_exists(n) OR n <= :last", values: { ":one": 1, ":last": BOUTS_PER_DAY - 1 } },
+    pairDay(uid, other, day, now),
     ...rows,
   ]);
   if (!r) return "error";
@@ -587,9 +606,25 @@ export async function openBout(uid: string, me: Player, pc: string, stake: numbe
   }
   if (r.reasons[0] === CCF) return "empty";
   if (r.reasons[2] === CCF) return "daily";
-  if (r.reasons[3 + LOCK] === CCF) return "already";
+  if (r.reasons[3] === CCF) return "pair-daily";
+  if (r.reasons[4 + LOCK] === CCF) return "already";
   return "error";
 }
+
+/** The pair's Stardust bouts today (PAIR#…  BETDAY#<date>), so two accounts can't pass dust back and forth all day. */
+const pairDay = (x: string, y: string, day: string, now: number): TxOp => ({
+  update: { PK: pairKey(x, y), SK: `BETDAY#${day}` },
+  set: "SET #ttl = :ttl ADD n :one",
+  names: { "#ttl": "ttl" },
+  condition: "attribute_not_exists(n) OR n <= :last",
+  values: { ":one": 1, ":last": PAIR_BETS_PER_DAY - 1, ":ttl": Math.floor(now / 1000) + 3 * 86_400 },
+});
+
+/**
+ * What a win pays from the other stake: whatever is left of the winner's weekly Stardust cap, the rest burned.
+ * Exported for tests.
+ */
+export const winTake = (stake: number, earnedThisWeek: number) => Math.max(0, Math.min(stake, WEEKLY_DUST_CAP - earnedThisWeek));
 
 /** One card at random from a deck that can still fight (burned or sheet-less cards are skipped). */
 async function draw(uid: string): Promise<string | null> {
@@ -617,9 +652,10 @@ async function fighterOf(uid: string): Promise<string | null> {
 
 /**
  * The friend answers. Friendly: both chosen fighters meet. Stardust: the friend matches the stake, one card is drawn
- * from each deck, and the winner takes both stakes (a tie refunds).
+ * from each deck. The winner gets their stake back plus the other stake up to their weekly cap (the rest is burned);
+ * a tie refunds.
  */
-export async function acceptBout(uid: string, me: Player, sk: string): Promise<{ ok: true; result: BattleResult; a: string; b: string; outcome: Bout["outcome"] } | { ok: false; why: "gone" | "lapsed" | "empty" | "no-cards" | "error" }> {
+export async function acceptBout(uid: string, me: Player, sk: string): Promise<{ ok: true; result: BattleResult; a: string; b: string; outcome: Bout["outcome"] } | { ok: false; why: "gone" | "lapsed" | "empty" | "daily" | "no-cards" | "error" }> {
   const mine = await ddbGet(U(uid), sk);
   if (!mine || mine.role !== "in" || mine.status !== "open") return { ok: false, why: "gone" };
   if (lapsed(mine)) return { ok: false, why: "lapsed" };
@@ -636,8 +672,12 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
   const now = Date.now();
   const side = (s: "a" | "b") => (w === "tie" ? "tied" : w === s ? "won" : "lost");
   // Challenger already paid in. Acceptor must hold the stake either way, so a bout is never free to accept.
-  const aGets = w === "a" ? 2 * stake : w === "tie" ? stake : 0;
-  const bDelta = w === "a" ? -stake : w === "b" ? stake : 0;
+  // The winner gets their own stake back plus the other stake up to their weekly cap; the rest is burned.
+  const winner = w === "a" ? challenger : w === "b" ? uid : null;
+  const won = stake && winner ? winTake(stake, await earnedThisWeek(winner, now)) : 0;
+  const burned = stake && winner ? stake - won : 0;
+  const aGets = w === "a" ? stake + won : w === "tie" ? stake : 0;
+  const bDelta = w === "a" ? -stake : w === "b" ? won : 0;
   const settle = (who: string, outcome: string): TxOp => ({
     update: { PK: U(who), SK: sk },
     set: "SET #s = :done, #a = :a, #b = :b, #o = :o, settledAt = :now",
@@ -646,6 +686,17 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
     values: { ":done": "done", ":open": "open", ":a": a, ":b": b, ":o": outcome, ":now": now },
   });
   const ops: TxOp[] = [settle(challenger, side("a")), settle(uid, side("b"))];
+  const day = new Date(now).toISOString().slice(0, 10);
+  if (stake) ops.push({ update: { PK: U(uid), SK: `BOUTDAY#${day}` }, set: "ADD n :one", condition: "attribute_not_exists(n) OR n <= :last", values: { ":one": 1, ":last": BOUTS_PER_DAY - 1 } });
+  if (winner && won)
+    ops.push({
+      update: { PK: U(winner), SK: `DUSTWEEK#${dustWeek(now)}` },
+      set: "SET #ttl = :ttl ADD earned :d",
+      names: { "#ttl": "ttl" },
+      condition: "attribute_not_exists(PK) OR earned <= :max",
+      values: { ":d": won, ":max": WEEKLY_DUST_CAP - won, ":ttl": Math.floor(now / 1000) + 21 * 86_400 },
+    });
+  if (burned) ops.push({ put: { PK: U(winner!), SK: `LEDGER#dustcap#bout#${sk}`, delta: 0, burned, unit: "dust", reason: "bout-cap", ref: sk, at: now }, condition: "attribute_not_exists(PK)" });
   if (stake) ops.push({ update: { PK: U(uid), SK: "WALLET" }, set: "SET dust = dust + :d, v = v + :one", condition: "dust >= :s", values: { ":d": bDelta, ":s": stake, ":one": 1 } });
   if (bDelta) ops.push({ put: { PK: U(uid), SK: `LEDGER#dust#bout#${sk}`, delta: bDelta, unit: "dust", reason: "bout", ref: sk, at: now }, condition: "attribute_not_exists(PK)" });
   if (aGets) {
@@ -654,7 +705,9 @@ export async function acceptBout(uid: string, me: Player, sk: string): Promise<{
   }
   const r = await ddbTransact(ops);
   if (!r) return { ok: false, why: "error" };
-  if (!r.ok) return { ok: false, why: r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : r.reasons[2] === CCF ? "empty" : "error" };
+  // ops: settle, settle, [BOUTDAY, DUSTWEEK?, burn record?, acceptor WALLET, …]
+  const wallet = ops.findIndex((o) => "update" in o && o.update.SK === "WALLET" && o.update.PK === U(uid));
+  if (!r.ok) return { ok: false, why: r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : stake && r.reasons[2] === CCF ? "daily" : wallet >= 0 && r.reasons[wallet] === CCF ? "empty" : "error" };
   await Promise.allSettled([recordBattle(a, b, result), bumpFriendship(uid, str(mine.pc), now), bumpFriendship(challenger, me.pc, now), touch(challenger), freePair(uid, challenger, sk)]);
   return { ok: true, result, a, b, outcome: side("b") };
 }

@@ -555,7 +555,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                       {!(me.card && f.card) && <p className="mt-2 pl-[52px] text-xs text-ink-3">{me.card ? "No card yet. This updates the moment they mint." : "Mint a card to fight."}</p>}
                       {betFor === f.pc && (
                         <div className="mt-3 ml-[52px] rounded-xl bg-paper/70 p-3">
-                          <p className="text-xs text-ink-2">Blind draw: one random card from each deck. Winner takes both stakes; a tie refunds. They have to accept.</p>
+                          <p className="text-xs text-ink-2">Blind draw: one random card from each deck. Winner gets their stake back plus yours, up to their weekly Stardust cap; a tie refunds. One bet per friend a day. They have to accept.</p>
                           <div className="mt-2 flex gap-2">
                             {(d.stakes ?? []).map((s) => (
                               <button key={s} type="button" disabled={busy !== null || (d.dust ?? 0) < s} onClick={() => void challenge(f.pc, s)} className={pill}>

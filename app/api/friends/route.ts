@@ -196,7 +196,7 @@ export async function POST(request: Request) {
       const stake = Number(b.stake) || 0;
       if (stake && !dustOn()) return json({ error: "Stardust is off." }, 404);
       const r = await openBout(uid, me, pc, stake);
-      const msg = { "friends-only": "You can only challenge friends.", stake: "Pick a stake.", empty: "Not enough Stardust.", daily: "That's today's five bouts. More tomorrow.", already: "You've already challenged them. It's on once they accept.", theirs: "They've already challenged you. Accept it above.", error: "Couldn't reach the server." } as const;
+      const msg = { "friends-only": "You can only challenge friends.", stake: "Pick a stake.", empty: "Not enough Stardust.", daily: "That's today's five bouts. More tomorrow.", "pair-daily": "You two have had today's Stardust bout. Fight for fun, or bet again tomorrow.", "new-friend": "Stardust bets open a day after you become friends. A friendly fight works now.", "new-account": "Stardust bets open once both accounts are a few days old. A friendly fight works now.", already: "You've already challenged them. It's on once they accept.", theirs: "They've already challenged you. Accept it above.", error: "Couldn't reach the server." } as const;
       return r === "open" ? json({ ok: true }) : json({ error: msg[r] }, r === "error" ? 503 : 400);
     }
     case "accept":
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
       }
       const r = await acceptBout(uid, me, id);
       if (r.ok) return json({ ok: true, a: r.a, b: r.b, outcome: r.outcome });
-      const msg = { gone: "That bout is already settled.", lapsed: "That challenge ran out of time. Send one back.", empty: "You need the stake in Stardust to accept.", "no-cards": "One of you has no card that can fight.", error: "Couldn't reach the server." } as const;
+      const msg = { gone: "That bout is already settled.", lapsed: "That challenge ran out of time. Send one back.", empty: "You need the stake in Stardust to accept.", daily: "That's today's five Stardust bouts. Accept tomorrow, or decline.", "no-cards": "One of you has no card that can fight.", error: "Couldn't reach the server." } as const;
       return json({ error: msg[r.why] }, r.why === "error" ? 503 : 400);
     }
   }

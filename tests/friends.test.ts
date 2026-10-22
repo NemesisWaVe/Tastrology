@@ -2,9 +2,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { runAgent } from "@/lib/agent";
 import { buildCard } from "@/lib/card";
 import { putFighterMemory, toSheet } from "@/lib/fighters";
-import { acceptBout, acceptFriend, addFriend, BOUT_TTL_MS, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, refundRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, setProfile, audienceOf, type Player } from "@/lib/friends";
+import { acceptBout, acceptFriend, addFriend, BET_ACCOUNT_AGE_MS, BET_FRIEND_AGE_MS, BOUTS_PER_DAY, BOUT_TTL_MS, winTake, closeBout, dropRequest, ensurePlayer, inboxCount, listBouts, listFriends, listRequests, lookupUser, openBout, setUsername, chargeRename, refundRename, nameFree, renameFee, RENAME_DUST, wipePlayer, lookupPlayer, indexCards, playerForCard, markSeen, alerts, removeFriend, setFighter, setProfile, audienceOf, type Player } from "@/lib/friends";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import { FakeDynamo } from "./fakeDynamo";
+import { isoWeek, WEEKLY_DUST_CAP } from "@/lib/stardust";
 
 let db: FakeDynamo;
 const cards: string[] = [];
@@ -46,15 +47,25 @@ function own(uid: string, i: number) {
 const wallet = (uid: string, dust: number) => db.items.set(`USER#${uid}|WALLET`, { PK: S(`USER#${uid}`), SK: S("WALLET"), dust: N(dust), v: N(0) });
 const dust = (uid: string) => Number(db.items.get(`USER#${uid}|WALLET`)?.dust?.N);
 
-async function pair(): Promise<[Player, Player]> {
+/** Two friends. `settled` ages the friendship and both accounts past the betting gate (BET_*_AGE_MS). */
+async function pair(settled = true): Promise<[Player, Player]> {
   own("ann", 0);
   own("bo", 1);
   const a = (await ensurePlayer("ann"))!;
   const b = (await ensurePlayer("bo"))!;
   expect(await addFriend("ann", a, b.pc)).toBe("sent");
   expect(await acceptFriend("bo", b, a.pc)).toBe("added");
+  if (settled) age(10 * 86_400_000);
   return [a, b];
 }
+/** Moves the friendship and both players' creation back by `ms`. */
+function age(ms: number) {
+  for (const [k, row] of db.items) if (/^USER#(ann|bo)\|(PLAYER|FRIEND#)/.test(k) && row.at) row.at = N(Number(row.at.N) - ms);
+}
+/** Forgets today's pair counter, as if the next bet were a different day (or pair). */
+const nextDay = () => {
+  for (const k of [...db.items.keys()]) if (k.includes("|BETDAY#")) db.items.delete(k);
+};
 
 describe("friends", () => {
   it("gives each account one stable code and its own card as fighter", async () => {
@@ -340,8 +351,66 @@ describe("stardust bouts", () => {
       expect(await openBout("ann", a, b.pc, 10)).toBe("open");
       // one live challenge per pair: cancel it (stake back) before the next
       await closeBout("ann", (await listBouts("ann"))!.find((x) => x.status === "open")!.id);
+      nextDay();
     }
     expect(await openBout("ann", a, b.pc, 10)).toBe("daily");
     expect(dust("ann")).toBe(500);
+  });
+
+  it("bets wait for a day-old friendship and accounts a few days old; friendly fights don't", async () => {
+    const [a, b] = await pair(false);
+    wallet("ann", 100);
+    expect(await openBout("ann", a, b.pc, 10)).toBe("new-friend");
+    age(BET_FRIEND_AGE_MS + 1000);
+    expect(await openBout("ann", a, b.pc, 10)).toBe("new-account");
+    age(BET_ACCOUNT_AGE_MS);
+    expect(await openBout("ann", a, b.pc, 10)).toBe("open");
+    expect(dust("ann")).toBe(90);
+  });
+
+  it("one Stardust bout per pair a day, cancelled or not", async () => {
+    const [a, b] = await pair();
+    wallet("ann", 100);
+    expect(await openBout("ann", a, b.pc, 10)).toBe("open");
+    await closeBout("ann", (await listBouts("ann"))!.find((x) => x.status === "open")!.id);
+    expect(await openBout("ann", a, b.pc, 10)).toBe("pair-daily");
+    expect(await openBout("ann", a, b.pc, 0)).toBe("open");
+    expect(dust("ann")).toBe(100);
+  });
+
+  it("a win pays the other stake only up to the winner's weekly cap; the rest is burned", async () => {
+    expect(winTake(50, 0)).toBe(50);
+    expect(winTake(50, WEEKLY_DUST_CAP - 20)).toBe(20);
+    expect(winTake(50, WEEKLY_DUST_CAP)).toBe(0);
+    const [a, b] = await pair();
+    wallet("ann", 100);
+    wallet("bo", 100);
+    // both already earned all but 10 this week
+    const week = isoWeek(Date.now());
+    for (const u of ["ann", "bo"]) db.items.set(`USER#${u}|DUSTWEEK#${week}`, { PK: S(`USER#${u}`), SK: S(`DUSTWEEK#${week}`), earned: N(WEEKLY_DUST_CAP - 10) });
+    await openBout("ann", a, b.pc, 50);
+    const [bout] = (await listBouts("bo"))!;
+    const r = await acceptBout("bo", b, bout.id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // winner: own stake back + 10; loser: -50; 40 leaves the economy
+    const want = { won: [50, 110], lost: [110, 50], tied: [100, 100] }[r.outcome!];
+    expect([dust("ann"), dust("bo")]).toEqual(want);
+    if (r.outcome !== "tied") {
+      const winner = r.outcome === "won" ? "bo" : "ann";
+      expect(Number(db.items.get(`USER#${winner}|DUSTWEEK#${week}`)!.earned.N)).toBe(WEEKLY_DUST_CAP);
+    }
+  });
+
+  it("accepting a bet counts toward your five a day", async () => {
+    const [a, b] = await pair();
+    wallet("ann", 100);
+    wallet("bo", 100);
+    const day = new Date().toISOString().slice(0, 10);
+    db.items.set(`USER#bo|BOUTDAY#${day}`, { PK: S("USER#bo"), SK: S(`BOUTDAY#${day}`), n: N(BOUTS_PER_DAY) });
+    await openBout("ann", a, b.pc, 10);
+    const [bout] = (await listBouts("bo"))!;
+    expect(await acceptBout("bo", b, bout.id)).toMatchObject({ ok: false, why: "daily" });
+    expect(dust("bo")).toBe(100);
   });
 });
