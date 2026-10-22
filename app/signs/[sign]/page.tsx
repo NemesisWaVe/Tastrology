@@ -92,7 +92,7 @@ export default async function SignPage({ params }: { params: Promise<{ sign: str
         <Link href="/" className="inline-flex h-12 items-center rounded-full bg-accent px-6 text-[15px] font-semibold text-paper">
           Find your sign
         </Link>
-        <span className="text-[14px] text-ink-3">Three favourites make your card. Your Sun is your sign.</span>
+        <span className="text-[14px] text-ink-3">Three favourites make your card, and your card names your sign.</span>
       </div>
 
       <nav aria-label="Other signs" className="mt-14 flex flex-wrap gap-2">

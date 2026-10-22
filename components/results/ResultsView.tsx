@@ -11,7 +11,7 @@ import { ReceiptBody, ReceiptPrinter } from "@/components/card/Receipt";
 import { Sparkle } from "@/components/card/Sigils";
 import { BigThree } from "./BigThree";
 import { TasteCensus } from "./TasteCensus";
-import { signFor } from "@/lib/signs";
+import { signOf } from "@/lib/signs";
 import { BrandCard } from "./Brands";
 import { CapsuleAndBridges, Changes, Critique, Matrix } from "./Sections";
 import { SectionHead, Thumb, useWidth, type Vote } from "./ui";
@@ -56,7 +56,7 @@ export function ResultsView({
   after?: ReactNode;
 }) {
   const card = useMemo(() => buildCard(result), [result]);
-  const sign = signFor(card.bigThree.sun.name);
+  const sign = signOf(card.bigThree);
   const [colRef, colW] = useWidth<HTMLDivElement>();
   const heroRef = useRef<HTMLElement>(null);
   const [navOn, setNavOn] = useState(false);

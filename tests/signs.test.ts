@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { typeOf } from "@/lib/card";
-import { SIGNS, isoWeek, signFor } from "@/lib/signs";
+import { SIGNS, isoWeek, signFor, signOf } from "@/lib/signs";
 import { weekLine, weekPick } from "@/lib/weekly";
 
 describe("signs and the weekly reading", () => {
@@ -11,6 +11,16 @@ describe("signs and the weekly reading", () => {
     expect(signFor("Futuristic")?.id).toBe("futurist");
     expect(signFor("Dark Academia")?.id).toBe("rebel");
     expect(signFor("Zzz")).toBeUndefined();
+  });
+
+  it("Qloo's wider vocabulary lands on a sign, and every card gets one", () => {
+    const want: [string, string][] = [["Cute", "playful"], ["Pastel Colors", "playful"], ["Seductive", "romantic"], ["Skate", "rebel"], ["Bold Logos", "rebel"], ["Conceptual", "avant"], ["User Friendly", "futurist"], ["Casual", "utility"], ["Refined Elegance", "luxe"], ["Earthy", "natural"], ["Smart", "tailored"], ["Refined Tailoring", "luxe"]];
+    for (const [w, id] of want) expect(signFor(w)?.id, w).toBe(id);
+    // the type colours on a card still come from `re` alone, so existing cards keep their look
+    expect(typeOf("Cute").glyph).toBe("✧");
+    const t = (name: string) => ({ name });
+    expect(signOf({ sun: t("Zzz"), moon: t("Cute"), rising: t("Urban") }).id).toBe("playful");
+    expect(signOf({ sun: t("Zzz"), moon: t("Qqq"), rising: t("Www") })).toBe(signOf({ sun: t("zzz"), moon: t("x"), rising: t("y") }));
   });
 
   it("ISO weeks start on Monday and roll over on Monday", () => {

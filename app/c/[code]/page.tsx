@@ -18,7 +18,7 @@ import { CursorArrow } from "@/components/CursorArrow";
 import { OwnedReading } from "@/components/results/OwnedReading";
 import { buildCard, cardCode, cardNo, editionOf, type CardData } from "@/lib/card";
 import { forgetReading, isFresh, latestCode, loadReading, type Reading } from "@/lib/readings";
-import { signFor } from "@/lib/signs";
+import { signOf } from "@/lib/signs";
 import type { StyleResult } from "@/lib/types";
 
 /** Digital twin of a printed or shared card: /c/<code>, the URL in the card-back QR. */
@@ -207,7 +207,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
                 </div>
               ))}
             </dl>
-            <WeekLink word={card.bigThree.sun.name} />
+            <WeekLink b={card.bigThree} />
             <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
               No. {cardNo(card)} · Season {editionOf(card)} · {card.rarityLabel}{card.print ? "" : ` · code ${code}`}
             </p>
@@ -250,10 +250,9 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
   );
 }
 
-/** The Sun's sign and its weekly reading (/signs/<id>), when the Sun belongs to one of the twelve. */
-function WeekLink({ word }: { word: string }) {
-  const s = signFor(word);
-  if (!s) return null;
+/** The card's sign and its weekly reading (/signs/<id>). */
+function WeekLink({ b }: { b: CardData["bigThree"] }) {
+  const s = signOf(b);
   return (
     <Link href={`/signs/${s.id}`} className="mt-3 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2 underline-offset-4 hover:text-ink hover:underline">
       <span style={{ color: s.a }}>{s.glyph}</span> {s.name} sign · this week →

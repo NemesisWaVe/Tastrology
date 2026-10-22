@@ -21,7 +21,7 @@ export default function SignsPage() {
         This week, <span className="text-accent">by sign.</span>
       </h1>
       <p className="mt-5 max-w-xl text-ink-2">
-        Your sign is your Sun: the style your card reads first. Every Monday each sign gets three brands, a song and a film, read by Qloo from what
+        Your sign comes from your card&apos;s Big Three, Sun first. Every Monday each sign gets three brands, a song and a film, read by Qloo from what
         people with that taste actually love.
       </p>
       <ul className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
