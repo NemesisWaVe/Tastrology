@@ -269,7 +269,10 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
       {(incoming.length > 0 || open.length > 0) && (
         <section className={`${lit} p-5 sm:p-6`}>
           <div className="flex items-baseline justify-between">
-            <p className={`${mono} text-accent`}>Waiting on you</p>
+            <p className={`${mono} text-accent`}>
+              {/* only your own outgoing challenges open: the move is theirs */}
+              {incoming.length > 0 || open.some((b) => b.role === "in") ? "Waiting on you" : "Waiting on them"}
+            </p>
             {d.dustOn && d.dust !== null && <p className="font-mono text-xs tabular-nums text-ink-2">{d.dust} dust</p>}
           </div>
           <ul className="mt-3 flex flex-col divide-y divide-line/70">
