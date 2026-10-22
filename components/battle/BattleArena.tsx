@@ -21,6 +21,7 @@ import {
   type Side,
 } from "@/lib/battle";
 import { BRAND } from "@/lib/brand";
+import { Mark } from "@/components/site/Mark";
 import type { StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 import { loadFighter, ME } from "./data";
@@ -241,8 +242,10 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="relative isolate min-h-screen w-full overflow-x-clip">
       <Sky f={OPEN_SKY} reduce={reduce} fixed quiet drawn dim={0.7} />
       <main className="mx-auto w-full max-w-[600px] px-4 pb-16">
-        <nav className="flex items-center justify-between py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-          <Link href="/" className="hover:text-ink">
+        {/* sits over the galaxies' glow, so each side gets its own frosted pill to stay readable */}
+        <nav className="relative z-10 flex items-center justify-between py-3">
+          <Link href="/" aria-label={BRAND.name} className={`${PILL} gap-2 !pl-1.5 font-display text-[15px] font-bold normal-case tracking-tight !text-ink`}>
+            <Mark size={24} />
             {BRAND.name}
           </Link>
           <ShellLinks />
@@ -253,14 +256,17 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+const PILL =
+  "inline-flex items-center whitespace-nowrap rounded-full border border-white/15 bg-paper/75 px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink shadow-[0_6px_24px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md transition hover:border-accent hover:text-accent";
+
 /** Somewhere to go from any battle screen: your deck and friends once you have a card, else the label. */
 function ShellLinks() {
   const has = useHasPlace();
-  if (!has) return <span>Taste battle</span>;
+  if (!has) return <span className={PILL}>Taste battle</span>;
   return (
-    <span className="flex items-center gap-4">
-      <Link href="/deck" className="hover:text-ink">My deck</Link>
-      <Link href="/friends" className="hover:text-ink">Friends</Link>
+    <span className="flex items-center gap-2">
+      <Link href="/deck" className={PILL}>My deck</Link>
+      <Link href="/friends" className={PILL}>Friends</Link>
     </span>
   );
 }
@@ -268,7 +274,7 @@ function ShellLinks() {
 /** Pinned to the bottom once the result is in, so leaving never means scrolling past the ruling. */
 function ExitDock({ reduce, onReplay }: { reduce: boolean; onReplay: () => void }) {
   const has = useHasPlace();
-  const item = "whitespace-nowrap rounded-full px-3.5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:bg-paper-2 hover:text-ink sm:px-4 sm:text-[11px]";
+  const item = "whitespace-nowrap rounded-full px-3.5 py-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink transition hover:bg-accent hover:text-paper active:scale-95 sm:px-4";
   return (
     <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3" style={{ bottom: "max(14px, env(safe-area-inset-bottom))" }}>
       <motion.nav
@@ -276,9 +282,11 @@ function ExitDock({ reduce, onReplay }: { reduce: boolean; onReplay: () => void 
         initial={reduce ? false : { opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 260, damping: 24, delay: reduce ? 0 : 0.9 }}
-        className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-line bg-paper/95 p-1 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl"
+        className="pointer-events-auto rounded-full p-[1.5px] shadow-[0_0_34px_-6px_rgb(198_255_61/0.45),0_18px_50px_-18px_rgba(0,0,0,0.9)]"
+        style={{ background: "linear-gradient(135deg, #c6ff3d, #83fff7 35%, #7894ff 60%, #d875ff 85%, #ff7773)" }}
       >
-        <button onClick={onReplay} className={item}>
+        <div className="flex items-center gap-0.5 rounded-full bg-paper/95 p-1 backdrop-blur-xl">
+        <button onClick={onReplay} className={`${item} !text-ink-2 hover:!text-paper`}>
           ↺ Replay
         </button>
         <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />
@@ -289,8 +297,9 @@ function ExitDock({ reduce, onReplay }: { reduce: boolean; onReplay: () => void 
             <Link href="/" className={item}>Home</Link>
           </>
         ) : (
-          <Link href="/" className={`${item} !text-accent`}>Get your sign →</Link>
+          <Link href="/" className={`${item} !text-accent hover:!text-paper`}>Get your sign →</Link>
         )}
+        </div>
       </motion.nav>
     </div>
   );
