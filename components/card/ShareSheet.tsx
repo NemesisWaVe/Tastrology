@@ -323,7 +323,7 @@ function NoteCard({ note, onSave, onShare, onClose }: { note: NonNullable<Note>;
     note.kind === "phone"
       ? { title: "Finish on your phone", steps: ["Scan this with your phone camera", "Tap Instagram or Snapchat there"], action: null }
       : insta
-        ? { title: "Link copied", steps: ["Share, then Instagram, then Stories", "Stickers, then Link, then paste", "Rename it “Fight my card”, drag it under the card"], action: "Share to Instagram" }
+        ? { title: "Link copied", steps: ["Share, then Instagram, then Stories", "Stickers, then Link, then paste", "Rename it “Find out”, drag it under the card"], action: "Share to Instagram" }
         : { title: "Link copied", steps: ["Share, then Snapchat", "Tap the paperclip, then paste"], action: "Share to Snapchat" };
   return (
     <motion.div
@@ -509,7 +509,7 @@ const GUIDE = [
   { t: "Tap Stickers", ms: 1500 },
   { t: "Pick Link", ms: 1500 },
   { t: "Paste the link", ms: 1800 },
-  { t: "Rename it “Fight my card”", ms: 1500 },
+  { t: "Rename it “Find out”", ms: 1500 },
   { t: "Drag it under the card", ms: 2600 },
 ];
 function StickerGuide({ link }: { link: string }) {
@@ -594,7 +594,7 @@ function StickerGuide({ link }: { link: string }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
               <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1 1M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1-1" />
             </svg>
-            Fight my card
+            Find out
           </motion.div>
         )}
         {step === 4 && (
