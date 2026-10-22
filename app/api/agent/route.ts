@@ -249,10 +249,12 @@ export async function POST(request: Request) {
     const au = uid ? await audienceOf(uid).catch(() => "" as const) : "";
     if (au) body.audience = au;
   }
-  // The word list ran in normalizeRequest; a model reads what people typed about themselves too (personas are ours).
+  // The word list ran on everything in normalizeRequest. A model also reads what people typed by hand: picks with no
+  // Qloo id and the occasion line. Picks chosen from search are real catalogue titles, so a model never vetoes those
+  // (an edgy film or band title is fine); vibes are Qloo tags, same.
   if (!isPersonaRequest(body)) {
-    const said = [...body.seeds.map((s) => s.name), ...(body.vibes ?? []).map((v) => v.name), body.goal ?? ""].filter(Boolean).join("\n");
-    if ((await moderate(said, "picks")) === "block") return Response.json({ error: "The stars won't read that one. Swap the rude pick for something you'd show a friend." }, { status: 400 });
+    const typed = [...body.seeds.filter((s) => !s.id).map((s) => s.name), body.goal ?? ""].filter(Boolean).join("\n");
+    if (typed && (await moderate(typed, "picks")) === "block") return Response.json({ error: "The stars won't read that one. Swap the rude pick for something you'd show a friend." }, { status: 400 });
   }
   const key = cacheKey(body);
   const fallbackKey = cacheKey(body, "*");
