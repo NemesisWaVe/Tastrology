@@ -3,6 +3,7 @@
 import { useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FloatNav } from "@/components/site/FloatNav";
 import { sfx } from "@/lib/sound";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
@@ -71,7 +72,8 @@ export function BattlePicker({ initialA, initialB }: { initialA?: string | null;
         <span className={`${g.nebula} ${g.nebulaA}`} data-on={Boolean(a)} style={{ ["--c" as string]: COL.a }} />
         <span className={`${g.nebula} ${g.nebulaB}`} data-on={Boolean(b)} style={{ ["--c" as string]: COL.b }} />
       </div>
-    <section className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
+    <section className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 pb-10">
+      <FloatNav />
       <header className="flex flex-col gap-3">
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-accent">Taste battle</p>
         <h1 className="font-display text-[clamp(34px,9vw,56px)] font-bold leading-[0.95] tracking-tight">

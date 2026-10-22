@@ -10,6 +10,7 @@ import { Burned } from "@/components/card/Burned";
 import { Galaxies } from "@/components/battle/Galaxies";
 import { FlipCard } from "@/components/card/FlipCard";
 import { FriendChip } from "@/components/friends/FriendChip";
+import { FloatNav } from "@/components/site/FloatNav";
 import { Sky } from "@/components/reveal/Sky";
 import { skyState } from "@/components/reveal/traceModel";
 import type { BattleResult } from "@/lib/battle";
@@ -86,7 +87,8 @@ export function VsCode({ code }: { code: string }) {
   if (st.kind === "fight") return <BattleStage out={st.out} again="/friends" />;
 
   return (
-    <main className="relative isolate mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">
+    <main className="relative isolate mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 pb-10 pt-20 text-center">
+      <FloatNav label="Taste battle" className="!absolute inset-x-4 top-0" />
       {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {st.kind === "loading" && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Finding the challenger…</p>}
       {st.kind === "unavailable" && (

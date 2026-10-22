@@ -21,7 +21,7 @@ import {
   type Side,
 } from "@/lib/battle";
 import { BRAND } from "@/lib/brand";
-import { Mark } from "@/components/site/Mark";
+import { FloatNav } from "@/components/site/FloatNav";
 import type { StyleResult } from "@/lib/types";
 import { useAgentRun } from "@/lib/useAgentRun";
 import { loadFighter, ME } from "./data";
@@ -242,32 +242,10 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="relative isolate min-h-screen w-full overflow-x-clip">
       <Sky f={OPEN_SKY} reduce={reduce} fixed quiet drawn dim={0.7} />
       <main className="mx-auto w-full max-w-[600px] px-4 pb-16">
-        {/* sits over the galaxies' glow, so each side gets its own frosted pill to stay readable */}
-        <nav className="relative z-10 flex items-center justify-between py-3">
-          <Link href="/" aria-label={BRAND.name} className={`${PILL} gap-2 !pl-1.5 font-display text-[15px] font-bold normal-case tracking-tight !text-ink`}>
-            <Mark size={24} />
-            {BRAND.name}
-          </Link>
-          <ShellLinks />
-        </nav>
+        <FloatNav label="Taste battle" />
         {children}
       </main>
     </div>
-  );
-}
-
-const PILL =
-  "inline-flex items-center whitespace-nowrap rounded-full border border-white/15 bg-paper/75 px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink shadow-[0_6px_24px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md transition hover:border-accent hover:text-accent";
-
-/** Somewhere to go from any battle screen: your deck and friends once you have a card, else the label. */
-function ShellLinks() {
-  const has = useHasPlace();
-  if (!has) return <span className={PILL}>Taste battle</span>;
-  return (
-    <span className="flex items-center gap-2">
-      <Link href="/deck" className={PILL}>My deck</Link>
-      <Link href="/friends" className={PILL}>Friends</Link>
-    </span>
   );
 }
 

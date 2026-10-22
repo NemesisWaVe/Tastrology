@@ -3,6 +3,7 @@
 import { LostCard } from "@/components/site/LostCard";
 import { useReducedMotion } from "motion/react";
 import Link from "next/link";
+import { FloatNav } from "@/components/site/FloatNav";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { FlipCard } from "@/components/card/FlipCard";
@@ -155,7 +156,8 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
     );
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-10 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:justify-center lg:gap-16">
+    <main className="relative mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-10 px-4 pb-10 pt-20 sm:px-6 lg:flex-row lg:items-center lg:justify-center lg:gap-16">
+      <FloatNav className="!absolute inset-x-4 top-0 sm:inset-x-6" />
       {sky && <Sky f={sky} anchor={cardRef} reduce={reduce} drawn fixed dim={0.8} />}
       {card === undefined && <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Looking up No. {code}…</p>}
 
