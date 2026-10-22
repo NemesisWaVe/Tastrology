@@ -368,14 +368,23 @@ describe("stardust bouts", () => {
     expect(dust("ann")).toBe(90);
   });
 
-  it("one Stardust bout per pair a day, cancelled or not", async () => {
+  it("one Stardust bout per pair a day; a cancelled or declined bet gives it back", async () => {
     const [a, b] = await pair();
     wallet("ann", 100);
+    wallet("bo", 100);
     expect(await openBout("ann", a, b.pc, 10)).toBe("open");
     await closeBout("ann", (await listBouts("ann"))!.find((x) => x.status === "open")!.id);
-    expect(await openBout("ann", a, b.pc, 10)).toBe("pair-daily");
-    expect(await openBout("ann", a, b.pc, 0)).toBe("open");
     expect(dust("ann")).toBe(100);
+    // cancelled to switch opponent or by mistake: the pair can still bet today
+    expect(await openBout("ann", a, b.pc, 10)).toBe("open");
+    await closeBout("bo", (await listBouts("bo"))!.find((x) => x.status === "open")!.id);
+    expect(await openBout("ann", a, b.pc, 25)).toBe("open");
+    const [bout] = (await listBouts("bo"))!;
+    expect((await acceptBout("bo", b, bout.id)).ok).toBe(true);
+    // one fought: that's the pair's bet for today, from either side; friendly fights stay open
+    expect(await openBout("ann", a, b.pc, 10)).toBe("pair-daily");
+    expect(await openBout("bo", b, a.pc, 10)).toBe("pair-daily");
+    expect(await openBout("ann", a, b.pc, 0)).toBe("open");
   });
 
   it("a win pays the other stake only up to the winner's weekly cap; the rest is burned", async () => {

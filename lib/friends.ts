@@ -31,7 +31,8 @@ export const BOUTS_PER_DAY = 5;
  * Anti-farming levers for Stardust bouts (NOTES ★ North star: one account must not be fed by others). A bout can't move
  * Stardust between accounts beyond what one honest player could earn anyway:
  *   - the winner's take from the other stake counts toward WEEKLY_DUST_CAP; past it, the rest is burned, not refunded
- *   - one Stardust bout per pair of friends per day, and accepting one counts toward your BOUTS_PER_DAY
+ *   - one Stardust bout per pair of friends per day (a cancelled, declined or lapsed one gives it back), and
+ *     accepting one counts toward your BOUTS_PER_DAY
  *   - betting needs a friendship a day old and two accounts a few days old (friendly fights need neither)
  */
 export const PAIR_BETS_PER_DAY = 1;
@@ -734,10 +735,14 @@ export async function closeBout(uid: string, sk: string, as?: "expired"): Promis
         { put: { PK: U(challenger), SK: `LEDGER#dustback#bout#${sk}`, delta: stake, unit: "dust", reason: status, ref: sk, at: now }, condition: "attribute_not_exists(PK)" },
       ]
     : [];
+  // A bet that never happened moved no dust, so it gives the pair its day's bet back (a cancel to switch opponent,
+  // a misclick, a lapse). Separate from the close: a counter that's already gone must not block it.
+  const day = new Date(Number(mine.at) || now).toISOString().slice(0, 10);
   const r = await ddbTransact([close(uid), close(other), ...refund]);
   if (!r) return "error";
   if (r.ok) {
-    await Promise.allSettled([touch(other), freePair(uid, other, sk)]);
+    const unbet = stake ? ddbUpdate(pairKey(uid, other), `BETDAY#${day}`, "ADD n :neg", { values: { ":neg": -1, ":one": 1 }, condition: "n >= :one" }) : null;
+    await Promise.allSettled([touch(other), freePair(uid, other, sk), unbet]);
     return "closed";
   }
   return r.reasons[0] === CCF || r.reasons[1] === CCF ? "gone" : "error";
