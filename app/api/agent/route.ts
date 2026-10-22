@@ -471,11 +471,12 @@ export async function POST(request: Request) {
 
       if (cached) {
         logRun({ runId: cached.result.runId, planner: cached.result.planner, qlooCalls: cached.result.stats.qlooCalls, ms: 0, cached: true, error: null });
-        // Replay the recorded trace quickly so the run stays inspectable.
+        // Replay the recorded trace quickly so the run stays inspectable (or at once, for a battle that only wants the card).
+        const pace = request.headers.get("x-replay") === "quick" ? 0 : 70;
         for (const e of cached.events) {
           if (closed) return;
           send(e);
-          await new Promise((r) => setTimeout(r, 70));
+          if (pace) await new Promise((r) => setTimeout(r, pace));
         }
         if (reprint) {
           if (reprinted) send({ type: "thought", text: "You've read these exact loves before, so the reading is the same. This is a new print of it, with its own roll." });

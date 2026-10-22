@@ -37,13 +37,13 @@ export function fighters(): Fighter[] {
 export const isFighter = (k: string | null): k is string => Boolean(k) && (k === ME || PERSONAS.some((p) => p.key === k));
 
 /** Cached first (persona runs are deterministic and cached server-side too), then a real agent run. */
-export async function loadFighter(key: string, run: (req: AgentRequest) => Promise<StyleResult | null>): Promise<StyleResult | null> {
+export async function loadFighter(key: string, run: (req: AgentRequest, opts?: { quick?: boolean }) => Promise<StyleResult | null>): Promise<StyleResult | null> {
   if (key === ME) return savedMine();
   const hit = readJSON<StyleResult>(cacheKey(key)) ?? readJSON<StyleResult>(`tastrology:lab:${key}`);
   if (hit?.dna) return hit;
   const p = PERSONAS.find((x) => x.key === key);
   if (!p) return null;
-  const r = await run(personaRequest(p));
+  const r = await run(personaRequest(p), { quick: true });
   if (r)
     try {
       localStorage.setItem(cacheKey(key), JSON.stringify(r));

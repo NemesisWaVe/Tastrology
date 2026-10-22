@@ -106,7 +106,8 @@ export function useAgentRun() {
     setErrorReason(null);
   }, []);
 
-  const run = useCallback(async (req: AgentRequest): Promise<StyleResult | null> => {
+  /** `quick`: a cached reading comes back without the paced trace replay (battles only need the result). */
+  const run = useCallback(async (req: AgentRequest, opts: { quick?: boolean } = {}): Promise<StyleResult | null> => {
     if (inflight.current) return null; // ignore starts while a run is in flight
     inflight.current = true;
     const id = ++seq.current;
@@ -123,7 +124,7 @@ export function useAgentRun() {
       const runId = newRunId();
       // Same body and run id on every retry, so the server replays, joins or charges once (its ledger is idempotent per run id).
       const post = (extra: Record<string, string> = {}) =>
-        fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json", "x-run-id": runId, ...extra }, body: JSON.stringify(req), signal: ac.signal });
+        fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json", "x-run-id": runId, ...(opts.quick ? { "x-replay": "quick" } : {}), ...extra }, body: JSON.stringify(req), signal: ac.signal });
       /** POST; while the server says this exact reading is already running (202), wait and ask again. */
       const open = async (extra: Record<string, string> = {}) => {
         let res = await post(extra);

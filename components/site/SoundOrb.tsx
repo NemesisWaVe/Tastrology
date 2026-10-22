@@ -11,6 +11,22 @@ import { armSound, enableSound, soundLocked, soundOn } from "@/lib/soundEngine";
 export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean }) {
   const [on, setOn] = useState<boolean | null>(null);
   const [locked, setLocked] = useState(false);
+  // The sitewide reminder steps aside after a while: any tap on the page unlocks sound anyway (armSound).
+  const [aside, setAside] = useState(false);
+  // Pages' navs differ in height (the phone nav wraps, the avatar adds a row), so sit just under whichever is there.
+  const [below, setBelow] = useState<number | null>(null);
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>("body nav.sticky");
+    if (!nav) return;
+    const ro = new ResizeObserver(() => setBelow(Math.round(nav.getBoundingClientRect().bottom) + 10));
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!onlyWhenLocked) return;
+    const t = setTimeout(() => setAside(true), 9000);
+    return () => clearTimeout(t);
+  }, [onlyWhenLocked]);
   useEffect(() => {
     const sync = () => {
       setOn(soundOn());
@@ -27,7 +43,7 @@ export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean 
   }, []);
   if (on === null) return null;
   // the global reminder appears only while sound is on but held by the browser; the landing orb leaves that to it
-  if (onlyWhenLocked ? !locked : locked) return null;
+  if (onlyWhenLocked ? !locked || aside : locked) return null;
   const toggle = () => {
     if (on && locked) {
       enableSound(true); // resume after a reload
@@ -45,6 +61,7 @@ export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean 
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? "Turn sound off" : "Turn sound on"}
+      style={below ? { top: below } : undefined}
       className={`group fixed right-4 top-16 z-[60] md:right-6 md:top-[72px] flex items-center gap-3 rounded-full border backdrop-blur-md transition-all duration-500 ${
         on && !locked ? "border-accent/30 bg-black/40 p-2.5" : "border-accent/50 bg-black/55 py-2.5 pl-3 pr-5 shadow-[0_0_40px_rgba(198,255,61,0.18)]"
       }`}

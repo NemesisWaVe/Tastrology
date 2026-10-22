@@ -5,7 +5,7 @@ import { motion, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
 import { cardNo, type CardData } from "@/lib/card";
-import { ROLL_ODDS } from "@/lib/odds";
+import { ROLL_ODDS, SECRET_SUPPLY } from "@/lib/odds";
 import { EASE } from "./primitives";
 import s from "./landing.module.css";
 
@@ -41,8 +41,14 @@ export function HallOfRares() {
         </p>
         {c && (
           <div className="mt-9 flex flex-wrap items-stretch justify-center gap-3 sm:gap-4">
-            <Medal tier="secret" n={c.secret} label={`Secret Rare${c.secret === 1 ? "" : "s"}`} odds={pct("secret")} />
-            <Medal tier="holo" n={c.holo} label={`Holo Rare${c.holo === 1 ? "" : "s"}`} odds={pct("holo")} />
+            {/* Early on a raw count reads as "empty", so Secrets count down from the edition's fixed supply, and Holos
+                show their number only once there are enough to read as a crowd. */}
+            <Medal tier="secret" n={Math.max(0, SECRET_SUPPLY - c.secret)} label={`of ${SECRET_SUPPLY} Secret Rares left`} odds={`Edition 01 · ${pct("secret")}`} />
+            {c.holo >= HOLO_CROWD ? (
+              <Medal tier="holo" n={c.holo} label="Holo Rares pulled" odds={pct("holo")} />
+            ) : (
+              <Medal tier="holo" n={pct("holo").split(" ")[0]} label="Holo odds" odds="every mint, same for everyone" />
+            )}
           </div>
         )}
       </div>
@@ -118,7 +124,7 @@ function HallDoor({ total, c }: { total: number; c: { holo: number; secret: numb
         <small>{more > 0 ? `+${more} more in the Hall` : "The whole Hall"}</small>
         <b>Enter the Hall</b>
         <em>
-          {c ? `${c.secret} Secret · ${c.holo} Holo` : "every foil pulled"} · swipe through them all
+          {c && c.secret + c.holo >= HOLO_CROWD ? `${c.secret} Secret · ${c.holo} Holo` : "every foil pulled so far"} · swipe through them all
         </em>
       </span>
       <span className={s.doorGo} aria-hidden>
@@ -128,15 +134,18 @@ function HallDoor({ total, c }: { total: number; c: { holo: number; secret: numb
   );
 }
 
+/** Below this many Holos, the Hall shows odds rather than a count. */
+const HOLO_CROWD = 10;
+
 const pct = (tier: string) => `${Math.round((ROLL_ODDS.find((o) => o.tier === tier)?.p ?? 0) * 1000) / 10}% of pulls`;
 
-function Medal({ tier, n, label, odds }: { tier: "secret" | "holo"; n: number; label: string; odds: string }) {
+function Medal({ tier, n, label, odds }: { tier: "secret" | "holo"; n: number | string; label: string; odds: string }) {
   return (
     <div className={s.medal} data-tier={tier}>
       <b>{n}</b>
       <span>
         {label}
-        <small>{n === 0 ? `unclaimed · ${odds}` : odds}</small>
+        <small>{odds}</small>
       </span>
     </div>
   );
