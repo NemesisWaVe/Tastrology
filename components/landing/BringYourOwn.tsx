@@ -181,7 +181,7 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
                 />
               )}
               <span className="relative flex items-center gap-3">
-                {ready ? "Mint my taste sign" : named.length < 1 && seeds.length >= 3 ? "Add one thing by name" : seeds.length === 0 ? "Pick 3 things you love" : `${need} more to mint`}
+                {ready ? "Mint my card" : named.length < 1 && seeds.length >= 3 ? "Add one thing by name" : seeds.length === 0 ? "Pick 3 things you love" : `${need} more to mint`}
                 {ready ? (
                   <CursorArrow className="h-9 w-9 bg-paper text-accent" />
                 ) : (

@@ -106,7 +106,7 @@ export function PhoneMenu({ newHref = "/?new=1", onNew }: { newHref?: string; on
             }}
             className="mt-1 flex items-center justify-center rounded-full bg-accent px-4 py-3.5 font-display text-[16px] font-bold text-paper"
           >
-            {has ? "New sign" : "Get your sign"}
+            {has ? "New card" : "Mint your card"}
           </a>
         </div>
       )}

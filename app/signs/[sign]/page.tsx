@@ -90,7 +90,7 @@ export default async function SignPage({ params }: { params: Promise<{ sign: str
 
       <div className="mt-12 flex flex-wrap items-center gap-4">
         <Link href="/" className="inline-flex h-12 items-center rounded-full bg-accent px-6 text-[15px] font-semibold text-paper">
-          Find your sign
+          Mint your card
         </Link>
         <span className="text-[14px] text-ink-3">Three favourites make your card, and your card names your sign.</span>
       </div>

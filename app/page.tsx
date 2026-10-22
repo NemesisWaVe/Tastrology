@@ -74,7 +74,7 @@ export default function Home() {
   }, []);
 
   // Memory: a return visit lands straight on your sign, at its card's address. History is home -> result so Back goes
-  // to the landing page. "/?new=1" (shop, "New sign") starts fresh instead; the card stays in the deck.
+  // to the landing page. "/?new=1" (shop, "New card") starts fresh instead; the card stays in the deck.
   useEffect(() => {
     if (new URLSearchParams(location.search).get("new") === "1") {
       // Clean the URL and mark this entry home, so the landing page is this entry and nothing steps Back.
@@ -234,7 +234,7 @@ export default function Home() {
     } catch {}
   };
 
-  /** "New sign": forget the latest reading (the card, and its reading under its code, stay) and go to the landing page. */
+  /** "New card": forget the latest reading (the card, and its reading under its code, stay) and go to the landing page. */
   const reset = () => {
     clearLatest();
     setCurrent(null);

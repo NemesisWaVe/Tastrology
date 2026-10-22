@@ -55,7 +55,7 @@ export function SiteNav() {
         <SoundToggle />
         <AuthNav />
         <Link href="/?new=1" className="hidden rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">
-          New sign
+          New card
         </Link>
         <PhoneMenu />
       </span>

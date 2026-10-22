@@ -256,7 +256,7 @@ export default function DeckPage() {
             <p className="font-serif text-3xl italic leading-tight text-ink">Your sky is still empty.</p>
             <p className="mt-2 text-ink-2">Name three to eight things you love and get your card. It&apos;s yours alone, and a new one comes each new moon.</p>
             <Link href="/" className="mt-6 inline-flex items-center gap-3 rounded-full bg-accent py-2 pl-6 pr-2 font-semibold text-paper">
-              Get your sign
+              Mint your card
               <CursorArrow className="h-9 w-9 bg-paper text-accent" />
             </Link>
             </div>

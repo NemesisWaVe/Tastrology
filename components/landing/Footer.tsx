@@ -23,7 +23,7 @@ export function Footer({ onPick }: { onPick: () => void }) {
             onClick={onPick}
             className="group inline-flex h-14 shrink-0 items-center gap-3 rounded-full bg-ink pl-6 pr-2 text-[15px] font-semibold text-paper"
           >
-            Get my taste sign
+            Mint your card
             <CursorArrow className="h-10 w-10 bg-accent text-paper" />
           </Magnetic>
         </Reveal>

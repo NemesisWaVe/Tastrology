@@ -41,7 +41,7 @@ export function OwnedReading({
   /** This is the device's latest reading (home reopens it); a re-read always becomes the latest. */
   latest: boolean;
   returning?: boolean;
-  /** The wordmark and "New sign". */
+  /** The wordmark and "New card". */
   onNew: () => void;
   /** The card just flew in from the pack: the hero skips its own entrance so the shared card lands cleanly. */
   flight?: boolean;
@@ -191,7 +191,7 @@ export function OwnedReading({
           <SoundToggle />
           <AuthNav />
           <button onClick={onNew} className="hidden shrink-0 whitespace-nowrap rounded-full border border-line px-4 py-1.5 text-sm text-ink-2 hover:border-ink-3 hover:text-ink sm:inline-block">
-            New sign
+            New card
           </button>
           <PhoneMenu onNew={onNew} />
         </span>

@@ -18,7 +18,7 @@ export function LostCard({
   title,
   body,
   stamp,
-  cta = { href: "/", label: "Mint your own card" },
+  cta = { href: "/", label: "Mint your card" },
   more,
 }: {
   kicker: string;

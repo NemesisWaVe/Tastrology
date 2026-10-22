@@ -96,7 +96,7 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
       if (!ra)
         return setErr(
           a === ME
-            ? "No saved reading on this device yet. Get your sign first."
+            ? "No card on this device yet. Mint your card first."
             : "Couldn't read the first taste.",
         );
       setLoading("b");
@@ -105,7 +105,7 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
       if (!rb)
         return setErr(
           b === ME
-            ? "No saved reading on this device yet. Get your sign first."
+            ? "No card on this device yet. Mint your card first."
             : "Couldn't read the second taste.",
         );
       setLoading(null);
@@ -137,7 +137,7 @@ export function BattleArena({ a, b }: { a: string; b: string }) {
               href="/"
               className="rounded-full bg-accent px-5 py-3 font-semibold text-paper"
             >
-              Get your sign
+              Mint your card
             </Link>
             <Link
               href="/vs"
@@ -275,7 +275,7 @@ function ExitDock({ reduce, onReplay }: { reduce: boolean; onReplay: () => void 
             <Link href="/" className={item}>Home</Link>
           </>
         ) : (
-          <Link href="/" className={`${item} !text-accent hover:!text-paper`}>Get your sign →</Link>
+          <Link href="/" className={`${item} !text-accent hover:!text-paper`}>Mint your card →</Link>
         )}
         </div>
       </motion.nav>

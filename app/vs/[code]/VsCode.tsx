@@ -115,7 +115,7 @@ export function VsCode({ code }: { code: string }) {
           title="No fighter in that corner."
           body="That card isn't on file, or the code has a typo. Mint your own and pick someone else."
           stamp={code}
-          cta={{ href: "/", label: "Mint yours" }}
+          cta={{ href: "/", label: "Mint your card" }}
           more={{ href: "/vs", label: "Fight a house card instead" }}
         />
       )}

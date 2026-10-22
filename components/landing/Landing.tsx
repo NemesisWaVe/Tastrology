@@ -215,7 +215,7 @@ function Nav({ onPick, hidden }: { onPick: () => void; hidden?: boolean }) {
             onClick={onPick}
             className="hidden shrink-0 whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-semibold text-paper transition hover:bg-accent sm:inline-block sm:px-4 sm:py-2"
           >
-            Get your sign
+            Mint your card
           </button>
           <PhoneMenu onNew={onPick} />
         </div>

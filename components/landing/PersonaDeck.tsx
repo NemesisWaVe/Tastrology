@@ -159,7 +159,7 @@ function PersonaCard({ p, tier, i, total, shown, onPick, picked, dim }: { p: Per
 
         <span className="mt-auto flex items-center justify-between pt-6 sm:pt-8">
           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-2 transition-colors group-hover:text-ink">
-            {picked ? "Minting…" : "Mint this sign"}
+            {picked ? "Minting…" : "Mint this card"}
           </span>
           <CursorArrow className="h-12 w-12 border border-line text-lg text-ink transition-colors duration-500 group-hover:border-accent group-hover:bg-accent group-hover:text-paper" />
         </span>
