@@ -5,11 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ReceiptRoll } from "@/components/card/ReceiptRoll";
 import { ShareSheet } from "@/components/card/ShareSheet";
-import {
-  PulledSky,
-  readDecoded,
-  writeDecoded,
-} from "@/components/deck/PulledSky";
+import { PulledSky } from "@/components/deck/PulledSky";
 import { ScratchReveal } from "@/components/deck/ScratchReveal";
 import { brandLink } from "@/components/results/Brands";
 import { Thumb } from "@/components/results/ui";
@@ -301,14 +297,38 @@ export function BrandSheet({
     });
   }, [sealed, r, reduce]);
 
-  // Decoded signals (components/deck/PulledSky.tsx): remembered per card on this device.
+  // Decoded signals (components/deck/PulledSky.tsx): fresh foil every visit, so opening a card is always an unsealing.
   const [decoded, setDecoded] = useState<Set<string>>(new Set());
   const [flashId, setFlashId] = useState<string | null>(null);
   useEffect(() => {
-    if (open) setDecoded(new Set(readDecoded(code)));
+    if (!open) return;
+    setDecoded(new Set());
+    setHeld(new Set());
   }, [open, code]);
-  // A sealed brand is scratched open by hand on its row (ScratchReveal); Auto (or a tap from the sky) runs it for you.
+  // A sealed brand is scratched open by hand on its row (ScratchReveal); a tap from the sky runs it for you.
   const [autoRun, setAutoRun] = useState<Record<string, number>>({});
+  // The unsealing: once a star's list is in view, its sealed brands scratch themselves one after another. Rubbing a
+  // row takes it over (the chain waits for it), and "I'll scratch these" stops the chain for that star.
+  const [cascade, setCascade] = useState<Record<string, number>>({});
+  const [held, setHeld] = useState<Set<string>>(new Set());
+  const listRef = useRef<HTMLUListElement>(null);
+  const chain = useRef({ love: "", on: false, sent: new Set<string>() });
+  const decodedRef = useRef(decoded);
+  decodedRef.current = decoded;
+  const pulledRef = useRef<SnapBrand[]>([]);
+  const nextInChain = () => {
+    const c = chain.current;
+    if (!c.on) return;
+    const b = pulledRef.current.find(
+      (p) => !decodedRef.current.has(p.id) && !c.sent.has(p.id),
+    );
+    if (!b) {
+      c.on = false;
+      return;
+    }
+    c.sent.add(b.id);
+    setCascade((m) => ({ ...m, [b.id]: (m[b.id] ?? 0) + 1 }));
+  };
   const decode = (b: SnapBrand) => {
     if (!decoded.has(b.id))
       setAutoRun((m) => ({ ...m, [b.id]: (m[b.id] ?? 0) + 1 }));
@@ -326,11 +346,7 @@ export function BrandSheet({
     );
   };
   const scratched = (b: SnapBrand) => {
-    setDecoded((cur) => {
-      const next = new Set(cur).add(b.id);
-      writeDecoded(code, [...next]);
-      return next;
-    });
+    setDecoded((cur) => new Set(cur).add(b.id));
     // the last of a love's signals: a little set chord
     if (
       pulled.length > 1 &&
@@ -353,6 +369,33 @@ export function BrandSheet({
     return out;
   }, [snap]);
   const pulled = love ? (brandsOf[love.id] ?? []) : [];
+  pulledRef.current = pulled;
+  const sealedHere = pulled.some((b) => !decoded.has(b.id));
+  const holding = love ? held.has(love.id) : false;
+  // Start the chain when this star's list comes into view; a new star starts its own.
+  useEffect(() => {
+    const el = listRef.current;
+    const id = love?.id;
+    if (!open || !el || !id || holding) return;
+    chain.current = { love: id, on: false, sent: new Set() };
+    let t = 0;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e?.isIntersecting || chain.current.on) return;
+        io.disconnect();
+        chain.current.on = true;
+        t = window.setTimeout(nextInChain, 450);
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      clearTimeout(t);
+      chain.current.on = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, love?.id, holding, Boolean(snap)]);
   const silent = snap
     ? snap.loves.filter(
         (l) =>
@@ -510,11 +553,22 @@ export function BrandSheet({
                     kept for this card.
                   </p>
                 )}
-                <h3 className="mt-6 font-serif text-2xl italic">
-                  Sent by {displayName(love.name)}
-                </h3>
+                <div className="mt-6 flex items-baseline justify-between gap-3">
+                  <h3 className="min-w-0 truncate font-serif text-2xl italic">
+                    Sent by {displayName(love.name)}
+                  </h3>
+                  {sealedHere && !holding && (
+                    <button
+                      type="button"
+                      onClick={() => setHeld((h) => new Set(h).add(love.id))}
+                      className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3 underline decoration-white/20 underline-offset-4 hover:text-ink"
+                    >
+                      I&apos;ll scratch these
+                    </button>
+                  )}
+                </div>
                 {pulled.length ? (
-                  <ul className="mt-2">
+                  <ul ref={listRef} className="mt-2">
                     {pulled.map((b, i) =>
                       decoded.has(b.id) ? (
                         <BrandRow
@@ -545,6 +599,12 @@ export function BrandSheet({
                               )}
                               reduce={reduce}
                               autoRun={autoRun[b.id] ?? 0}
+                              cascade={cascade[b.id] ?? 0}
+                              onCleared={() => {
+                                if (!chain.current.on) return;
+                                chain.current.sent.add(b.id);
+                                setTimeout(nextInChain, 220);
+                              }}
                               onDone={() => scratched(b)}
                             />
                             <p className="mt-0.5 pl-2 text-sm text-ink-3">
@@ -554,13 +614,6 @@ export function BrandSheet({
                               % of the pull
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => decode(b)}
-                            className="shrink-0 self-start rounded-full border border-accent/60 px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-accent hover:bg-accent hover:text-paper"
-                          >
-                            Auto
-                          </button>
                         </li>
                       ),
                     )}

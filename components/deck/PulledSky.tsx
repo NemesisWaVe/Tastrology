@@ -9,22 +9,6 @@ import { sfx } from "@/lib/sound";
 
 const img = (u?: string) => (u ? (u.startsWith("/") ? u : proxied(u)) : undefined);
 
-/** Brands decoded on this device, per card: a signal stays decoded, and new ones (fresh weeks) arrive sealed. */
-const key = (code: string) => `tastrology:decoded:${code}`;
-export function readDecoded(code: string): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(key(code)) ?? "[]");
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-export function writeDecoded(code: string, ids: string[]) {
-  try {
-    localStorage.setItem(key(code), JSON.stringify(ids.slice(-200)));
-  } catch {}
-}
-
 type Love = Snap["loves"][number];
 type Cam = { x: number; y: number; k: number };
 type Anim = { kind: "in" | "out" | "warp"; t0: number; dur: number; from: Cam; to: Cam; star: number };

@@ -47,6 +47,8 @@ export function ScratchReveal({
   strength = 0.5,
   reduce,
   autoRun = 0,
+  cascade = 0,
+  onCleared,
   onDone,
 }: {
   name: string;
@@ -56,6 +58,10 @@ export function ScratchReveal({
   strength?: number;
   reduce: boolean;
   autoRun?: number;
+  /** Bump to run a quicker auto scratch as part of a chain; ignored once a hand has touched the foil. */
+  cascade?: number;
+  /** The foil just let go (onDone follows once the shine has played). */
+  onCleared?: () => void;
   onDone: () => void;
 }) {
   const foil = foilFor(loveId);
@@ -255,6 +261,7 @@ export function ScratchReveal({
     buzz([12, 40, 24]);
     if (auto) setByHand(false);
     setPhase("done");
+    onCleared?.();
     setTimeout(onDone, reduce ? 500 : 1300);
   };
 
@@ -362,7 +369,7 @@ export function ScratchReveal({
   };
 
   /** Run the scratch by itself. Again while running: hurry; a third time: finish. */
-  const runAuto = () => {
+  const runAuto = (pace = 1) => {
     const s = st.current;
     if (s.mode === "done" || !s.cov) return;
     if (s.mode === "auto") {
@@ -383,7 +390,7 @@ export function ScratchReveal({
     }
     s.mode = "auto";
     s.autoT = 0;
-    s.autoK = 1;
+    s.autoK = pace;
     s.taps = 0;
     s.last = null;
     setPhase("going");
@@ -396,6 +403,13 @@ export function ScratchReveal({
     if (autoRun && autoRun !== firstRun.current) runAuto();
     firstRun.current = autoRun;
   }, [autoRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a chained unsealing runs about twice as fast, so a star's four brands open in a few seconds
+  const firstCascade = useRef(cascade);
+  useEffect(() => {
+    if (cascade && cascade !== firstCascade.current && st.current.mode === "idle") runAuto(2.2);
+    firstCascade.current = cascade;
+  }, [cascade]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const local = (e: { clientX: number; clientY: number }) => {
     const r = box.current!.getBoundingClientRect();
