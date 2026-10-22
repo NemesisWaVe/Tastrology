@@ -83,7 +83,7 @@ export function VsCode({ code }: { code: string }) {
   const challenger = st.kind === "card" ? st.card : null;
   const sky = useMemo(() => (challenger ? skyState(challenger.evolvesFrom, challenger.archetype, [], [], challenger.vibes) : null), [challenger]);
 
-  if (st.kind === "fight") return <BattleStage out={st.out} />;
+  if (st.kind === "fight") return <BattleStage out={st.out} again="/friends" />;
 
   return (
     <main className="relative isolate mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 py-10 text-center">

@@ -12,7 +12,7 @@ import {
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import { HoloCard } from "@/components/card/HoloCard";
 import { Sky } from "@/components/reveal/Sky";
-import { markFought } from "@/components/site/AfterFirstCard";
+import { markFought, useHasPlace } from "@/components/site/AfterFirstCard";
 import { skyState } from "@/components/reveal/traceModel";
 import {
   battle,
@@ -187,10 +187,11 @@ export function biggestLast(out: BattleResult): BattleResult {
 }
 
 /** The cinematic clock plus the sequence, for any BattleResult (client-side or from /api/battle). */
-export function BattleStage({ out: raw, a = "a", b = "b", onReplay }: { out: BattleResult; a?: string; b?: string; onReplay?: () => void }) {
+export function BattleStage({ out: raw, a = "a", b = "b", again, onReplay }: { out: BattleResult; a?: string; b?: string; again?: string; onReplay?: () => void }) {
   const reduce = useReducedMotion() ?? false;
   const [phase, setPhase] = useState(0);
   const [nonce, setNonce] = useState(0);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const out = useMemo(() => biggestLast(raw), [raw]);
   // A fight seen to the end opens the Shop and Stardust on this device.
   useEffect(() => {
@@ -207,6 +208,7 @@ export function BattleStage({ out: raw, a = "a", b = "b", onReplay }: { out: Bat
       T_INTRO + 4 * T_ROUND + T_SLAM,
     ];
     const ids = at.map((ms, i) => setTimeout(() => setPhase(i + 1), ms));
+    timers.current = ids;
     return () => ids.forEach(clearTimeout);
   }, [out, reduce, nonce]);
 
@@ -218,7 +220,12 @@ export function BattleStage({ out: raw, a = "a", b = "b", onReplay }: { out: Bat
       reduce={reduce}
       a={a}
       b={b}
-      onSkip={() => setPhase(PH_REVEAL)}
+      again={again ?? `/vs?a=${encodeURIComponent(a)}`}
+      // the round clock must stop too, or its next tick drags the fight back from the result
+      onSkip={() => {
+        timers.current.forEach(clearTimeout);
+        setPhase(PH_REVEAL);
+      }}
       onReplay={() => {
         setNonce((n) => n + 1);
         onReplay?.();
@@ -238,10 +245,53 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="hover:text-ink">
             {BRAND.name}
           </Link>
-          <span>Taste battle</span>
+          <ShellLinks />
         </nav>
         {children}
       </main>
+    </div>
+  );
+}
+
+/** Somewhere to go from any battle screen: your deck and friends once you have a card, else the label. */
+function ShellLinks() {
+  const has = useHasPlace();
+  if (!has) return <span>Taste battle</span>;
+  return (
+    <span className="flex items-center gap-4">
+      <Link href="/deck" className="hover:text-ink">My deck</Link>
+      <Link href="/friends" className="hover:text-ink">Friends</Link>
+    </span>
+  );
+}
+
+/** Pinned to the bottom once the result is in, so leaving never means scrolling past the ruling. */
+function ExitDock({ reduce, onReplay }: { reduce: boolean; onReplay: () => void }) {
+  const has = useHasPlace();
+  const item = "whitespace-nowrap rounded-full px-3.5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:bg-paper-2 hover:text-ink sm:px-4 sm:text-[11px]";
+  return (
+    <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3" style={{ bottom: "max(14px, env(safe-area-inset-bottom))" }}>
+      <motion.nav
+        aria-label="After the fight"
+        initial={reduce ? false : { opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 24, delay: reduce ? 0 : 0.9 }}
+        className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-line bg-paper/95 p-1 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl"
+      >
+        <button onClick={onReplay} className={item}>
+          ↺ Replay
+        </button>
+        <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />
+        {has ? (
+          <>
+            <Link href="/deck" className={item}>Deck</Link>
+            <Link href="/friends" className={item}>Friends</Link>
+            <Link href="/" className={item}>Home</Link>
+          </>
+        ) : (
+          <Link href="/" className={`${item} !text-accent`}>Get your sign →</Link>
+        )}
+      </motion.nav>
     </div>
   );
 }
@@ -250,7 +300,7 @@ function Sequence({
   out,
   phase,
   reduce,
-  a,
+  again,
   onSkip,
   onReplay,
 }: {
@@ -259,6 +309,7 @@ function Sequence({
   reduce: boolean;
   a: string;
   b: string;
+  again: string;
   onSkip: () => void;
   onReplay: () => void;
 }) {
@@ -581,18 +632,18 @@ function Sequence({
                     : "Share the result"}
             </button>
             <Link
-              href={`/vs?a=${encodeURIComponent(a)}`}
+              href={again}
               className="flex-1 rounded-full border border-line px-6 py-4 text-center font-display text-[16px] font-semibold text-ink transition hover:border-ink-3"
             >
-              Battle someone else
+              Fight someone else
             </Link>
           </motion.div>
 
           <details className="group mt-8 rounded-2xl border border-line bg-card">
             <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3.5 text-[14px] font-medium text-ink">
               The judge&apos;s full ruling
-              <span className="font-mono text-[11px] text-ink-3 group-open:hidden">
-                P1 {out.score.a} – {out.score.b} P2
+              <span className="font-mono text-[11px] tabular-nums text-ink-3 group-open:hidden">
+                <span style={{ color: COL.a }}>P1 {out.score.a}</span> – <span style={{ color: COL.b }}>{out.score.b} P2</span>
               </span>
             </summary>
             <ol className="flex flex-col gap-4 border-t border-line px-4 py-4">
@@ -616,14 +667,9 @@ function Sequence({
             </ol>
           </details>
 
-          <div className="mt-6 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">
-            <button onClick={onReplay} className="hover:text-ink">
-              ↺ Replay
-            </button>
-            <Link href="/" className="hover:text-ink">
-              Get your own sign →
-            </Link>
-          </div>
+          {/* room for the dock */}
+          <div className="h-20" />
+          <ExitDock reduce={reduce} onReplay={onReplay} />
         </div>
       )}
     </Shell>

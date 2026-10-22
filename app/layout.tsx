@@ -1,13 +1,15 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
+import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { ClerkBridge } from "@/components/auth/ClerkBridge";
 import { SoundOrb } from "@/components/site/SoundOrb";
 import { BRAND } from "@/lib/brand";
 import { Telemetry } from "@/components/site/Telemetry";
 import "./globals.css";
 
-const display = Bricolage_Grotesque({ variable: "--nf-display", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
+// Self-hosted (OFL, via Fontsource): Google serves this one from a URL Turbopack can't parse, which failed builds.
+const display = localFont({ variable: "--nf-display", src: "./fonts/bricolage-grotesque-latin-wght.woff2", weight: "200 800", display: "swap" });
 const serif = Instrument_Serif({ variable: "--nf-serif", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
 const sans = Inter({ variable: "--nf-sans", subsets: ["latin"] });
 const mono = JetBrains_Mono({ variable: "--nf-mono", subsets: ["latin"], weight: ["400", "500"] });
