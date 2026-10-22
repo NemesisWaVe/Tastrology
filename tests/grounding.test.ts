@@ -80,6 +80,17 @@ describe("taglines must name a seed", () => {
     expect(shortSeed("The Lunchbox")).toBe("Lunchbox");
     expect(shortSeed("Blade Runner 2049")).toBe("Blade Runner");
     expect(shortSeed("Made in Heaven")).toBe("Heaven");
+    // games: the name people say, never the first word of a long title or a sequel number
+    expect(shortSeed("Grand Theft Auto V")).toBe("GTA");
+    expect(shortSeed("Grand Theft Auto 5")).toBe("GTA");
+    expect(shortSeed("The Legend of Zelda: Breath of the Wild")).toBe("Zelda");
+    expect(shortSeed("Call of Duty: Modern Warfare")).toBe("CoD");
+    expect(shortSeed("Red Dead Redemption 2")).toBe("Red Dead");
+    expect(shortSeed("The Elder Scrolls V: Skyrim")).toBe("Elder Scrolls");
+    expect(shortSeed("Uncharted 4: A Thief's End")).toBe("Uncharted");
+    expect(shortSeed("Minecraft")).toBe("Minecraft");
+    expect(groundSignName("The GTA Who Bakes", ["Grand Theft Auto V"])).toBe("The GTA Who Bakes");
+    expect(groundSignName("The Grand Who Bakes", ["Grand Theft Auto V"])).toBe("The GTA Who Bakes");
   });
   it("grounds the LLM's sign noun in a real seed", () => {
     const s = ["Daft Punk", "Neuromancer (Sprawl, #1)", "Blade Runner 2049"];

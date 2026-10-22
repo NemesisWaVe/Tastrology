@@ -42,9 +42,29 @@ function stripSeed(name: string): string {
   return noun || base || name;
 }
 
-/** The noun in "The <Seed> Who …": the stripped name if it is 1-2 words, else its longest word ("Made in Heaven" becomes "Heaven"). */
+/** Long titles people only ever say short. Checked against the stripped name, so "Grand Theft Auto V" is "GTA". */
+const SAID_AS: [RegExp, string][] = [
+  [/^grand theft auto\b/i, "GTA"],
+  [/^call of duty\b/i, "CoD"],
+  [/^(the )?legend of zelda\b/i, "Zelda"],
+  [/^(new )?super mario\b|^mario kart\b/i, "Mario"],
+  [/^red dead redemption\b/i, "Red Dead"],
+  [/^world of warcraft\b/i, "WoW"],
+  [/^league of legends\b/i, "League"],
+  [/^god of war\b/i, "God of War"],
+  [/^(the )?lord of the rings\b/i, "LOTR"],
+];
+const ROMAN = /^(i{1,3}|iv|v|vi{0,3}|ix|x)$/i;
+
+/**
+ * The noun in "The <Seed> Who …": what people call it ("GTA", "Zelda"), else the stripped name if it is 1-2 words,
+ * else its longest word ("Made in Heaven" becomes "Heaven"). Sequel numbers and Roman numerals never count.
+ */
 export function shortSeed(name: string): string {
-  const w = stripSeed(name).split(/\s+/);
+  const base = stripSeed(name);
+  const said = SAID_AS.find(([re]) => re.test(base) || re.test(name));
+  if (said) return said[1];
+  const w = base.split(/\s+/).filter((x, i, a) => !(i > 0 && i === a.length - 1 && ROMAN.test(x)));
   return w.length <= 2 ? w.join(" ") : w.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
