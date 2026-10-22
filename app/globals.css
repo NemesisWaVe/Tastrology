@@ -442,3 +442,12 @@ body {
     animation: none !important;
   }
 }
+
+/* Shop: the Hall ticker scrolls one full set, then repeats seamlessly (the list is doubled). */
+@keyframes marketTicker {
+  to { transform: translateX(-50%); }
+}
+.market-ticker { animation: marketTicker linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .market-ticker { animation: none; }
+}

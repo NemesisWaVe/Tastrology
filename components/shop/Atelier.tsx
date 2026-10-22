@@ -9,6 +9,7 @@ import { loadDeck, type DeckEntry } from "@/lib/deck";
 import type { Economy } from "@/lib/economy";
 import type { Snap } from "@/lib/receipt";
 import { sfx } from "@/lib/sound";
+import { MarketHead, walletChanged } from "./Market";
 
 interface Lens {
   id: string;
@@ -37,6 +38,7 @@ const MONTH = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleString("en", 
 export function Atelier() {
   const [cards, setCards] = useState<DeckEntry[] | null>(null);
   const [eco, setEco] = useState<Economy | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
   const [dust, setDust] = useState<number | null>(null);
   const [pick, setPick] = useState<string | null>(null);
   const [info, setInfo] = useState<RecastInfo | null>(null);
@@ -54,7 +56,8 @@ export function Atelier() {
       });
       fetch("/api/me", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((m: { stardust?: { dust: number | null; economy?: Economy } | null } | null) => {
+        .then((m: { signedIn?: boolean; stardust?: { dust: number | null; economy?: Economy } | null } | null) => {
+          setSignedOut(m?.signedIn === false);
           setEco(m?.stardust?.economy ?? null);
           setDust(m?.stardust?.dust ?? null);
         })
@@ -83,6 +86,16 @@ export function Atelier() {
       .catch(() => {});
   }, [pick]);
 
+  // Signed out: the aisle is still on the shelf (the market bar links to it), with the way in.
+  if (signedOut)
+    return (
+      <section id="atelier" className="mt-20 scroll-mt-36">
+        <MarketHead kicker="The atelier" pay="dust" title={<>Same card. <span className="text-accent">New orbit.</span></>} blurb="Recast one of your cards into a new territory (food, travel, beauty…) and see which brands your taste pulls in there, or wake its sigils so they breathe." />
+        <button type="button" onClick={() => void whenAuthReady().then((b) => b?.openSignIn())} className="mt-6 rounded-full border border-line px-5 py-2.5 text-sm text-ink-2 transition hover:border-ink-3 hover:text-ink">
+          Sign in to use the atelier
+        </button>
+      </section>
+    );
   if (!eco || (eco.recast === null && eco.living === null)) return null;
   const entry = cards?.find((c) => c.code === pick) ?? null;
   const prestige = entry && (entry.card.rarity === "holo" || entry.card.rarity === "secret");
@@ -98,6 +111,7 @@ export function Atelier() {
     if (!res?.ok || !j?.row) return setMsg(j?.error ?? "Couldn't recast just now.");
     sfx("reveal");
     setFresh(j.row);
+    walletChanged();
     setDust((d) => (d === null ? d : Math.max(0, d - (eco.recast ?? 0))));
     setInfo((i) => (i ? { ...i, rows: [j.row!, ...i.rows.filter((r) => r.lens !== j.row!.lens)] } : i));
     setCards((cs) => cs?.map((c) => (c.code === pick ? { ...c, card: { ...c.card, recasts: [...new Set([...(c.card.recasts ?? []), j.row!.lens])] } } : c)) ?? cs);
@@ -112,6 +126,7 @@ export function Atelier() {
     setBusy(false);
     if (!res?.ok) return setMsg(j?.error ?? "Couldn't do that just now.");
     sfx("reveal");
+    walletChanged();
     setDust((d) => (d === null ? d : Math.max(0, d - (eco.living ?? 0))));
     setCards((cs) => cs?.map((c) => (c.code === pick ? { ...c, card: { ...c.card, living: true } } : c)) ?? cs);
   };
@@ -120,31 +135,36 @@ export function Atelier() {
   const seasonLabel = info?.lenses.find((l) => l.id === info.season.lens)?.label;
 
   return (
-    <section className="mt-16 rounded-[28px] border border-line bg-paper/60 p-6 sm:p-8">
-      <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">The atelier · Stardust only</p>
-      <h2 className="mt-2 font-serif text-4xl italic leading-tight">Same card. New orbit.</h2>
-      <p className="mt-3 max-w-xl text-ink-2">
-        Recast a card into a new territory and see which brands there your taste pulls in. Its loves, code and rarity stay exactly as they are.
-        {seasonLabel && (
+    <section id="atelier" className="mt-20 scroll-mt-36">
+      <MarketHead
+        kicker="The atelier"
+        pay="dust"
+        title={<>Same card. <span className="text-accent">New orbit.</span></>}
+        blurb={
           <>
-            {" "}
-            This {MONTH(info!.season.month)}, <span className="text-accent">{seasonLabel}</span> is the season: recasts into it carry a mark you can&apos;t get later.
+            Recast a card into a new territory and see which brands there your taste pulls in. Its loves, code and rarity stay exactly as they are.
+            {seasonLabel && (
+              <>
+                {" "}
+                This {MONTH(info!.season.month)}, <span className="text-accent">{seasonLabel}</span> is the season: recasts into it carry a mark you can&apos;t get later.
+              </>
+            )}
           </>
-        )}
-      </p>
-
+        }
+      />
+      <div className="mt-8 rounded-[24px] border border-line bg-paper/60 p-6 sm:p-8">
       {cards === null ? (
-        <p className="mt-6 font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Loading your deck…</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-3">Loading your deck…</p>
       ) : cards.length === 0 ? (
-        <p className="mt-6 text-sm text-ink-3">
+        <p className="text-sm text-ink-3">
           Recasts work on cards you minted.{" "}
           <Link href="/" className="text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">
-            Make your card
+            Mint your card
           </Link>{" "}
           first.
         </p>
       ) : (
-        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr]">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr]">
           <div className="flex flex-col items-center gap-4">
             {entry && <HoloCard card={entry.card} width={240} idle />}
             {cards.length > 1 && (
@@ -259,6 +279,7 @@ export function Atelier() {
           </div>
         </div>
       )}
+      </div>
     </section>
   );
 }
