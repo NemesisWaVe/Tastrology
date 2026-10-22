@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { runAgent } from "@/lib/agent";
-import { GroundingLedger, chooseTagline, groundSignName, shortSeed, tagMentionsSeed } from "@/lib/grounding";
+import { blendVerb, runAgent } from "@/lib/agent";
+import { GroundingLedger, chooseTagline, groundSignName, shortSeed, tagMentionsSeed, wholeSeed } from "@/lib/grounding";
 import * as qloo from "@/lib/qloo";
 import { PERSONAS, personaRequest } from "@/lib/personas";
 import type { QEntity } from "@/lib/types";
@@ -89,6 +89,8 @@ describe("taglines must name a seed", () => {
     expect(shortSeed("The Elder Scrolls V: Skyrim")).toBe("Elder Scrolls");
     expect(shortSeed("Uncharted 4: A Thief's End")).toBe("Uncharted");
     expect(shortSeed("Minecraft")).toBe("Minecraft");
+    expect(wholeSeed("Everything Everywhere All at Once")).toBeNull();
+    expect(wholeSeed("Grand Theft Auto V")).toBe("GTA");
     expect(groundSignName("The GTA Who Bakes", ["Grand Theft Auto V"])).toBe("The GTA Who Bakes");
     expect(groundSignName("The Grand Who Bakes", ["Grand Theft Auto V"])).toBe("The GTA Who Bakes");
   });
@@ -120,5 +122,20 @@ describe("taglines must name a seed", () => {
       names.add(r.dna.name);
     }
     expect(names.size).toBe(PERSONAS.length);
+  });
+});
+
+describe("blended sign verbs", () => {
+  it("names a second love when it reads well, by what kind of thing it is", () => {
+    expect(blendVerb({ name: "matcha", kind: "vibe" }, "Hatsune Miku")).toBe("Craves Matcha");
+    expect(blendVerb({ name: "The Legend of Zelda: Breath of the Wild", kind: "videogame" }, "Miku")).toBe("Plays Zelda");
+    expect(blendVerb({ name: "Daft Punk", kind: "artist" }, "Neuromancer")).toBe("Hums Daft Punk");
+  });
+  it("gives up rather than read badly", () => {
+    // a fragment of a long title, a name too long for six words, the noun itself, an unknown kind
+    expect(blendVerb({ name: "Everything Everywhere All at Once", kind: "movie" }, "Miku")).toBeNull();
+    expect(blendVerb({ name: "Taylor Swift", kind: "person" }, "Hatsune Miku")).toBeNull();
+    expect(blendVerb({ name: "Minecraft", kind: "videogame" }, "Minecraft")).toBeNull();
+    expect(blendVerb({ name: "Something", kind: "weird" }, "Miku")).toBeNull();
   });
 });

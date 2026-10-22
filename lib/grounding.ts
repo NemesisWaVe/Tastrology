@@ -61,11 +61,22 @@ const ROMAN = /^(i{1,3}|iv|v|vi{0,3}|ix|x)$/i;
  * else its longest word ("Made in Heaven" becomes "Heaven"). Sequel numbers and Roman numerals never count.
  */
 export function shortSeed(name: string): string {
+  return wholeSeed(name) ?? longestWord(name);
+}
+
+/** The seed's short name only when it is the whole thing (an alias, or 1-2 words), never a fragment of a long title. */
+export function wholeSeed(name: string): string | null {
   const base = stripSeed(name);
   const said = SAID_AS.find(([re]) => re.test(base) || re.test(name));
   if (said) return said[1];
   const w = base.split(/\s+/).filter((x, i, a) => !(i > 0 && i === a.length - 1 && ROMAN.test(x)));
-  return w.length <= 2 ? w.join(" ") : w.reduce((a, b) => (b.length > a.length ? b : a));
+  return w.length <= 2 ? w.join(" ") : null;
+}
+
+function longestWord(name: string): string {
+  return stripSeed(name)
+    .split(/\s+/)
+    .reduce((a, b) => (b.length > a.length ? b : a));
 }
 
 /**

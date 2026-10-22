@@ -3,7 +3,7 @@ import { blocked } from "./guard";
 import { resolveVibes } from "./vibes";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BRAND } from "./brand";
-import { GroundingLedger, chooseTagline, groundSignName, shortSeed } from "./grounding";
+import { GroundingLedger, chooseTagline, groundSignName, shortSeed, wholeSeed } from "./grounding";
 import { SEASON, displayName } from "./card";
 import { chat, llmConfigured, llmPaused, type ChatMessage, type ToolDef } from "./llm";
 import { findTags, insights, isUpstreamError, lookupEntities, qlooMode, searchEntities, withQlooLane, withQlooSignal } from "./qloo";
@@ -438,7 +438,40 @@ async function critique(st: RunState) {
     rejected: st.rejected.map((r) => ({ name: r.entity.name, reason: r.reason })),
     contradictions: st.contradictions.slice(0, 3).map((c) => `${st.seedName(c.a)} vs ${st.seedName(c.b)} (overlap ${c.overlap})`),
     strongest_seed: strongestSeed(st)?.name,
+    blend_with: blendLoves(st, strongestSeed(st)).map((x) => `${x.name} (${x.kind})`),
   };
+}
+
+/** The loves next to the strongest one (other seeds, then picked vibes): what the sign's verb blends in. */
+function blendLoves(st: RunState, lead?: QEntity): { name: string; kind: string }[] {
+  return [
+    ...st.seeds.filter((s) => s.id !== lead?.id).map((s) => ({ name: s.name, kind: String(s.kind) })),
+    ...(st.req.vibes ?? []).map((v) => ({ name: v.name, kind: "vibe" })),
+  ];
+}
+
+/** A habit that names a love, by what kind of thing it is: "Sips" would guess, "Craves" never does. */
+const BLEND_VERB: Record<string, string> = {
+  artist: "Hums",
+  movie: "Quotes",
+  tv_show: "Binges",
+  book: "Rereads",
+  podcast: "Quotes",
+  videogame: "Plays",
+  place: "Haunts",
+  destination: "Daydreams About",
+  brand: "Wears",
+  person: "Stans",
+  vibe: "Craves",
+};
+
+/** "Sips Matcha" style verb from the next love, or null when its name is too long to read in a sign. */
+export function blendVerb(love: { name: string; kind: string }, noun: string): string | null {
+  const short = wholeSeed(love.name);
+  const verb = BLEND_VERB[love.kind];
+  if (!verb || !short || short.toLowerCase() === noun.toLowerCase() || short.length > 14) return null;
+  const phrase = `${verb} ${short.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}`;
+  return words(`The ${noun} Who ${phrase}`) <= 6 && `The ${noun} Who ${phrase}`.length <= 48 ? phrase : null;
 }
 
 /** The love that moves your brand picks most: summed leave-one-out affinity drop (Qloo explainability breaks ties). */
@@ -597,7 +630,7 @@ const TOOLS: ToolDef[] = [
   fn("critique_matches", "Find inert seeds, contradicting seeds (splits the DNA into two sides) and brands carried by a single seed; returns kept and rejected brands.", {}),
   fn("find_taste_bridges", "Ask Qloo for a place, film, artist and book that complete the aesthetic.", {}),
   fn("finalize", "Publish the result. Only reference brand/bridge ids returned by earlier tools.", {
-    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 6 words, built around strongest_seed from critique_matches, e.g. 'The Neuromancer Who Bakes'. The noun is that seed as people say it (shortened, no leading 'The', no sequel number: 'GTA', 'Zelda', 'Blade Runner'); the verb phrase is a concrete, slightly funny everyday habit (1-3 words) inspired by the Moon keywords, e.g. 'Bakes', 'Owns Nothing', 'Hoards Paperbacks'. Never a verb plus a bare style word ('Embraces Eclectic', 'Cultivates Understated'), and never the noun's own obvious activity ('The Minecraft Who Stacks Blocks', 'The Spider-Man Who Swings'): the habit comes from the Moon side, so the name has a twist." },
+    name: { type: "string", description: "Taste sign in the form 'The <Noun> Who <Verb phrase>', at most 6 words, built around strongest_seed from critique_matches, e.g. 'The Neuromancer Who Bakes'. The noun is that seed as people say it (shortened, no leading 'The', no sequel number: 'GTA', 'Zelda', 'Blade Runner'); the verb phrase is a concrete, slightly funny everyday habit (1-3 words) that blends in another love from blend_with, so the name mixes two tastes: Hatsune Miku + matcha gives 'The Hatsune Miku Who Sips Matcha', Miku + Minecraft gives 'The Miku Who Builds Castles'. Name that love when it's short, hint at it when it's long. With nothing in blend_with, take the habit from the Moon keywords ('Bakes', 'Owns Nothing', 'Hoards Paperbacks'). Never a verb plus a bare style word ('Embraces Eclectic', 'Cultivates Understated'), and never the noun's own obvious activity ('The Minecraft Who Stacks Blocks', 'The Spider-Man Who Swings')." },
     tagline: { type: "string", description: "One blunt line, at most 12 words, that names at least one of the person's seeds exactly as given. Grounded in the keywords. No flattery." },
     bridge_notes: {
       type: "array",
@@ -616,7 +649,7 @@ Hard rules:
 - Every brand, place or title you mention must come from a tool result. Never invent recommendations or IDs.
 - Style keywords come from get_style_tags, not from you.
 Plan: resolve_seeds → find_brand_tags (skip in mock mode) → get_style_tags → get_brand_insights → ablate_seeds → critique_matches → find_taste_bridges → finalize.
-In finalize, give the person a taste sign in the form "The <Noun> Who <Verb phrase>" (max 6 words, e.g. "The Neuromancer Who Bakes"): build it around strongest_seed from critique_matches (the love that moves their picks most) as the noun, with a verb phrase from the Moon keywords (sign_basis.moon), so a split taste shows its tension and strangers never share a name. Add one blunt tagline of at most 12 words that names at least one of their seeds, and a short note per taste bridge citing its driven_by entities.
+In finalize, give the person a taste sign in the form "The <Noun> Who <Verb phrase>" (max 6 words, e.g. "The Neuromancer Who Bakes"): build it around strongest_seed from critique_matches (the love that moves their picks most) as the noun, with a verb phrase that blends in another love from blend_with (or, with only one love, the Moon keywords in sign_basis.moon), so the name reads as a mix of their tastes and strangers never share a name. Add one blunt tagline of at most 12 words that names at least one of their seeds, and a short note per taste bridge citing its driven_by entities.
 Before each tool call, write one short sentence of reasoning (what you expect to learn). Be terse.`;
 
 async function dispatch(st: RunState, name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -795,10 +828,12 @@ function fallbackSign(st: RunState): { name: string; tagline: string } {
   const lead = strongestSeed(st) ?? st.seeds[0];
   const h = hashOf(`${lead?.id ?? ""}|${(moon[0] ?? sun[0] ?? "").toLowerCase()}`);
   const fm = familyOf(moon.length ? moon : sun);
-  const verb = fm.verbs[h % fm.verbs.length];
+  const style = fm.verbs[h % fm.verbs.length];
   const S = lead ? shortSeed(lead.name) : "";
   const fs = familyOf(sun);
-  const noun = S && words(`The ${S} Who ${verb}`) <= 6 ? S : S.split(" ").sort((a, b) => b.length - a.length)[0] || fs.nouns[h % fs.nouns.length];
+  const noun = S && words(`The ${S} Who ${style}`) <= 6 ? S : S.split(" ").sort((a, b) => b.length - a.length)[0] || fs.nouns[h % fs.nouns.length];
+  // a blend of two loves when one reads well in a sign ("The Miku Who Craves Matcha"), else the Moon's habit
+  const verb = blendLoves(st, lead).map((l) => blendVerb(l, noun)).find(Boolean) ?? style;
   const name = `The ${noun} Who ${verb}`;
   const lc = (t?: string) => (t ?? "").toLowerCase();
   const L = lead ? displayName(lead.name) : "";
