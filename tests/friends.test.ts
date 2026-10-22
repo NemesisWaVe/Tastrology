@@ -379,7 +379,7 @@ describe("stardust bouts", () => {
     expect(await openBout("ann", a, b.pc, 10)).toBe("open");
     await closeBout("bo", (await listBouts("bo"))!.find((x) => x.status === "open")!.id);
     expect(await openBout("ann", a, b.pc, 25)).toBe("open");
-    const [bout] = (await listBouts("bo"))!;
+    const bout = (await listBouts("bo"))!.find((x) => x.status === "open")!;
     expect((await acceptBout("bo", b, bout.id)).ok).toBe(true);
     // one fought: that's the pair's bet for today, from either side; friendly fights stay open
     expect(await openBout("ann", a, b.pc, 10)).toBe("pair-daily");
