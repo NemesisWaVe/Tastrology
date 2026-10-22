@@ -14,10 +14,13 @@ export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean 
   // The sitewide reminder steps aside after a while: any tap on the page unlocks sound anyway (armSound).
   const [aside, setAside] = useState(false);
   // Pages' navs differ in height (the phone nav wraps, the avatar adds a row), so sit just under whichever is there.
+  // Pages without the site nav (a card, a battle) put their own controls up there, so the reminder stays off them:
+  // the first tap anywhere turns sound on regardless (armSound).
   const [below, setBelow] = useState<number | null>(null);
+  const [bare, setBare] = useState(false);
   useEffect(() => {
     const nav = document.querySelector<HTMLElement>("body nav.sticky");
-    if (!nav) return;
+    if (!nav) return setBare(true);
     const ro = new ResizeObserver(() => setBelow(Math.round(nav.getBoundingClientRect().bottom) + 10));
     ro.observe(nav);
     return () => ro.disconnect();
@@ -43,7 +46,7 @@ export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean 
   }, []);
   if (on === null) return null;
   // the global reminder appears only while sound is on but held by the browser; the landing orb leaves that to it
-  if (onlyWhenLocked ? !locked || aside : locked) return null;
+  if (onlyWhenLocked ? !locked || aside || bare : locked) return null;
   const toggle = () => {
     if (on && locked) {
       enableSound(true); // resume after a reload
