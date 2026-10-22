@@ -116,7 +116,8 @@ async function fileOwnMint(minter: Minter, code: string, card: ReturnType<typeof
   const SK = `CARD#${code}`;
   // runId + funding let a burn check the ledger (docs/design/burn.md). Every credit is free during the beta; once the shop
   // sells credits, spendCredit must report which kind it took and "paid" goes here (paid mints burn at a flat rate).
-  const funding = minter.paidWith === "dust" ? "dust" : minter.paidWith === "regret" ? "regret" : "free";
+  // An uncharged mint (admin, or credits off) is filed as such, so the deck never promises Stardust a burn won't pay.
+  const funding = !minter.charged ? "uncharged" : minter.paidWith === "dust" ? "dust" : minter.paidWith === "regret" ? "regret" : "free";
   const paid: Record<string, string> = { runId: minter.runId, funding, ...(minter.pick ? { pick: minter.pick } : {}) };
   const out = await ddbPutIfAbsent({ PK, SK, code, card: JSON.stringify(card), rarityScore: card.rarityScore, addedAt: Date.now(), minted: 1, source: "mint", ...paid });
   if (out === "exists") {

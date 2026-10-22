@@ -1,4 +1,4 @@
-import { clerkOn } from "@/lib/auth";
+import { clerkOn, isAdmin } from "@/lib/auth";
 import { styled } from "@/lib/cardStyle";
 import { previewDust, REGRETS_MAX, regretOn, regretWhy } from "@/lib/burn";
 import { ddbConfigured, ddbGet, ddbPutIfAbsent, ddbQuery } from "@/lib/ddb";
@@ -32,9 +32,12 @@ export async function GET(request: Request) {
   if (!page) return Response.json({ error: "Your deck is unreachable right now." }, { status: 503, headers: NO_STORE });
   // Burning: signed-in accounts only (docs/design/burn.md). `earns` is the published rate before the weekly cap.
   const canBurn = kind === "user";
+  // An admin's mints spend nothing, so a burn pays nothing and a regret has nothing to give back (lib/burn.ts checks
+  // the ledger); don't promise either. Cards filed since 22 Oct carry funding "uncharged", which says the same.
+  const free = canBurn && (await isAdmin(owner).catch(() => false));
   const dust = canBurn && dustOn();
   // Regret burns: which card (if any) still qualifies. The burn route re-checks everything, including the ledger.
-  const rOn = canBurn && regretOn();
+  const rOn = canBurn && regretOn() && !free;
   const used = rOn ? Number((await ddbGet(`USER#${owner}`, "PROFILE").catch(() => null))?.regretUsed) || 0 : REGRETS_MAX;
   const newest = Math.max(0, ...page.items.filter((x) => x.minted === 1).map((x) => Number(x.addedAt) || 0));
   const cards: DeckEntry[] = [];
@@ -47,7 +50,7 @@ export async function GET(request: Request) {
         card: JSON.parse(String(it.card)) as CardData,
         addedAt: Number(it.addedAt) || 0,
         minted,
-        ...(dust && minted ? { earns: previewDust(it) } : {}),
+        ...(dust && minted ? { earns: free ? 0 : previewDust(it) } : {}),
         ...(canRegret ? { regret: true } : {}),
       });
     } catch {}
