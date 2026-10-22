@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
 import { brandLink } from "@/components/results/Brands";
+import { whenAuthReady } from "@/lib/authBridge";
 import { loadDeck, type DeckEntry } from "@/lib/deck";
 import type { Economy } from "@/lib/economy";
 import type { Snap } from "@/lib/receipt";
@@ -45,18 +46,27 @@ export function Atelier() {
   const [fresh, setFresh] = useState<Row | null>(null);
 
   useEffect(() => {
-    void loadDeck().then((d) => {
-      const own = d.owner === "user" ? d.cards.filter((c) => c.minted) : [];
-      setCards(own);
-      if (own[0]) setPick(own[0].code);
+    const load = () => {
+      void loadDeck().then((d) => {
+        const own = d.owner === "user" ? d.cards.filter((c) => c.minted) : [];
+        setCards(own);
+        setPick((p) => (p && own.some((c) => c.code === p) ? p : (own[0]?.code ?? null)));
+      });
+      fetch("/api/me", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((m: { stardust?: { dust: number | null; economy?: Economy } | null } | null) => {
+          setEco(m?.stardust?.economy ?? null);
+          setDust(m?.stardust?.dust ?? null);
+        })
+        .catch(() => {});
+    };
+    // Same as the packs: wait for the session, or the account's cards and Stardust come back empty.
+    let off: (() => void) | undefined;
+    void whenAuthReady().then((b) => {
+      load();
+      off = b?.onChange(load);
     });
-    fetch("/api/me", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((m: { stardust?: { dust: number | null; economy?: Economy } | null } | null) => {
-        setEco(m?.stardust?.economy ?? null);
-        setDust(m?.stardust?.dust ?? null);
-      })
-      .catch(() => {});
+    return () => off?.();
   }, []);
 
   useEffect(() => {

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { HoloCard } from "@/components/card/HoloCard";
 import type { CardData } from "@/lib/card";
 import { sfx } from "@/lib/sound";
+import { whenAuthReady } from "@/lib/authBridge";
 
 type Odds = { tier: string; p: number }[];
 type Kind = "star" | "flare" | "supernova";
@@ -45,14 +46,23 @@ export function BattlePack() {
   const [msg, setMsg] = useState<string>();
 
   useEffect(() => {
-    fetch("/api/pack", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<PackInfo>) : null))
-      .then((j) => {
-        if (!j) return;
-        setInfo(j);
-        if (j.today?.cards.length) setCards(j.today.cards);
-      })
-      .catch(() => {});
+    const load = () =>
+      fetch("/api/pack", { cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<PackInfo>) : null))
+        .then((j) => {
+          if (!j) return;
+          setInfo(j);
+          if (j.today?.cards.length) setCards(j.today.cards);
+        })
+        .catch(() => {});
+    // Asked before Clerk has refreshed the session, the server sees nobody and says "Sign in to open": wait for it,
+    // and ask again whenever the sign-in state changes.
+    let off: (() => void) | undefined;
+    void whenAuthReady().then((b) => {
+      void load();
+      off = b?.onChange(() => void load());
+    });
+    return () => off?.();
   }, []);
 
   const open = async (kind: Kind, cost: number) => {
@@ -125,7 +135,13 @@ export function BattlePack() {
                         {busy ? "Opening…" : afford ? "Open" : `Need ${p.cost - (info.dust ?? 0)} more`}
                       </button>
                     ) : (
-                      <span className="block rounded-full border border-line py-2.5 text-center text-sm text-ink-3">{info?.on ? "Sign in to open" : "Opens when Stardust is on"}</span>
+                      info?.on ? (
+                        <button type="button" onClick={() => void whenAuthReady().then((b) => b?.openSignIn())} className="w-full rounded-full border border-line py-2.5 text-sm text-ink-2 transition hover:border-ink-3 hover:text-ink">
+                          Sign in to open
+                        </button>
+                      ) : (
+                        <span className="block rounded-full border border-line py-2.5 text-center text-sm text-ink-3">Opens when Stardust is on</span>
+                      )
                     )}
                   </div>
                 </li>
