@@ -39,7 +39,7 @@ export default function ShopPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
               Beta market
             </span>
-            Stardust works today. Nothing here takes money: readings are free while we're in beta.
+            Stardust works today. Nothing here takes money: readings are free while we’re in beta.
           </p>
         )}
       </div>
