@@ -21,6 +21,7 @@ import { buildCard, cardCode, cardNo, editionOf, type CardData } from "@/lib/car
 import { forgetReading, isFresh, latestCode, loadReading, type Reading } from "@/lib/readings";
 import { signOf } from "@/lib/signs";
 import type { StyleResult } from "@/lib/types";
+import { maskRude } from "@/lib/guard";
 
 /** Digital twin of a printed or shared card: /c/<code>, the URL in the card-back QR. */
 export default function TwinPage({ params }: { params: Promise<{ code: string }> }) {
@@ -213,7 +214,7 @@ export default function TwinPage({ params }: { params: Promise<{ code: string }>
             <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
               No. {cardNo(card)} · Season {editionOf(card)} · {card.rarityLabel}{card.print ? "" : ` · code ${code}`}
             </p>
-            {card.moves.length > 0 && <p className="mt-4 text-sm text-ink-2">Signature brands: {card.moves.map((m) => m.name).join(" · ")}</p>}
+            {card.moves.length > 0 && <p className="mt-4 text-sm text-ink-2">Signature brands: {card.moves.map((m) => maskRude(m.name)).join(" · ")}</p>}
             {/* Owner: sharing is the main move. Visitor: answering it is (mint yours, fight this one). */}
             {mine ? (
               <Primary onClick={() => setShare(true)} title="Are we taste twins?" sub="send it: they mint theirs, you both get a score" />
