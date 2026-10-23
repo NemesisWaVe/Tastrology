@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildCard, cardCode } from "@/lib/card";
-import { FRESH_MS, LATEST, clearLatest, forgetReading, isFresh, latestCode, loadReading, markFresh, saveReading, type Reading } from "@/lib/readings";
+import { FRESH_MS, LATEST, clearLatest, forgetReading, isFresh, latestCode, loadLatest, loadReading, markFresh, saveReading, type Reading } from "@/lib/readings";
+import { PERSONAS, personaRequest } from "@/lib/personas";
 import type { BrandMatch, QEntity, StyleResult } from "@/lib/types";
 
 // A Map-backed localStorage with a size cap, so the "store is full" path runs too.
@@ -53,6 +54,21 @@ describe("readings filed by card code", () => {
   beforeEach(() => {
     store.m.clear();
     store.cap = Infinity;
+  });
+
+  it("files a borrowed persona card but never makes it your latest sign", () => {
+    const mine = reading("Mine");
+    saveReading(mine, { latest: true });
+    const borrowed: Reading = { ...reading("Persona"), req: personaRequest(PERSONAS[0]) };
+    saveReading(borrowed, { latest: true });
+    expect(latestCode()).toBe(code(mine));
+    expect(loadReading(code(borrowed))?.result?.runId).toBe("Persona");
+  });
+
+  it("drops a persona saved as the latest by an older version", () => {
+    store.setItem(LATEST, JSON.stringify({ ...reading("Persona"), req: personaRequest(PERSONAS[0]) }));
+    expect(loadLatest()).toBeNull();
+    expect(store.getItem(LATEST)).toBeNull();
   });
 
   it("finds an older card's reading after a newer one became the latest", () => {

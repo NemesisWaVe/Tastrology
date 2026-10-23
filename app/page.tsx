@@ -10,6 +10,7 @@ import { Landing } from "@/components/landing/Landing";
 import { OwnedReading } from "@/components/results/OwnedReading";
 import { Reveal } from "@/components/reveal/Reveal";
 import { takePendingRun } from "@/lib/authBridge";
+import { isPersonaRequest } from "@/lib/personas";
 import { clearLatest, codeOf, forgetReading, isFresh, latestCode, loadLatest, loadReading, markFresh, saveReading, type Reading } from "@/lib/readings";
 import { TWIN_CODE } from "@/lib/twins";
 import type { AgentRequest, StyleResult } from "@/lib/types";
@@ -195,7 +196,7 @@ export default function Home() {
     const reading: Reading = { req, result, votes: {}, pinned: [] };
     const minted = saveReading(reading, { latest: true });
     if (minted && result.mode !== "mock") markFresh(minted);
-    try { localStorage.setItem("tastrology:first-card", "1"); } catch {}
+    if (!isPersonaRequest(req)) try { localStorage.setItem("tastrology:first-card", "1"); } catch {}
     window.dispatchEvent(new Event("tastrology:minted"));
     if (result.mode === "live" && !result.cached) recordScanMint();
     if (result.mode === "live") void befriendInviter();

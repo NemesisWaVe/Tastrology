@@ -1,4 +1,5 @@
 import { buildCard, cardCode } from "./card";
+import { isPersonaRequest } from "./personas";
 import { isSavedResult, slim, trimResult } from "./saved";
 import type { AgentRequest, BrandMatch, StyleResult } from "./types";
 
@@ -68,11 +69,14 @@ export function codeOf(result: StyleResult | undefined | null): string | null {
   }
 }
 
-/** The latest reading on this device, or null. A broken one is removed. */
+/** The latest reading on this device, or null. A broken one is removed, and so is a borrowed persona (not yours). */
 export function loadLatest(): Reading | null {
   const raw = read(LATEST);
   const r = parse(raw);
-  if (raw && !r) drop(LATEST);
+  if (raw && (!r || isPersonaRequest(r.req))) {
+    drop(LATEST);
+    return null;
+  }
   return r;
 }
 
@@ -141,7 +145,8 @@ export function saveReading(r: Reading, { latest }: { latest: boolean }): string
   const code = codeOf(r.result);
   if (!code) return null;
   file(code, r);
-  if (latest)
+  // A borrowed persona card is filed (its /c page works) but never becomes "your sign".
+  if (latest && !isPersonaRequest(r.req))
     try {
       localStorage.setItem(LATEST, JSON.stringify(slimmed(r)));
     } catch {}
