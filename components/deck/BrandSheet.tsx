@@ -603,7 +603,8 @@ export function BrandSheet({
                               onCleared={() => {
                                 if (!chain.current.on) return;
                                 chain.current.sent.add(b.id);
-                                setTimeout(nextInChain, 220);
+                                // a beat to read the brand that just came out before the next one starts
+                                setTimeout(nextInChain, 900);
                               }}
                               onDone={() => scratched(b)}
                             />

@@ -30,6 +30,9 @@ function iosSwitch(): HTMLLabelElement | null {
     probe.setAttribute("aria-hidden", "true");
     const label = document.createElement("label");
     label.setAttribute("aria-hidden", "true");
+    // The tick is a click: keep it from the page (the click pop, link and tap handlers would all run on every buzz).
+    label.dataset.nopop = "";
+    label.addEventListener("click", (e) => e.stopPropagation());
     label.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
     label.appendChild(probe);
     document.body.appendChild(label);

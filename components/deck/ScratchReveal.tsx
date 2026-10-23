@@ -98,6 +98,7 @@ export function ScratchReveal({
     taps: 0,
     tip: [] as { x: number; y: number }[],
     marks: 0,
+    step: 0,
     t: 0,
   });
 
@@ -229,7 +230,12 @@ export function ScratchReveal({
       sfx("ripple", { i: 3, gain: 0.5 });
       buzz(8);
     }
-    setCover(total);
+    // The hint only changes at 0, any and 25%: re-render then, not on every stroke.
+    const step = total >= 0.25 ? 2 : total > 0 ? 1 : 0;
+    if (step !== s.step) {
+      s.step = step;
+      setCover(total);
+    }
     if (s.cov.done(threshold)) finish();
   };
 
@@ -404,10 +410,11 @@ export function ScratchReveal({
     firstRun.current = autoRun;
   }, [autoRun]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // a chained unsealing runs about twice as fast, so a star's four brands open in a few seconds
+  // A chained unsealing runs at the same watchable pace as a single one: you should see each brand come out from
+  // under the foil. A tap hurries it.
   const firstCascade = useRef(cascade);
   useEffect(() => {
-    if (cascade && cascade !== firstCascade.current && st.current.mode === "idle") runAuto(2.2);
+    if (cascade && cascade !== firstCascade.current && st.current.mode === "idle") runAuto(1);
     firstCascade.current = cascade;
   }, [cascade]); // eslint-disable-line react-hooks/exhaustive-deps
 
