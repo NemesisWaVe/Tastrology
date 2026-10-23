@@ -10,6 +10,7 @@ import { createMirror, SKY_AR, type Mirror, type SkyView, type Touch } from "./m
 import { PERSONAS } from "@/lib/personas";
 import { buildWord, CARD_AR, drawDrops, drawStars, type Rect, type Word } from "./stars";
 import s from "./intro.module.css";
+import { BRAND } from "@/lib/brand";
 
 const KEY = "tastrology:intro";
 const CAPTIONS = ["everything you love leaves a ripple", "the sky has been keeping track", "…and it writes you a sign"];
@@ -539,6 +540,8 @@ export function Intro({ onActive }: { onActive?: (active: boolean) => void }) {
         <p className={s.credit}>sky: ESO/S. Brunier</p>
         {gate !== "hidden" && (
           <div className={`${s.gate} ${gate === "closing" ? s.gateOut : ""}`}>
+            {/* the first screen a new visitor sees: say what this is before the art plays */}
+            <p className={s.gatePromise}>{BRAND.promise}</p>
             <p className={s.gateKicker}>best with sound</p>
             <div className={s.gateRow}>
               <button type="button" className={s.gateMain} onClick={() => choose(true)}>

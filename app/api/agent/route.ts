@@ -259,6 +259,7 @@ export async function POST(request: Request) {
   const key = cacheKey(body);
   const fallbackKey = cacheKey(body, "*");
   const persona = isPersonaRequest(body);
+  if (persona && process.env.QLOO_MODE !== "mock") later(countEvent("persona"));
   const userId = clerkOn() ? await currentUserId() : null;
   const cookies: string[] = [];
   let guest: string | undefined;

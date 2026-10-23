@@ -1,6 +1,6 @@
 "use client";
 
-export function track(event: "landed" | "shared" | "scanned" | "scan_minted", once = false) {
+export function track(event: "landed" | "picker" | "picked" | "shared" | "scanned" | "scan_minted", once = false) {
   try {
     if (navigator.doNotTrack === "1" || (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl) return;
     const key = `tastrology:event:${event}:${new Date().toISOString().slice(0, 10)}`;

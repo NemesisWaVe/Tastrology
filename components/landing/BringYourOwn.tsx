@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { KIND_ICON, KIND_LABEL, SeedPicker, type Seed } from "@/components/SeedPicker";
 import { ROLL_ODDS } from "@/lib/odds";
 import { loadDraft, saveDraft } from "@/lib/authBridge";
+import { track } from "@/lib/telemetry";
 import type { AgentRequest } from "@/lib/types";
 import { EASE, Eyebrow, Magnetic, MaskedWords, Reveal } from "./primitives";
 import s from "./landing.module.css";
@@ -27,12 +28,14 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   const [tune, setTune] = useState(false);
   // Typed picks survive a sign-up, a reload or a closed tab: restored once, then saved on every change.
   const restored = useRef(false);
+  const hadSeeds = useRef<boolean | null>(null); // null until the draft is restored
   useEffect(() => {
     const d = loadDraft<{ seeds?: Seed[]; budget?: 1 | 2 | 3; goal?: string }>();
     if (d?.seeds?.length) setSeeds(d.seeds);
     if (d?.budget) setBudget(d.budget);
     if (d?.goal) setGoal(d.goal);
     if (d?.budget || d?.goal) setTune(true);
+    hadSeeds.current = Boolean(d?.seeds?.length);
     restored.current = true;
   }, []);
   useEffect(() => {
@@ -46,6 +49,16 @@ export function BringYourOwn({ onStart }: { onStart: (req: AgentRequest) => void
   // the card lights up while it's on screen: this is the one place a skimmer should land
   const stage = useRef<HTMLDivElement>(null);
   const seen = useInView(stage, { amount: 0.35 });
+  // funnel: the picker was seen, then a first love typed in (a restored draft doesn't count)
+  useEffect(() => {
+    if (seen) track("picker", true);
+  }, [seen]);
+  useEffect(() => {
+    if (hadSeeds.current === false && seeds.length > 0) {
+      hadSeeds.current = true;
+      track("picked", true);
+    }
+  }, [seeds]);
 
   const go = () => {
     if (!ready) return;

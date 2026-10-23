@@ -1,8 +1,10 @@
 import { upstash, upstashConfigured } from "./cache";
 
-export const FUNNEL_EVENTS = ["landed", "started", "minted", "shared", "scanned", "scan_minted", "friend_added"] as const;
+// picker/picked/persona: where a landing visitor stops before a reading (the picker came into view, a first love was
+// added, a demo persona was opened instead)
+export const FUNNEL_EVENTS = ["landed", "picker", "picked", "persona", "started", "minted", "shared", "scanned", "scan_minted", "friend_added"] as const;
 export type FunnelEvent = typeof FUNNEL_EVENTS[number];
-export const CLIENT_EVENTS: readonly string[] = ["landed", "shared", "scanned", "scan_minted"];
+export const CLIENT_EVENTS: readonly string[] = ["landed", "picker", "picked", "shared", "scanned", "scan_minted"];
 export const dayKey = (date = new Date()) => `tm:funnel:${date.toISOString().slice(0, 10)}`;
 
 export async function countEvent(event: FunnelEvent) {

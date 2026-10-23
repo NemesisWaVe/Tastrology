@@ -217,6 +217,7 @@ export function ResultsView({
               </button>
               <BattleLink />
             </div>
+            {!fight && <p className="mt-2.5 text-[13px] text-ink-3">Send it to one friend: they mint theirs in a minute, and you both see how close your taste is.</p>}
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2">
               <button type="button" onClick={() => setShowBack((b) => !b)} aria-pressed={showBack} className="underline-offset-4 hover:text-ink hover:underline">
                 {showBack ? "Front ⟲" : "Flip ⟲"}
