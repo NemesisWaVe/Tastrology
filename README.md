@@ -16,9 +16,7 @@
 
 <br /><br />
 
-<a href="https://tastrology.vercel.app"><img src="docs/readme/banner.webp" alt="The Tastrology intro: the name drawn as a constellation inside a holographic card frame, over the Milky Way" width="100%" /></a>
-
-<sub>The opening of the live site: your name in the stars, before the card is minted.</sub>
+<a href="https://tastrology.vercel.app"><img src="docs/readme/01-cover.webp" alt="Tastrology: Astrology, but with receipts. A holo rare card next to a reading of its Big Three" width="100%" /></a>
 
 <br /><br />
 
@@ -28,7 +26,7 @@
 ![Qloo](https://img.shields.io/badge/Taste_graph-Qloo-c6ff3d)
 ![Amazon Bedrock](https://img.shields.io/badge/LLM-Amazon_Bedrock-FF9900?logo=amazonaws)
 ![DynamoDB](https://img.shields.io/badge/DynamoDB-no_SDK-4053D6?logo=amazondynamodb&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-187_passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-271_passing-2ea44f)
 ![Budget](https://img.shields.io/badge/budget-%240-c6ff3d)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
@@ -51,6 +49,26 @@ AI loves to make stuff up. This one can't. Every reading ends with:
 There's also a panel that asks a plain LLM the same question with no Qloo, so you can see the difference for yourself.
 
 Then you share the card, scan a friend's, and fight. Your first reading doesn't even need an account.
+
+## A look inside
+
+<table>
+<tr>
+<td width="50%"><img src="docs/readme/02-agent.webp" alt="The agent calling Qloo live, every step on screen" /><br /><sub><b>Watch it think.</b> Every Qloo call streams onto the screen as it happens.</sub></td>
+<td width="50%"><img src="docs/readme/03-receipts.webp" alt="A thermal receipt with voided matches and a total taste score" /><br /><sub><b>Every star has a receipt.</b> Matches carried by one love get voided.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/readme/04-without-qloo.webp" alt="A plain LLM's guess next to the Qloo-grounded reading" /><br /><sub><b>With and without Qloo.</b> The same question to a plain LLM, side by side.</sub></td>
+<td><img src="docs/readme/05-card.webp" alt="A holographic taste card coming out of a pack" /><br /><sub><b>A card that's yours.</b> Tear the pack, tilt the holo, flip it over.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/readme/06-battle.webp" alt="Two taste cards fighting over rounds of Qloo data" /><br /><sub><b>Are we taste twins?</b> Send your card, then let your skies fight.</sub></td>
+<td><img src="docs/readme/07-weekly.webp" alt="This week's reading for each of the twelve signs" /><br /><sub><b>A reason to come back.</b> Each sign gets a new reading every Monday.</sub></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/readme/08-hall.webp" alt="The Hall of rare pulls" /><br /><sub><b>The Hall.</b> Real rare pulls, with odds published before you open a pack.</sub></td>
+</tr>
+</table>
 
 ## What you get
 
@@ -160,7 +178,7 @@ A few pieces I'm proud of:
 
 ## The story
 
-I built this alone in five days, from `create-next-app` to a live site, with a budget of zero. Before writing any code I wrote one rule down: every star comes from Qloo, in that run, and the app has to prove it.
+I built this alone in fifteen days, from `create-next-app` to a live site, with a budget of zero. Before writing any code I wrote one rule down: every star comes from Qloo, in that run, and the app has to prove it.
 
 That budget shaped everything. No paid model, so the planner had to survive free-tier rate limits: when the LLM gets throttled mid-run, a circuit breaker pauses it and the deterministic autopilot quietly finishes the reading. No paid database, so every read and write had to be counted; the friends page is three reads and live updates are one tiny counter. No paid domain, so Clerk stays on a development instance, its badge hidden, with inactive accounts pruned by hand to stay under the cap.
 
@@ -194,10 +212,10 @@ Collectible, gamified, social: that's three ways to get into trouble. So the bor
 
 | | |
 |---|---|
-| Built in | 5 days, solo |
-| Commits | 190 |
-| Lines of TypeScript | about 35,000 |
-| Tests | 187, across 32 files |
+| Built in | 15 days, solo |
+| Commits | almost 300 |
+| Lines of TypeScript | about 41,000 |
+| Tests | 271 |
 | AWS SDKs | 0 |
 | Audio files | 0 |
 | Budget | $0 |
@@ -241,6 +259,10 @@ To go live, fill in `.env.local` (`.env.example` documents the Qloo, LLM, cache 
 ## Stack
 
 Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Motion · Lenis · Clerk · Amazon Bedrock · Qloo · DynamoDB · S3 · Upstash Redis · Vercel · Vitest
+
+## Made by
+
+**Akshat Bijalwan** ([@NemesisWaVe](https://github.com/NemesisWaVe)), solo: idea, design, code and every sound.
 
 ## License
 
