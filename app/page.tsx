@@ -275,11 +275,15 @@ export default function Home() {
       <>
         <Landing onStart={start} />
         {saved?.result && (
+          // A small corner chip, not a bar over the page: the name shows only where there's room for it.
           <button
             onClick={resume}
-            className="rise fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-line bg-paper/90 px-5 py-2.5 text-sm font-medium text-ink shadow-2xl backdrop-blur-md hover:border-ink-3"
+            aria-label={`Back to your sign: ${saved.result.dna.name}`}
+            className="rise fixed bottom-3 right-3 z-50 flex max-w-[60vw] items-center gap-1.5 rounded-full border border-line bg-paper/80 px-3 py-1.5 text-xs font-medium text-ink-2 backdrop-blur-md hover:border-ink-3 hover:text-ink sm:bottom-4 sm:right-4"
           >
-            Back to your sign: {saved.result.dna.name} &rarr;
+            <span className="shrink-0">Your sign</span>
+            <span className="hidden truncate text-ink-3 sm:inline">· {saved.result.dna.name}</span>
+            <span aria-hidden>&rarr;</span>
           </button>
         )}
       </>

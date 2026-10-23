@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { ClerkBridge } from "@/components/auth/ClerkBridge";
+import { MotionAsk } from "@/components/site/MotionAsk";
 import { SoundOrb } from "@/components/site/SoundOrb";
 import { BRAND } from "@/lib/brand";
 import { Telemetry } from "@/components/site/Telemetry";
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <body className={fonts}>
           {children}
           <Telemetry />
+          <MotionAsk />
           <SoundOrb onlyWhenLocked />
         </body>
       </html>
@@ -42,6 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <body className={fonts}>
           {children}
           <Telemetry />
+          <MotionAsk />
           <SoundOrb onlyWhenLocked />
           <ClerkBridge />
         </body>
