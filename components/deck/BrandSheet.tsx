@@ -15,6 +15,7 @@ import type { Drift } from "@/lib/drift";
 import type { Snap, SnapBrand } from "@/lib/receipt";
 import { sfx } from "@/lib/sound";
 import type { StyleResult } from "@/lib/types";
+import { maskRude } from "@/lib/guard";
 
 type Reply = {
   status: "fresh" | "lite" | "faded" | "burned" | "error";
@@ -114,7 +115,7 @@ function BrandRow({
       <Thumb src={img(b.image)} name={b.name} size={44} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
-          <span className="font-display text-lg font-semibold">{b.name}</span>
+          <span className="font-display text-lg font-semibold">{maskRude(b.name)}</span>
           <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3">
             {b.category}
           </span>
@@ -650,7 +651,7 @@ export function BrandSheet({
                                     size={32}
                                   />
                                   <span className="min-w-0 truncate text-sm font-semibold">
-                                    {b.name}
+                                    {maskRude(b.name)}
                                   </span>
                                 </a>
                               </li>
@@ -663,7 +664,7 @@ export function BrandSheet({
                           {visitor ? "Left its orbit" : "Left your orbit"}:{" "}
                           {r.drift.left
                             .slice(0, 3)
-                            .map((b) => b.name)
+                            .map((b) => maskRude(b.name))
                             .join(", ")}
                           .
                         </p>

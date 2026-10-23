@@ -10,6 +10,7 @@ import type { Economy } from "@/lib/economy";
 import type { Snap } from "@/lib/receipt";
 import { sfx } from "@/lib/sound";
 import { MarketHead, walletChanged } from "./Market";
+import { maskRude } from "@/lib/guard";
 
 interface Lens {
   id: string;
@@ -233,7 +234,7 @@ export function Atelier() {
                     return (
                       <li key={b.id} className="flex items-center gap-4 py-3">
                         <span className="w-10 shrink-0 font-mono text-sm tabular-nums text-accent">{Math.round(b.affinity * 100)}</span>
-                        <span className="min-w-0 flex-1 truncate font-display text-[15px] font-semibold">{b.name}</span>
+                        <span className="min-w-0 flex-1 truncate font-display text-[15px] font-semibold">{maskRude(b.name)}</span>
                         <a
                           href={link.href}
                           target="_blank"

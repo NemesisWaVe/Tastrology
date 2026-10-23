@@ -5,6 +5,7 @@ import { HoloCard } from "@/components/card/HoloCard";
 import type { BattleResult } from "@/lib/battle";
 import { BRAND } from "@/lib/brand";
 import { rng } from "@/components/reveal/skyFigures";
+import { maskRude } from "@/lib/guard";
 
 /** 9:16 fight image (360x640, exported at 3x). Both card fronts, score, the roast from the biggest-margin round, joint sign, crossover. */
 export const FightShare = forwardRef<HTMLDivElement, { res: BattleResult }>(function FightShare({ res }, ref) {
@@ -41,7 +42,7 @@ export const FightShare = forwardRef<HTMLDivElement, { res: BattleResult }>(func
       <div style={{ marginTop: "auto", width: "100%", border: "1px solid rgba(255,255,255,.14)", borderRadius: 16, padding: "12px 14px", textAlign: "center" }}>
         <p className="font-mono" style={{ fontSize: 9.5, letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.55 }}>Joint sign · {res.compatibility}% compatible</p>
         <p className="font-display" style={{ fontSize: 22, fontWeight: 700, marginTop: 2 }}>{res.jointSign.name}</p>
-        {x && <p style={{ fontSize: 12.5, marginTop: 6, opacity: 0.8 }}>Crossover brand: <b style={{ color: "#c6ff3d" }}>{x.brand.name}</b></p>}
+        {x && <p style={{ fontSize: 12.5, marginTop: 6, opacity: 0.8 }}>Crossover brand: <b style={{ color: "#c6ff3d" }}>{maskRude(x.brand.name)}</b></p>}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import type { BrandMatch, StyleResult } from "./types";
 import { SIGNS } from "./signs";
+import { maskRude } from "./guard";
 
 /**
  * Turns an agent result into a collectible card. Every number on the card is derived from
@@ -317,8 +318,9 @@ export function ablationLines(b: BrandMatch, seeds: { id: string; name: string }
 }
 const clampStat = (v: number) => Math.round(Math.max(5, Math.min(99, v)));
 
-/** "Neuromancer (Sprawl, #1)" → "Neuromancer". Strips trailing (…) / […] groups, keeps the rest intact. */
+/** "Neuromancer (Sprawl, #1)" → "Neuromancer", swear words starred (maskRude). Strips trailing (…) / […] groups, keeps the rest intact. */
 export function displayName(name: string): string {
+  name = maskRude(name);
   // Qloo omnibus editions ("Ikigai: ... / The Little Book of Lykke / Lagom…"): keep the first title.
   let out = name.split(" / ")[0].trim();
   for (let k = 0; k < 3; k++) {

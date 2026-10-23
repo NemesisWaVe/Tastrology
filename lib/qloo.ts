@@ -4,6 +4,7 @@ import { kvCache, sharedCache, MAX_TTL_MS } from "./cache";
 import { mockQloo } from "./mock/server";
 import { bumpDaily } from "./ratelimit";
 import type { Audience, EntityKind, InsightsParams, QEntity, QlooCallLog, QTag } from "./types";
+import { maskRude } from "./guard";
 
 export const qlooMode = (): "live" | "mock" =>
   process.env.QLOO_MODE === "live" && process.env.QLOO_API_KEY ? "live" : "mock";
@@ -326,7 +327,8 @@ export async function insights(p: InsightsParams, log?: QlooCallLog[]): Promise<
       affinity: Number(((t.query ?? {}) as Record<string, unknown>).affinity ?? 0) || undefined,
     }));
   }
-  const out = list.map(normEntity);
+  // what Qloo recommends keeps its place, with any swear word starred (lib/guard maskRude)
+  const out = list.map(normEntity).map((e) => ({ ...e, name: maskRude(e.name) }));
   return p.type === "brand" ? out.filter((e) => fitsAudience(e, p.audience)) : out;
 }
 

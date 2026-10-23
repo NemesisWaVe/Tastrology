@@ -6,6 +6,7 @@ import { ablationLines, displayName } from "@/lib/card";
 import type { BrandMatch, QEntity } from "@/lib/types";
 import { Thumb, cleanStyle, type Vote } from "./ui";
 import bs from "./brands.module.css";
+import { maskRude } from "@/lib/guard";
 
 /**
  * A brand as a specimen plate: catalogue number, an ink-stamped logo, Qloo's own description, and a small star chart
@@ -80,7 +81,7 @@ export function BrandCard({
       <div className={`relative mt-4 flex gap-4 ${hero ? "sm:items-center sm:gap-7" : "items-start"}`}>
         <Stamp image={e.image} name={e.name} size={hero ? 92 : 64} />
         <div className="min-w-0 flex-1">
-          <h3 className={`font-serif leading-[1] tracking-[-0.01em] ${hero ? "text-[34px] sm:text-[48px]" : "text-[27px]"}`}>{e.name}</h3>
+          <h3 className={`font-serif leading-[1] tracking-[-0.01em] ${hero ? "text-[34px] sm:text-[48px]" : "text-[27px]"}`}>{maskRude(e.name)}</h3>
           {e.founded && <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-ink-3">Est. {e.founded}</p>}
           {(e.subtitle || b.why) && (
             <p className={`mt-2 font-serif italic leading-snug text-ink-2 ${hero ? "text-[17px] sm:text-[19px]" : "line-clamp-3 text-[15px]"}`}>{e.subtitle || b.why}</p>

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { upstash } from "@/lib/cache";
 import { getReceipt, snapOf } from "@/lib/receipt";
 import { getTwinStatus, TWIN_CODE } from "@/lib/twins";
+import { maskRude } from "@/lib/guard";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
     } catch {}
   }
   if (!names.length) names = (snap?.brands ?? []).map((b) => b.name);
-  names = names.slice(0, 3);
+  names = names.slice(0, 3).map((n) => maskRude(n));
   const svg = readFileSync(join(process.cwd(), "app/icon.svg"), "utf8").replace(/@media[^}]*\}\}/, "");
   const logo = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
   const glow = GLOW[card.rarity];

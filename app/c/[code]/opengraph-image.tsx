@@ -6,6 +6,7 @@ import { cardNo, type CardData } from "@/lib/card";
 import { getStyle } from "@/lib/cardStyle";
 import { getTwinStatus, TWIN_CODE } from "@/lib/twins";
 import { isAllowedImageUrl } from "@/app/api/img/allow";
+import { maskRude } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const size = { width: 1200, height: 630 };
@@ -196,7 +197,7 @@ export default async function Image({ params }: { params: Promise<{ code: string
                 <div key={m.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 2px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontFamily: mono, fontSize: 11, color: a }}>0{i + 1}</span>
-                    <span style={{ fontSize: 17, fontWeight: 600 }}>{m.name}</span>
+                    <span style={{ fontSize: 17, fontWeight: 600 }}>{maskRude(m.name)}</span>
                   </div>
                   <span style={{ fontSize: 18, fontWeight: 700 }}>{Math.round(m.value)}</span>
                 </div>

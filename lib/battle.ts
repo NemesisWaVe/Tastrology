@@ -1,5 +1,6 @@
 import { buildCard, type CardData } from "./card";
 import type { QEntity, StyleResult } from "./types";
+import { maskRude } from "./guard";
 
 /**
  * Taste Battle: two results face off. Pure and deterministic (no network, no randomness) so it is
@@ -168,7 +169,7 @@ function roastFor(stat: StatName, loser: StyleResult, winner: StyleResult, lc: C
     case "Edge": {
       const m = mainstreamBrand(loser);
       if (m && m.pop >= 0.6)
-        return { roast: `${m.name} sits at ${Math.round(m.pop * 100)}% popularity. Bold of ${who} to call that a find.`, receipt: `Qloo popularity of ${m.name}` };
+        return { roast: `${maskRude(m.name)} sits at ${Math.round(m.pop * 100)}% popularity. Bold of ${who} to call that a find.`, receipt: `Qloo popularity of ${maskRude(m.name)}` };
       return { roast: `${who}'s brands are tasteful, in the way a hotel lobby is tasteful.`, receipt: `avg brand popularity, edge ${lc.stats[1].value} vs ${wc.stats[1].value}` };
     }
     case "Cohesion": {

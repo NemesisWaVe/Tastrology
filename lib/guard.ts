@@ -118,5 +118,21 @@ export function nearest(text: string): string[] {
 /** A help line that works in any country (a directory of free, confidential lines). */
 export const HELP_LINE = { label: "Find a helpline near you", href: "https://findahelpline.com" };
 
+/**
+ * Swear words inside a real name, starred for display: "FUCKTHEPOPULATION" → "F*CKTHEPOPULATION". Qloo's brands keep
+ * their place on a card (the taste is real); only the word is softened. One vowel per word, case kept.
+ */
+const RUDE = /fuck|shit|cunt|bitch|slut|whore|wank|twat|nigg|faggot|retard|cuck/gi;
+export function maskRude(name: string): string;
+export function maskRude(name: string | undefined): string | undefined;
+export function maskRude(name: string | undefined): string | undefined {
+  if (!name) return name;
+  return name.replace(/[\p{L}\p{N}]+/gu, (word) => {
+    const low = word.toLowerCase();
+    if (SAFE_INSIDE.some((a) => low.includes(a))) return word;
+    return word.replace(RUDE, (m) => m.replace(/[aeiou]/i, "*"));
+  });
+}
+
 /** Drops results whose name (or id, for tags) trips the guard. */
 export const clean = <T extends { name: string; id?: string }>(xs: T[]): T[] => xs.filter((x) => !blocked(x.name) && !blocked(x.id));

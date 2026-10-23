@@ -5,6 +5,7 @@ import type { BattleResult } from "@/lib/battle";
 import { BRAND } from "@/lib/brand";
 import { proxied, typeOf } from "@/lib/card";
 import { glyph } from "@/components/card/HoloCard";
+import { maskRude } from "@/lib/guard";
 
 /** Works for hex and hsl() type colours alike. */
 const mix = (c: string, pct: number) => `color-mix(in srgb, ${c} ${pct}%, transparent)`;
@@ -67,7 +68,7 @@ export const ResultPanel = forwardRef<HTMLDivElement, { res: BattleResult }>(fun
             </div>
             <div className="min-w-0">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">{x.shared ? "Crossover brand · on both lists" : "Crossover brand"}</p>
-              <p className="truncate font-display text-[20px] font-bold leading-tight text-ink">{x.brand.name}</p>
+              <p className="truncate font-display text-[20px] font-bold leading-tight text-ink">{maskRude(x.brand.name)}</p>
               <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{x.reason}</p>
             </div>
           </div>

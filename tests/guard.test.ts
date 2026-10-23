@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { blocked, care, clean, nearest } from "@/lib/guard";
+import { blocked, care, clean, maskRude, nearest } from "@/lib/guard";
+import { displayName } from "@/lib/card";
 
 describe("content guard", () => {
   it("blocks explicit and hateful terms, with simple disguises", () => {
@@ -24,5 +25,16 @@ describe("content guard", () => {
     expect(nearest("hentai")).toEqual(["Anime", "Manga", "Seinen"]);
     expect(nearest("loli")).toEqual([]);
     expect(nearest("porn").length).toBeGreaterThan(0);
+  });
+
+  it("stars swear words inside real names, keeping the name and its case", () => {
+    expect(maskRude("FUCKTHEPOPULATION")).toBe("F*CKTHEPOPULATION");
+    expect(maskRude("Shit Happens Co.")).toBe("Sh*t Happens Co.");
+    expect(maskRude("Bad Bitch Club")).toBe("Bad B*tch Club");
+    expect(maskRude("Supreme")).toBe("Supreme");
+    expect(maskRude("Scunthorpe United")).toBe("Scunthorpe United");
+    expect(maskRude("Swank Studio")).toBe("Swank Studio");
+    expect(maskRude(undefined)).toBeUndefined();
+    expect(displayName("Fuck Buttons (band)")).toBe("F*ck Buttons");
   });
 });

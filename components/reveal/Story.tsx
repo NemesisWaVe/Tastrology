@@ -8,6 +8,7 @@ import type { StyleResult } from "@/lib/types";
 import { Sky } from "./Sky";
 import { KIND_LABEL, overlapFigures, skyState } from "./traceModel";
 import s from "./reveal.module.css";
+import { maskRude } from "@/lib/guard";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
 
@@ -554,7 +555,7 @@ function buildBeats(r: StyleResult, card: CardData): Beat[] {
               {...rise(reduce, 1.15 + k * 0.12, 10)}
               className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[14px] font-medium backdrop-blur"
             >
-              {b.entity.name}
+              {maskRude(b.entity.name)}
               <span className="ml-1.5 font-mono text-[10px] text-ink-3">{b.affinity.toFixed(3)}</span>
             </motion.span>
           ))}

@@ -8,6 +8,7 @@ import { KindSigil, Sigil, Sparkle, TypeSigil } from "./Sigils";
 import { qr, qrPath } from "./qr";
 import s from "./holo.module.css";
 import { tiltReader } from "@/lib/tilt";
+import { maskRude } from "@/lib/guard";
 
 export interface HoloCardHandle {
   /** Freeze the card flat with a static (blend-mode free) foil, for PNG export. */
@@ -266,7 +267,7 @@ function CardFace({ card, copy = false }: { card: CardData; copy?: boolean }) {
           <li key={m.name} className={s.pr} style={pd(3 + i)}>
             <span className={s.moveIdx}>{String(i + 1).padStart(2, "0")}</span>
             <span className={s.moveName}>
-              {m.name}
+              {maskRude(m.name)}
               {/* the "via" line prints once: rows that share it would just repeat it */}
               {m.note && m.note !== card.moves[i - 1]?.note && <small>via {m.note}</small>}
             </span>
