@@ -199,12 +199,8 @@ export function streakStep(now = Date.now()): number {
   return streak.n;
 }
 
-/** A tiny buzz on phones that have it. */
-export function buzz(p: number | number[]) {
-  try {
-    navigator.vibrate?.(p);
-  } catch {}
-}
+/** A tiny buzz on phones (Android vibrate, iPhone's switch tick). */
+export { buzz } from "./haptics";
 
 const BASE: Record<Material, string[]> = {
   silver: ["#8d9099", "#d9dce3", "#9a9ea8", "#e7e9ee", "#7f838c"],

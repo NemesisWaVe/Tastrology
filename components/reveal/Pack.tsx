@@ -13,6 +13,8 @@ import { figureFor, rng } from "./skyFigures";
 import { Sky } from "./Sky";
 import { skyState } from "./traceModel";
 import s from "./reveal.module.css";
+import { buzz } from "@/lib/haptics";
+import { tiltReader } from "@/lib/tilt";
 
 const EASE = [0.2, 0.7, 0.2, 1] as const;
 
@@ -107,7 +109,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
     sfx("tear");
     animate(fl, 1, { type: "spring", stiffness: 700, damping: 28 });
     await sleep(120);
-    navigator.vibrate?.([34, 18, 70]);
+    buzz([34, 18, 70]);
     // a small recoil along the tear direction as the foil gives (no screen shake)
     shake.set({ x: 4, y: 0, rotate: 0 });
     shake.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 300, damping: 26 } });
@@ -161,7 +163,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
     const bucket = Math.floor(t * 5);
     if (bucket > d.tick) {
       d.tick = bucket;
-      navigator.vibrate?.(5 + bucket * 2);
+      buzz(5 + bucket * 2);
       sfx("tick", { gain: 0.5 + bucket * 0.15 }); // the foil creaks as it gives
     }
     if (raw >= 1) {
@@ -191,7 +193,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
     sfx("whoosh");
     pull.current = null;
     setPulling(false);
-    navigator.vibrate?.([10, 30, 18]);
+    buzz([10, 30, 18]);
     setStage("facedown");
     if (reduce) cardY.set(0);
     else animate(cardY, 0, { type: "spring", stiffness: 170, damping: 16, velocity: -900 });
@@ -237,7 +239,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
     const b = Math.floor((r / PULL) * 4);
     if (b > pl.tick) {
       pl.tick = b;
-      navigator.vibrate?.(6);
+      buzz(6);
     }
     if (r >= PULL) takeCard();
   };
@@ -279,7 +281,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
     }
     // Posters spiral into the card, then the flip lands with a burst.
     c.collapse = 0;
-    navigator.vibrate?.(card.rarity === "secret" || card.rarity === "holo" ? [12, 40, 24] : 14);
+    buzz(card.rarity === "secret" || card.rarity === "holo" ? [12, 40, 24] : 14);
     await new Promise((res) => setTimeout(res, 260));
     if (card.rarity === "secret") {
       setCrack(true);
@@ -335,7 +337,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
         c.tick += dt;
         if (c.tick > 150 - v * 90) {
           c.tick = 0;
-          navigator.vibrate?.(8);
+          buzz(8);
         }
         if (v > 0.5 && !hotRef.current) {
           hotRef.current = true;
@@ -816,7 +818,11 @@ function PackArt({ w, h, tearY }: { w: number; h: number; tearY: number }) {
     const node = el.current;
     if (!node) return;
     const onMove = (e: PointerEvent) => node.style.setProperty("--hx", (e.clientX / window.innerWidth).toFixed(3));
-    const onTilt = (e: DeviceOrientationEvent) => e.gamma != null && node.style.setProperty("--hx", (0.5 + Math.max(-0.5, Math.min(0.5, e.gamma / 50))).toFixed(3));
+    const readTilt = tiltReader();
+    const onTilt = (e: DeviceOrientationEvent) => {
+      const t = readTilt(e);
+      if (t) node.style.setProperty("--hx", (0.5 + t.x / 2).toFixed(3));
+    };
     window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("deviceorientation", onTilt, { passive: true });
     return () => {

@@ -7,6 +7,7 @@ import { BRAND } from "@/lib/brand";
 import { KindSigil, Sigil, Sparkle, TypeSigil } from "./Sigils";
 import { qr, qrPath } from "./qr";
 import s from "./holo.module.css";
+import { tiltReader } from "@/lib/tilt";
 
 export interface HoloCardHandle {
   /** Freeze the card flat with a static (blend-mode free) foil, for PNG export. */
@@ -128,8 +129,10 @@ export const HoloCard = forwardRef<
             st.tx = 0;
             st.ty = 0;
           }
-          st.x += (st.tx - st.x) * 0.09;
-          st.y += (st.ty - st.y) * 0.09;
+          // Phones step at half rate, so they ease twice as far per step to feel as quick.
+          const ease = coarse ? 0.17 : 0.09;
+          st.x += (st.tx - st.x) * ease;
+          st.y += (st.ty - st.y) * ease;
           const mx = 50 + st.x * 50;
           const my = 50 + st.y * 50;
           put("--rx", `${(-st.y * 14).toFixed(dp + 1)}deg`);
@@ -151,11 +154,13 @@ export const HoloCard = forwardRef<
         state.current.ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1));
       };
       const leave = () => (state.current.active = false);
+      const readTilt = tiltReader();
       const orient = (e: DeviceOrientationEvent) => {
-        if (e.gamma == null || e.beta == null) return;
+        const t = readTilt(e);
+        if (!t) return;
         state.current.active = true;
-        state.current.tx = Math.max(-1, Math.min(1, e.gamma / 30));
-        state.current.ty = Math.max(-1, Math.min(1, (e.beta - 45) / 30));
+        state.current.tx = t.x;
+        state.current.ty = t.y;
       };
       el.addEventListener("pointermove", move);
       el.addEventListener("pointerleave", leave);

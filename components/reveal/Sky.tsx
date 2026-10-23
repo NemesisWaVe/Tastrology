@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { displayName } from "@/lib/card";
 import { figureFor, rng, TAU, type FigureShape } from "./skyFigures";
 import { KIND_LABEL, pullShares, vibeAngles, type Folded } from "./traceModel";
+import { tiltReader } from "@/lib/tilt";
 
 /**
  * The sky behind the reading, story, pack, /c and /vs. A long-exposure night sky with an engraved atlas plate on top:
@@ -353,10 +354,12 @@ export function Sky({
       target.x = (e.clientX / window.innerWidth) * 2 - 1;
       target.y = (e.clientY / window.innerHeight) * 2 - 1;
     };
+    const readTilt = tiltReader();
     const onTilt = (e: DeviceOrientationEvent) => {
-      if (e.gamma == null || e.beta == null) return;
-      target.x = Math.max(-1, Math.min(1, e.gamma / 30));
-      target.y = Math.max(-1, Math.min(1, (e.beta - 45) / 30));
+      const t = readTilt(e);
+      if (!t) return;
+      target.x = t.x;
+      target.y = t.y;
     };
     if (!reduce) {
       window.addEventListener("pointermove", onMove, { passive: true });

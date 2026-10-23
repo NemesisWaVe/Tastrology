@@ -11,6 +11,7 @@ import type { CardData, Rarity } from "@/lib/card";
 import { ROLL_ODDS, tierAt } from "@/lib/odds";
 import { sfx } from "@/lib/sound";
 import s from "./hall.module.css";
+import { buzz as haptic } from "@/lib/haptics";
 
 type Entry = { code: string; card: CardData };
 type Census = { holo: number; secret: number };
@@ -56,9 +57,7 @@ function useCardWidth() {
 }
 
 function buzz(pattern: number[]) {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {}
+  haptic(pattern);
 }
 
 /**
