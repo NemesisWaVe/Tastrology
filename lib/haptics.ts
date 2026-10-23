@@ -1,11 +1,15 @@
 /**
- * One buzz for the whole site. Android (and other browsers with navigator.vibrate) get the pattern, with each pulse
- * raised to MIN_MS: shorter ones are below what most phone motors can make you feel. iPhones have no vibrate API;
- * since iOS 18, toggling a switch-style checkbox plays the system's light tick, so they get one tick per buzz.
+ * One buzz for the whole site.
+ *
+ * Android (and other browsers with navigator.vibrate) get the pattern, each pulse raised to MIN_MS: shorter ones are
+ * below what most phone motors can make you feel.
+ *
+ * iPhones have no vibrate API, and iOS no longer ticks when a script clicks a switch: the tick plays only when a finger
+ * really taps a `<label>` wired to an `<input type=checkbox switch>`. So on iOS every button carries an invisible label
+ * over itself (installHaptics), and a real tap on the button is a tap on that label: the switch flips and the phone
+ * ticks. Drags (the tear, a scratch) end without a tap, so they have no tick on iPhone.
  */
 const MIN_MS = 16;
-/** iOS ticks closer than this blur into one, and a hold that ticks every frame would just hum. */
-const IOS_GAP_MS = 70;
 
 /** Pulses (even indexes) raised to MIN_MS; pauses (odd indexes) kept. */
 export function strengthen(p: number | number[]): number | number[] {
@@ -13,88 +17,77 @@ export function strengthen(p: number | number[]): number | number[] {
   return p.map((ms, i) => (i % 2 === 0 && ms > 0 ? Math.max(MIN_MS, ms) : ms));
 }
 
-let ios: HTMLLabelElement | null | undefined;
-let lastTick = 0;
-
-/** A hidden <label><input type=checkbox switch></label>; clicking the label flips the switch and iOS ticks. */
-function iosSwitch(): HTMLLabelElement | null {
-  if (ios !== undefined) return ios;
-  ios = null;
-  try {
-    const probe = document.createElement("input");
-    probe.type = "checkbox";
-    // Only WebKit knows the `switch` attribute; elsewhere this does nothing and the label stays unused.
-    if (!("switch" in probe)) return ios;
-    probe.setAttribute("switch", "");
-    probe.tabIndex = -1;
-    probe.setAttribute("aria-hidden", "true");
-    const label = document.createElement("label");
-    label.setAttribute("aria-hidden", "true");
-    // The tick is a click: keep it from the page (the click pop, link and tap handlers would all run on every buzz).
-    label.dataset.nopop = "";
-    label.addEventListener("click", (e) => e.stopPropagation());
-    label.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
-    label.appendChild(probe);
-    document.body.appendChild(label);
-    ios = label;
-  } catch {}
-  return ios;
-}
-
-/**
- * iOS plays the switch tick only while the page is handling a tap (a release: pointerup, touchend, click, or a key).
- * A buzz asked for at any other moment (mid-drag, at the end of a hold, on a timer) is owed and plays on the next
- * release, so a tear, a scratch or a charge still lands as one tick when the finger lifts.
- */
-let inTap = false;
-let owed = false;
 let lastAny = 0;
-
-function tick() {
-  const now = performance.now();
-  if (now - lastTick < IOS_GAP_MS) return;
-  const label = iosSwitch();
-  if (!label) return;
-  lastTick = now;
-  label.click();
-}
 
 export function buzz(p: number | number[]) {
   try {
-    if (typeof navigator === "undefined") return;
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
     lastAny = performance.now();
-    if (typeof navigator.vibrate === "function") {
-      navigator.vibrate(strengthen(p));
-      return;
-    }
-    if (inTap) tick();
-    else owed = true;
+    navigator.vibrate(strengthen(p));
   } catch {}
+}
+
+/** iPhones and iPads, whatever the browser (they all run on WebKit), including iPads that say "Macintosh". */
+function isIOS(): boolean {
+  const ua = navigator.userAgent;
+  return /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Buttons that get the iOS tick. Not links or submit buttons: a label inside them takes the click's default action,
+ * so a plain link wouldn't follow and a form wouldn't submit. `data-nohaptic` opts an element (and its children) out.
+ */
+const TARGETS = 'button:not([type="submit"]), [role="button"], [role="tab"], summary';
+
+function attach(el: HTMLElement) {
+  if (el.dataset.haptic !== undefined || el.closest("[data-nohaptic]")) return;
+  if (el instanceof HTMLButtonElement && (el.type === "submit" || el.form)) return;
+  // a tappable card holding its own buttons or links: a label over it would cover them
+  if (el.querySelector('button, a, input, select, textarea, [role="button"], [role="tab"]')) return;
+  el.dataset.haptic = "";
+  const label = document.createElement("label");
+  label.setAttribute("aria-hidden", "true");
+  label.dataset.hapticLabel = "";
+  label.style.cssText =
+    "position:absolute;inset:0;border-radius:inherit;cursor:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;";
+  const sw = document.createElement("input");
+  sw.type = "checkbox";
+  sw.setAttribute("switch", "");
+  sw.tabIndex = -1;
+  // never under the finger: a touch that starts on the input itself would stop the page from scrolling
+  sw.style.cssText = "position:absolute;width:1px;height:1px;margin:0;opacity:0;visibility:hidden;pointer-events:none;";
+  // the label hands its click to the switch; that second click stays here so the button's handlers run once
+  sw.addEventListener("click", (e) => e.stopPropagation());
+  label.appendChild(sw);
+  if (getComputedStyle(el).position === "static") el.style.position = "relative";
+  el.appendChild(label);
 }
 
 let installed = false;
 /**
- * Sitewide, once: marks when a tap is being handled (for iOS), pays owed ticks on release, and gives every button and
- * link a light tap unless something already buzzed for that press.
+ * Sitewide, once. Android: every button and link gives a light tap unless something already buzzed for that press.
+ * iOS: buttons (now and as they appear) get the tap-through switch label.
  */
 export function installHaptics() {
   if (installed || typeof window === "undefined") return;
   installed = true;
-  const release = (e: Event) => {
-    if (e.type === "pointerdown" && (e as PointerEvent).pointerType !== "mouse") return;
-    inTap = true;
-    if (owed) {
-      owed = false;
-      if (typeof navigator.vibrate !== "function") tick();
-    }
-    setTimeout(() => void (inTap = false), 0); // the page's own handlers for this event run before this
+  if (typeof navigator.vibrate === "function") {
+    // bubble phase: the press's own handlers (a flip, a tear) buzz first, and the light tap stays out of their way
+    document.addEventListener("click", (e) => {
+      const el = (e.target as Element | null)?.closest?.("button, a, [role=button], summary, [role=tab]");
+      if (!el || el.closest("[data-nohaptic]") || performance.now() - lastAny < 180) return;
+      buzz(10);
+    });
+    return;
+  }
+  if (!isIOS()) return;
+  let queued = 0;
+  const scan = () => {
+    queued = 0;
+    document.querySelectorAll<HTMLElement>(TARGETS).forEach(attach);
   };
-  for (const t of ["pointerup", "touchend", "click", "keydown"]) window.addEventListener(t, release, true);
-  // bubble phase: the press's own handlers (a flip, a tear) buzz first, and the light tap stays out of their way
-  document.addEventListener("click", (e) => {
-    const el = (e.target as Element | null)?.closest?.("button, a, [role=button], summary, [role=tab], input[type=checkbox]");
-    if (!el || el.closest("[data-nohaptic]") || performance.now() - lastAny < 180) return;
-    inTap = true;
-    buzz(10);
-  });
+  scan();
+  new MutationObserver(() => {
+    if (!queued) queued = requestAnimationFrame(scan);
+  }).observe(document.body, { childList: true, subtree: true });
 }
