@@ -358,9 +358,10 @@ export function enableSound(v: boolean): void {
   } catch {}
   try {
     if (v) {
-      const c = ensure();
-      if (c && c.state !== "running") void c.resume().catch(() => {});
       setEngine({ play, scrub: scrubApi });
+      // from inside this tap: start it now, and keep the next taps listening in case iOS didn't take this one
+      unlock();
+      if (ctx?.state !== "running") arm();
       watchReturn();
     } else {
       scrubEnd();
@@ -370,29 +371,50 @@ export function enableSound(v: boolean): void {
   window.dispatchEvent(new CustomEvent("tastrology:sound", { detail: v })); // keep every switch in sync
 }
 
+/**
+ * Taps that let a page start audio. iOS only accepts a release (touchend, pointerup, click) or a key: a touch-down
+ * isn't enough, and a resume tried there fails quietly.
+ */
+const UNLOCK_EVENTS = ["pointerdown", "pointerup", "touchend", "click", "keydown"];
+
+/** Start (or restart) the context from inside a tap; keep listening until it is really running. */
+function unlock() {
+  if (!soundOn()) return disarm();
+  const c = ensure();
+  if (!c) return disarm();
+  if (c.state === "running") return disarm();
+  try {
+    // iOS wakes the output on a sound played inside the tap: one silent sample
+    const b = c.createBufferSource();
+    b.buffer = c.createBuffer(1, 1, c.sampleRate);
+    b.connect(c.destination);
+    b.start();
+  } catch {}
+  void c
+    .resume()
+    .then(() => {
+      if (c.state !== "running" || ctx !== c) return;
+      disarm();
+      window.dispatchEvent(new Event("tastrology:unlocked"));
+      window.dispatchEvent(new CustomEvent("tastrology:sound", { detail: true }));
+    })
+    .catch(() => {});
+}
+function arm() {
+  if (!soundOn()) return;
+  UNLOCK_EVENTS.forEach((e) => window.addEventListener(e, unlock, true));
+}
+function disarm() {
+  UNLOCK_EVENTS.forEach((e) => window.removeEventListener(e, unlock, true));
+}
+
 /** On a returning visit sound is remembered, but the context can only start after a gesture. */
 export function armSound(): void {
   if (typeof window === "undefined" || !soundOn()) return;
   setEngine({ play, scrub: scrubApi });
-  const events = ["pointerdown", "keydown", "touchend"];
-  const unlock = () => {
-    const c = ensure();
-    if (c && c.state !== "running")
-      void c
-        .resume()
-        .then(() => window.dispatchEvent(new Event("tastrology:unlocked")))
-        .catch(() => {});
-    events.forEach((e) => window.removeEventListener(e, unlock));
-  };
-  const arm = () => {
-    if (!soundOn()) return;
-    events.forEach((e) => window.addEventListener(e, unlock));
-  };
   arm();
-  rearm = arm;
   watchReturn();
 }
-let rearm: (() => void) | null = null;
 let watching = false;
 
 /** iPhones and iPads, whatever the browser (they all run on WebKit), including iPads that say "Macintosh". */
@@ -418,8 +440,7 @@ function watchReturn() {
       ctx = master = dry = wet = noiseBuf = null;
       void old.close().catch(() => {});
     } else if (ctx.state === "running") return;
-    if (rearm) rearm();
-    else armSound();
+    arm();
     window.dispatchEvent(new CustomEvent("tastrology:sound", { detail: true })); // switches show "tap to hear"
   };
   document.addEventListener("visibilitychange", back);

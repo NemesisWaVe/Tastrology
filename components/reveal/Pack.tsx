@@ -300,11 +300,23 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
     busy.current = false;
   }, [card.rarity, reduce, rotY, stage]);
 
+  const [early, setEarly] = useState(false);
   const startHold = useCallback(() => {
     if (busy.current || stage !== "facedown" || reduce) return;
     charge.current.holding = true;
+    setEarly(false);
     setStage("charging");
   }, [stage, reduce]);
+
+  // Letting go before the charge is full doesn't mint: the glow drains back (the loop) and the card waits.
+  const letGo = useCallback(() => {
+    const c = charge.current;
+    if (!c.holding || busy.current) return;
+    c.holding = false;
+    setStage("facedown");
+    setEarly(true);
+    buzz(6);
+  }, []);
 
   // One loop drives the orbit, the charge glow, the jitter and the haptic ticks (no re-renders).
   useEffect(() => {
@@ -381,7 +393,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
       else if (stage === "facedown" || stage === "charging") flip();
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === " " && charge.current.holding) flip();
+      if (e.key === " ") letGo();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKeyUp);
@@ -389,7 +401,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [stage, open, flip, startHold, reduce]);
+  }, [stage, open, flip, startHold, letGo, reduce]);
 
   /* ---------------------------------------------------------------- pointer tilt for the sealed pack */
 
@@ -469,7 +481,7 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
                 <>
                   <p className="font-mono text-[10.5px] uppercase tracking-[0.26em] text-ink-3">1 card inside</p>
                   <h2 className="mt-1.5 font-serif text-[clamp(30px,8vw,42px)] italic leading-none">
-                    {stage === "opening" || stage === "inpack" ? (reduce ? "Take your card." : "Pull it out.") : reduce ? "Tap to flip." : stage === "charging" ? (hot && big ? "Oh. Oh, this one’s rare." : "Minting…") : "Hold to mint."}
+                    {stage === "opening" || stage === "inpack" ? (reduce ? "Take your card." : "Pull it out.") : reduce ? "Tap to flip." : stage === "charging" ? (hot && big ? "Oh. Oh, this one’s rare." : "Minting…") : early ? "Keep holding. Don’t let go." : "Hold to mint."}
                   </h2>
                 </>
               )}
@@ -664,8 +676,8 @@ export function Pack({ card, loves, reduce, onDone, leaving = false }: { card: C
                           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                           startHold();
                         }}
-                        onPointerUp={() => !reduce && charge.current.holding && flip()}
-                        onPointerCancel={() => !reduce && charge.current.holding && flip()}
+                        onPointerUp={() => !reduce && letGo()}
+                        onPointerCancel={() => !reduce && letGo()}
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <CardBack card={card} crack={crack} />
