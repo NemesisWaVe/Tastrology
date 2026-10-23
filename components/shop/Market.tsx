@@ -161,14 +161,14 @@ export function ResetClock() {
 }
 
 /** Every aisle opens the same way: what it is, how you pay, and anything live (a clock, a balance). */
-export function MarketHead({ kicker, title, blurb, pay, aside }: { kicker: string; title: React.ReactNode; blurb?: React.ReactNode; pay: "dust" | "usd"; aside?: React.ReactNode }) {
+export function MarketHead({ kicker, title, blurb, pay, aside }: { kicker: string; title: React.ReactNode; blurb?: React.ReactNode; pay: "dust" | "usd" | "free"; aside?: React.ReactNode }) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-xl">
         <p className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">
           {kicker}
           <span className={`rounded-full border px-2 py-0.5 text-[9.5px] tracking-[0.16em] ${pay === "dust" ? "border-accent/40 text-accent" : "border-line text-ink-2"}`}>
-            {pay === "dust" ? "✦ Stardust" : "$ USD"}
+            {pay === "dust" ? "✦ Stardust" : pay === "usd" ? "$ USD" : "Free"}
           </span>
         </p>
         <h2 className="mt-2 font-serif text-4xl italic leading-[1.02] sm:text-5xl">{title}</h2>

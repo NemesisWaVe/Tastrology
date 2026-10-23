@@ -4,8 +4,8 @@ import { SiteShell } from "@/components/site/SiteShell";
 import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: `Fight me · ${BRAND.name}`,
-  description: "Add me on Tastrology. Mint your taste card and fight mine.",
+  title: `Are we taste twins? · ${BRAND.name}`,
+  description: "Add me on Tastrology. Mint your taste card and see how close our taste is.",
 };
 
 /** Friend invite: /f/<player code>. */

@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: `Shop · ${BRAND.name}` };
 export const dynamic = "force-dynamic";
 
 /**
- * The orbital market: three aisles (Stardust packs, the Stardust atelier, readings and prints in dollars) under a
+ * The orbital market: three aisles (Stardust packs, the Stardust atelier, readings and prints: free until payments are on) under a
  * sticky bar with your wallet, and a ticker of real rares from the Hall up top.
  */
 export default function ShopPage() {
@@ -39,7 +39,7 @@ export default function ShopPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
               Beta market
             </span>
-            Stardust works today. Dollar prices show what a future version might cost; nothing takes money.
+            Stardust works today. Nothing here takes money: readings are free while we're in beta.
           </p>
         )}
       </div>
@@ -53,7 +53,7 @@ export default function ShopPage() {
       <section id="readings" className="mt-20 scroll-mt-36">
         <MarketHead
           kicker="Readings & prints"
-          pay="usd"
+          pay={paid ? "usd" : "free"}
           title={<>More of <span className="text-accent">you.</span></>}
           blurb="Every account starts with free readings and gets another each new moon. These are for when you can't wait."
         />
@@ -129,10 +129,8 @@ function ProductCard({ p, paid, soon, i }: { p: Product; paid: boolean; soon: bo
         <p className="mt-3 max-w-sm font-serif text-lg italic leading-snug text-ink-2">{p.blurb}</p>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <span className="flex items-center gap-2">
-          <PriceTag cents={p.priceCents} muted={!paid} />
-          {!paid && <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">concept</span>}
-        </span>
+        {/* no prices while nothing takes money: a price on a Qloo-powered reading reads as a paid feature */}
+        {paid ? <PriceTag cents={p.priceCents} /> : <span />}
         {soon ? (
           <span className="rounded-full border border-line px-5 py-2 text-sm text-ink-3">Coming soon</span>
         ) : paid ? (
