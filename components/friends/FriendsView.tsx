@@ -519,7 +519,7 @@ export function FriendsView({ prefill = "" }: { prefill?: string }) {
                             <Presence seen={f.seen} />
                           </p>
                           <p className="mt-0.5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.16em] text-ink-3">
-                            <span style={{ color: tint }}>{lvl}</span> · {f.days ?? 0}d fought{f.cards !== undefined ? ` · ${f.cards} card${f.cards === 1 ? "" : "s"}` : ""}
+                            <span style={{ color: tint }}>{lvl}</span> · {f.days ?? 0}d fought{f.card && f.cards !== undefined ? ` · ${f.cards} card${f.cards === 1 ? "" : "s"}` : ""}
                           </p>
                           <span className="mt-1.5 block h-[2px] w-full max-w-[9rem] overflow-hidden rounded-full bg-white/[0.07]" title={bd.next ? `${bd.left} more day${bd.left === 1 ? "" : "s"} to ${bd.next}` : "As close as it gets"}>
                             <span className="block h-full rounded-full" style={{ width: `${bd.pct * 100}%`, background: tint, boxShadow: `0 0 6px ${tint}` }} />

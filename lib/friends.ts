@@ -185,11 +185,11 @@ const indexedAt = new Map<string, number>();
 export async function indexCards(uid: string, pc: string): Promise<void> {
   if ((indexedAt.get(uid) ?? 0) > Date.now()) return;
   indexedAt.set(uid, Date.now() + 10 * 60 * 1000);
-  const [cards, held] = await Promise.all([ownCards(uid), ddbQuery(`OWNER#${uid}`, "CARD#", 200, undefined, ["code"])]);
+  const [cards, held] = await Promise.all([ownCards(uid), ddbQuery(`OWNER#${uid}`, "CARD#", 200, undefined, ["code", "source"])]);
   await Promise.allSettled([
     ...(cards ?? []).map((c) => ddbPutIfAbsent({ PK: `CARDPC#${c.code}`, SK: "META", pc, at: Date.now() })),
-    // The deck size friends see, refreshed on the same beat.
-    held ? ddbUpdate(U(uid), "PLAYER", "SET cards = :n", { values: { ":n": held.items.length }, condition: "attribute_exists(pc)" }) : null,
+    // The deck size friends see, refreshed on the same beat. Pack copies don't count: they can't fight (ownCards).
+    held ? ddbUpdate(U(uid), "PLAYER", "SET cards = :n", { values: { ":n": held.items.filter((it) => it.source !== "collect").length }, condition: "attribute_exists(pc)" }) : null,
   ]);
 }
 
