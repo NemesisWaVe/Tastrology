@@ -361,6 +361,7 @@ export function enableSound(v: boolean): void {
       const c = ensure();
       if (c && c.state !== "running") void c.resume().catch(() => {});
       setEngine({ play, scrub: scrubApi });
+      watchReturn();
     } else {
       scrubEnd();
       setEngine(null);
@@ -388,14 +389,42 @@ export function armSound(): void {
     events.forEach((e) => window.addEventListener(e, unlock));
   };
   arm();
-  if (armed) return;
-  armed = true;
-  // iOS suspends audio whenever you leave the browser: re-arm so the next tap anywhere brings it back
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && ctx && ctx.state !== "running") arm();
-  });
+  rearm = arm;
+  watchReturn();
 }
-let armed = false;
+let rearm: (() => void) | null = null;
+let watching = false;
+
+/** iPhones and iPads, whatever the browser (they all run on WebKit), including iPads that say "Macintosh". */
+function isIOS(): boolean {
+  const ua = navigator.userAgent;
+  return /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Leaving Safari (another app, the lock screen) interrupts its audio. Coming back, the old context can stay
+ * "interrupted", or claim "running" while playing nothing, so the switch says on and nothing sounds. On iOS the
+ * context is dropped on return and rebuilt by the next tap; elsewhere it's only re-armed if it really stopped.
+ * Installed once, whether sound was on at load or turned on later.
+ */
+function watchReturn() {
+  if (watching) return;
+  watching = true;
+  const back = () => {
+    if (document.hidden || !soundOn() || !ctx) return;
+    if (isIOS()) {
+      scrubEnd();
+      const old = ctx;
+      ctx = master = dry = wet = noiseBuf = null;
+      void old.close().catch(() => {});
+    } else if (ctx.state === "running") return;
+    if (rearm) rearm();
+    else armSound();
+    window.dispatchEvent(new CustomEvent("tastrology:sound", { detail: true })); // switches show "tap to hear"
+  };
+  document.addEventListener("visibilitychange", back);
+  window.addEventListener("pageshow", (e) => e.persisted && back());
+}
 
 let popsOn = false;
 /** Every button and link pops, unless that click already played its own sound. Installed once. */

@@ -26,14 +26,19 @@ export function SoundOrb({ onlyWhenLocked = false }: { onlyWhenLocked?: boolean 
     return () => ro.disconnect();
   }, []);
   useEffect(() => {
-    if (!onlyWhenLocked) return;
+    if (!onlyWhenLocked || aside) return;
     const t = setTimeout(() => setAside(true), 9000);
     return () => clearTimeout(t);
-  }, [onlyWhenLocked]);
+  }, [onlyWhenLocked, aside]);
   useEffect(() => {
+    let was = soundLocked();
     const sync = () => {
+      const now = soundLocked();
+      // Sound held again (back from another app on iPhone): the reminder may come back even if it stepped aside.
+      if (now && !was) setAside(false);
+      was = now;
       setOn(soundOn());
-      setLocked(soundLocked());
+      setLocked(now);
     };
     sync();
     armSound();
